@@ -78,6 +78,11 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
         $this->showModal = false;
         
         session()->flash('message', 'Funcionário e usuário criados com sucesso.');
+        $this->dispatch('app-modal-alert', [
+            'type' => 'success',
+            'title' => 'Funcionário Cadastrado!',
+            'message' => 'O colaborador e o acesso de usuário foram criados com sucesso.'
+        ]);
     }
 
     public function delete($id)
@@ -102,6 +107,11 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
         }
         
         session()->flash('message', 'Funcionário e acesso removidos.');
+        $this->dispatch('app-modal-alert', [
+            'type' => 'info',
+            'title' => 'Funcionário Removido',
+            'message' => 'O colaborador e seu acesso de usuário foram removidos do sistema com sucesso.'
+        ]);
     }
 
     public function with()
@@ -193,7 +203,14 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">{{ $employee->cpf }}</td>
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ $employee->phone ?: '-' }}</td>
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <button wire:click="delete({{ $employee->id }})" wire:confirm="Tem certeza? Isso apagará o funcionário e o acesso de usuário dele!" class="text-red-600 hover:text-red-900 font-medium">Excluir</button>
+                                <button type="button" @click="window.showModalConfirm({
+                                    title: 'Excluir Funcionário',
+                                    message: 'Tem certeza que deseja excluir o colaborador {{ addslashes($employee->user->name ?? 'Colaborador') }}? Esta ação apagará o funcionário e o acesso de usuário dele permanentemente.',
+                                    confirmText: 'Sim, Excluir',
+                                    cancelText: 'Cancelar',
+                                    isDanger: true,
+                                    onConfirm: () => $wire.delete({{ $employee->id }})
+                                })" class="text-red-600 hover:text-red-900 font-medium">Excluir</button>
                             </td>
                         </tr>
                     @empty

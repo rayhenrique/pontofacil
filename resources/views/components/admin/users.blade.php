@@ -71,9 +71,19 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Usuários')] class extends Compo
         if ($this->userId) {
             User::findOrFail($this->userId)->update($data);
             session()->flash('message', 'Usuário atualizado com sucesso.');
+            $this->dispatch('app-modal-alert', [
+                'type' => 'success',
+                'title' => 'Usuário Atualizado!',
+                'message' => 'Os dados do usuário foram atualizados com sucesso.'
+            ]);
         } else {
             User::create($data);
             session()->flash('message', 'Usuário criado com sucesso.');
+            $this->dispatch('app-modal-alert', [
+                'type' => 'success',
+                'title' => 'Usuário Cadastrado!',
+                'message' => 'O novo usuário foi criado com sucesso.'
+            ]);
         }
 
         $this->showModal = false;
@@ -83,11 +93,21 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Usuários')] class extends Compo
     {
         if (auth()->id() == $id) {
             session()->flash('error', 'Você não pode excluir a si mesmo.');
+            $this->dispatch('app-modal-alert', [
+                'type' => 'error',
+                'title' => 'Operação Não Permitida',
+                'message' => 'Você não pode excluir sua própria conta de usuário.'
+            ]);
             return;
         }
 
         User::findOrFail($id)->delete();
         session()->flash('message', 'Usuário removido com sucesso.');
+        $this->dispatch('app-modal-alert', [
+            'type' => 'info',
+            'title' => 'Usuário Removido',
+            'message' => 'O usuário foi excluído do sistema com sucesso.'
+        ]);
     }
 
     public function with()
@@ -161,7 +181,14 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Usuários')] class extends Compo
                             </td>
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 <button wire:click="openEditModal({{ $user->id }})" class="text-indigo-600 hover:text-indigo-900 font-medium mr-3">Editar</button>
-                                <button wire:click="delete({{ $user->id }})" wire:confirm="Tem certeza que deseja remover este usuário permanentemente?" class="text-red-600 hover:text-red-900 font-medium">Excluir</button>
+                                <button type="button" @click="window.showModalConfirm({
+                                    title: 'Excluir Usuário',
+                                    message: 'Tem certeza que deseja remover o usuário {{ addslashes($user->name) }} permanentemente? Ele perderá imediatamente o acesso ao sistema.',
+                                    confirmText: 'Sim, Excluir',
+                                    cancelText: 'Cancelar',
+                                    isDanger: true,
+                                    onConfirm: () => $wire.delete({{ $user->id }})
+                                })" class="text-red-600 hover:text-red-900 font-medium">Excluir</button>
                             </td>
                         </tr>
                     @empty

@@ -64,6 +64,12 @@ new #[Layout('layouts.app')] #[Title('Ajuste Manual de Ponto')] class extends Co
         
         $this->message = "Ajuste manual criado com sucesso e registrado na trilha de auditoria.";
         $this->status = 'success';
+        $this->dispatch('app-modal-alert', [
+            'type' => 'success',
+            'title' => 'Ajuste Manual Realizado!',
+            'message' => 'O apontamento retroativo foi inserido com sucesso e registrado na trilha de auditoria (Portaria 671).',
+            'buttonText' => 'Entendido'
+        ]);
         
         // Limpar o formulário (menos data e hora para facilitar cadastros sequenciais)
         $this->justification = '';

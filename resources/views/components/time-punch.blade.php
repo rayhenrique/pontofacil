@@ -14,26 +14,64 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
 
     public function registerPunch($qrCodeHash, $latitude, $longitude)
     {
+        $user = Auth::user();
+        $employee = $user ? $user->employee : null;
+        $sector = $employee ? $employee->sector : null;
+
         $settings = SystemSetting::whereIn('key', [
             'qr_code_hash', 'company_latitude', 'company_longitude', 'allowed_radius_meters'
         ])->pluck('value', 'key');
 
-        if ($qrCodeHash !== $settings['qr_code_hash']) {
-            $this->message = "QR Code inválido ou expirado.";
+        // 1. Resolução do QR Code esperado (Regra Híbrida: Setor -> Global)
+        $expectedQrCode = ($sector && !empty($sector->qr_code_hash))
+            ? $sector->qr_code_hash
+            : ($settings['qr_code_hash'] ?? null);
+
+        if ($qrCodeHash !== $expectedQrCode) {
+            $this->message = "QR Code inválido ou não autorizado para o seu setor.";
             $this->status = 'error';
+            $this->dispatch('app-modal-alert', [
+                'type' => 'error',
+                'title' => 'QR Code Não Autorizado',
+                'message' => 'O código escaneado não é válido para o seu setor ou matriz da empresa.',
+                'buttonText' => 'Escanear Novamente'
+            ]);
             return;
         }
+
+        // 2. Resolução das Coordenadas e Raio esperados (Regra Híbrida: Setor -> Global)
+        $hasCustomLocation = $sector && $sector->latitude !== null && $sector->longitude !== null;
+
+        $targetLatitude = $hasCustomLocation
+            ? (float) $sector->latitude
+            : (float) ($settings['company_latitude'] ?? -9.6658);
+
+        $targetLongitude = $hasCustomLocation
+            ? (float) $sector->longitude
+            : (float) ($settings['company_longitude'] ?? -35.7350);
+
+        $allowedRadius = ($sector && $sector->allowed_radius_meters !== null)
+            ? (float) $sector->allowed_radius_meters
+            : (float) ($settings['allowed_radius_meters'] ?? 100);
+
+        $locationName = $hasCustomLocation ? "do seu setor ({$sector->name})" : "da empresa";
 
         $distance = $this->calculateDistance(
             (float) $latitude,
             (float) $longitude,
-            (float) $settings['company_latitude'],
-            (float) $settings['company_longitude']
+            $targetLatitude,
+            $targetLongitude
         );
 
-        if ($distance > (float) $settings['allowed_radius_meters']) {
-            $this->message = "Você está fora do raio permitido para bater o ponto. (Distância: " . round($distance) . "m)";
+        if ($distance > $allowedRadius) {
+            $this->message = "Você está fora do raio permitido para bater o ponto {$locationName}. (Distância: " . round($distance) . "m, permitido: {$allowedRadius}m)";
             $this->status = 'error';
+            $this->dispatch('app-modal-alert', [
+                'type' => 'error',
+                'title' => 'Fora do Raio Permitido (GPS)',
+                'message' => $this->message,
+                'buttonText' => 'Entendido'
+            ]);
             return;
         }
 
@@ -55,6 +93,12 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
         $tipoStr = $type === 'in' ? 'Entrada' : 'Saída';
         $this->message = "Ponto registrado com sucesso! ($tipoStr às " . now()->format('H:i:s') . ")";
         $this->status = 'success';
+        $this->dispatch('app-modal-alert', [
+            'type' => 'success',
+            'title' => 'Ponto Registrado com Sucesso!',
+            'message' => "Sua {$tipoStr} foi confirmada às " . now()->format('H:i:s') . " no Horário Oficial de Maceió (GMT-3).",
+            'buttonText' => 'Concluir'
+        ]);
     }
 
     private function calculateDistance($lat1, $lon1, $lat2, $lon2)

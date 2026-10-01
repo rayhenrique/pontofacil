@@ -22,11 +22,15 @@ Contas de acesso ao sistema (Admin, Gestor e Colaborador).
 - `deleted_at` (timestamp, softDeletes)
 
 ### 2. `sectors`
-Departamentos e setores operacionais da organização.
+Departamentos e setores operacionais da organização (com suporte a Regras Híbridas de Ponto).
 - `id` (bigIncrements, PK)
-- `name` (string, unique) -> Nome do setor (ex: "Tecnologia", "Financeiro", "Operações").
+- `name` (string, unique) -> Nome do setor (ex: "Tecnologia", "Financeiro", "Operações", "Filial Ponta Verde").
 - `description` (string, nullable)
 - `manager_id` (foreignId -> `users.id`, nullable, on delete set null) -> Usuário com perfil Gestor responsável por este setor.
+- `qr_code_hash` (string, nullable) -> Hash exclusivo do QR Code deste setor (se null, usa o QR Code global da empresa).
+- `latitude` (decimal: 10,8, nullable) -> Latitude específica do setor/filial (se null, usa a latitude global da empresa).
+- `longitude` (decimal: 11,8, nullable) -> Longitude específica do setor/filial (se null, usa a longitude global da empresa).
+- `allowed_radius_meters` (integer, nullable) -> Raio de tolerância em metros específico do setor (se null, usa o raio global da empresa).
 - `created_at`, `updated_at` (timestamps)
 
 ### 3. `employees`

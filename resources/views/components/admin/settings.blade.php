@@ -45,6 +45,12 @@ new #[Layout('layouts.app')] #[Title('Configurações da Empresa e QR Code')] cl
 
         $this->message = 'Novo QR Code gerado com sucesso! Os colaboradores deverão ler este novo código para registrar o ponto.';
         $this->status = 'success';
+        $this->dispatch('app-modal-alert', [
+            'type' => 'success',
+            'title' => 'Novo QR Code Gerado!',
+            'message' => 'O QR Code oficial da empresa foi atualizado com sucesso. Imprima a nova versão para fixação na entrada.',
+            'buttonText' => 'Entendido'
+        ]);
     }
 
     public function saveGps()
@@ -61,6 +67,12 @@ new #[Layout('layouts.app')] #[Title('Configurações da Empresa e QR Code')] cl
 
         $this->message = 'Coordenadas e raio de segurança da empresa atualizados com sucesso.';
         $this->status = 'success';
+        $this->dispatch('app-modal-alert', [
+            'type' => 'success',
+            'title' => 'Parâmetros GPS Atualizados!',
+            'message' => 'As coordenadas da sede e o raio de segurança antifraude foram salvos com sucesso.',
+            'buttonText' => 'OK'
+        ]);
     }
 };
 ?>
@@ -120,7 +132,14 @@ new #[Layout('layouts.app')] #[Title('Configurações da Empresa e QR Code')] cl
                         Imprimir QR Code
                     </button>
 
-                    <button type="button" wire:click="regenerateQrCode" wire:confirm="Tem certeza de que deseja invalidar o QR Code atual e gerar um novo? O código impresso atual deixará de funcionar imediatamente." class="inline-flex items-center justify-center px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-sm font-semibold transition">
+                    <button type="button" @click="window.showModalConfirm({
+                        title: 'Invalidar e Gerar Novo QR Code',
+                        message: 'Tem certeza de que deseja invalidar o QR Code atual e gerar um novo? O código impresso atual deixará de funcionar imediatamente para todos os colaboradores.',
+                        confirmText: 'Sim, Gerar Novo',
+                        cancelText: 'Cancelar',
+                        isDanger: true,
+                        onConfirm: () => $wire.regenerateQrCode()
+                    })" class="inline-flex items-center justify-center px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-sm font-semibold transition">
                         <svg class="w-4 h-4 mr-2 text-gray-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
                         Gerar Novo Código
                     </button>
@@ -202,7 +221,7 @@ new #[Layout('layouts.app')] #[Title('Configurações da Empresa e QR Code')] cl
 
                 detectCurrentLocation() {
                     if (!navigator.geolocation) {
-                        alert('Geolocalização não é suportada pelo seu navegador.');
+                        window.showModalAlert('warning', 'Geolocalização Indisponível', 'Geolocalização não é suportada pelo seu navegador.');
                         return;
                     }
 
@@ -210,10 +229,10 @@ new #[Layout('layouts.app')] #[Title('Configurações da Empresa e QR Code')] cl
                         (pos) => {
                             @this.set('company_latitude', pos.coords.latitude.toFixed(6));
                             @this.set('company_longitude', pos.coords.longitude.toFixed(6));
-                            alert('Coordenadas capturadas com sucesso! Clique em "Salvar Coordenadas" para confirmar.');
+                            window.showModalAlert('success', 'Localização Capturada!', 'Coordenadas capturadas com sucesso! Clique no botão "Salvar Coordenadas" para confirmar a gravação.');
                         },
                         (err) => {
-                            alert('Não foi possível obter a localização: ' + err.message);
+                            window.showModalAlert('error', 'Falha ao Obter Localização', 'Não foi possível obter a localização: ' + err.message);
                         },
                         { enableHighAccuracy: true, timeout: 10000 }
                     );

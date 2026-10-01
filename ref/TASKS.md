@@ -68,4 +68,18 @@
 - [x] **Fase 12: Suíte de Testes Automatizados & Qualidade de Código**
   - [x] Testes de autorização de gestores e isolamento de setor.
   - [x] Testes de traduções, validações em português e fuso horário `America/Maceio`.
-  - [x] Testes de trilha de auditoria e permissões de configurações (`13 testes, 38 asserções`).
+  - [x] Testes de trilha de auditoria e permissões de configurações (`19 testes, 62 asserções`).
+
+- [x] **Fase 13: Estrutura Híbrida Inteligente de Setores (Fallback)**
+  - [x] Migration com campos opcionais em `sectors`: `qr_code_hash`, `latitude`, `longitude`, `allowed_radius_meters`.
+  - [x] Atualização do Model `Sector` com casts, fillable e métodos auxiliares `hasCustomLocation()` e `hasCustomQrCode()`.
+  - [x] Algoritmo de Fallback Inteligente no registro de ponto (`TimePunch`): prioriza regras exclusivas do setor do funcionário e recorre automaticamente à matriz da empresa se os campos estiverem em branco.
+  - [x] Interface administrativa de Setores (`admin.sectors`) com captura de GPS do setor, gerador de QR Code exclusivo e impressão.
+  - [x] Testes automatizados cobrindo cenários de fallback e isolamento geográfico/QR por setor (`HybridSectorPunchTest`).
+
+- [x] **Fase 14: Sistema Global de Modais Popups e Redesign de Novidades & Versões**
+  - [x] Componente global `modal-feedback`: Popups elegantes para mensagens de alerta, sucesso, erro e diálogos de confirmação de exclusão/ações destrutivas.
+  - [x] Integração em todos os módulos (Bater Ponto, Setores, Funcionários, Usuários, Configurações e Ajuste Manual), substituindo banners estáticos e `wire:confirm` / `alert()` nativos do navegador.
+  - [x] Redesign completo do módulo "Novidades e Versões" (`help.blade.php`): Linha do tempo visual (timeline) com nós conectados, destaque para a versão atual `v1.5.0`, cartões categorizados, pills e ícones.
+  - [x] Atualização do modal `version-notifier` para `v1.5.0` com visual moderno de boas-vindas.
+  - [x] Testes automatizados da nova camada modal e renderização do changelog (`21 testes, 71 asserções`).

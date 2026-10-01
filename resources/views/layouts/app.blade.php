@@ -242,6 +242,7 @@
                 <!-- Page Main Content -->
                 <main class="flex-1 p-3 sm:p-6 lg:p-8 pb-24 md:pb-8">
                     <livewire:version-notifier />
+                    <x-modal-feedback />
                     {{ $slot }}
                 </main>
 
