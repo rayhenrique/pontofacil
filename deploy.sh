@@ -22,6 +22,10 @@ composer install --optimize-autoloader --no-dev
 echo "🗄️ Executando Migrations..."
 php artisan migrate --force
 
+# Publicar assets do Livewire para evitar erro 404 no Nginx
+echo "🌐 Publicando assets do Livewire..."
+php artisan livewire:publish --assets
+
 # Compila Assets (Tailwind/Vite)
 echo "🎨 Compilando assets NPM..."
 npm install
