@@ -49,4 +49,13 @@ class ModalAndChangelogTest extends TestCase
         $user->refresh();
         $this->assertEquals('v1.5.0', $user->last_seen_version);
     }
+
+    public function test_login_page_renders_with_kl_tecnologia_link(): void
+    {
+        $response = $this->get(route('login'));
+        $response->assertOk();
+        $response->assertSee('KL Tecnologia');
+        $response->assertSee('https://kltecnologia.com');
+        $response->assertSee('PontoFácil');
+    }
 }
