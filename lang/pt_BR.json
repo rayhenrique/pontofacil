@@ -1,0 +1,22 @@
+{
+    "Login": "Acesso ao Sistema",
+    "Logout": "Sair",
+    "Dashboard": "Painel de Controle",
+    "Users": "Usuários",
+    "Employees": "Funcionários",
+    "Sectors": "Setores",
+    "Audit": "Auditoria",
+    "Reports": "Relatórios",
+    "Timesheet": "Espelho de Ponto",
+    "Time Punch": "Bater Ponto",
+    "Manual Adjustment": "Ajuste Manual",
+    "Settings": "Configurações",
+    "Save": "Salvar",
+    "Cancel": "Cancelar",
+    "Edit": "Editar",
+    "Delete": "Excluir",
+    "Actions": "Ações",
+    "Search": "Buscar",
+    "Loading...": "Carregando...",
+    "Close": "Fechar"
+}

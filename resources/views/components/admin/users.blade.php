@@ -149,9 +149,13 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Usuários')] class extends Compo
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
                                         Administrador
                                     </span>
+                                @elseif($user->role === App\Enums\UserRole::Manager)
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                        Gestor
+                                    </span>
                                 @else
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                        Funcionário
+                                        Colaborador
                                     </span>
                                 @endif
                             </td>
@@ -175,10 +179,11 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Usuários')] class extends Compo
     <!-- Modal Adicionar/Editar Usuário (Mobile Friendly) -->
     @if($showModal)
     <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true" wire:transition>
-        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 bg-gray-900/75 backdrop-blur-xs transition-opacity" aria-hidden="true" wire:click="$set('showModal', false)"></div>
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div class="inline-block align-bottom bg-white rounded-2xl px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+        <!-- Backdrop overlay -->
+        <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-xs transition-opacity" aria-hidden="true" wire:click="$set('showModal', false)"></div>
+
+        <div class="flex min-h-screen items-center justify-center p-4 text-center sm:p-0">
+            <div class="relative z-10 w-full max-w-lg transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-2xl transition-all sm:my-8">
                 <div>
                     <h3 class="text-lg leading-6 font-bold text-gray-900 border-b pb-2" id="modal-title">
                         {{ $userId ? 'Editar Usuário' : 'Cadastrar Novo Usuário' }}
@@ -201,7 +206,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Usuários')] class extends Compo
                                 <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Nível de Acesso</label>
                                 <select wire:model="role" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" required>
                                     @foreach(App\Enums\UserRole::cases() as $r)
-                                        <option value="{{ $r->value }}">{{ $r->value === 'admin' ? 'Administrador' : 'Funcionário' }}</option>
+                                        <option value="{{ $r->value }}">{{ $r->label() }}</option>
                                     @endforeach
                                 </select>
                                 @error('role') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror

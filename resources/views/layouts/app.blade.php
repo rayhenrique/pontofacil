@@ -90,6 +90,15 @@
                                         Ajuste Manual
                                     </a>
                                 </div>
+                            @elseif(Auth::user()->role === App\Enums\UserRole::Manager)
+                                <div class="pt-4 mt-4 border-t border-indigo-800 space-y-1">
+                                    <p class="px-3 text-xs font-semibold text-indigo-300 uppercase tracking-wider mb-2">Gestão de Equipe</p>
+                                    
+                                    <a href="{{ route('admin.employees') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-3 rounded-lg text-base font-medium text-indigo-100 hover:bg-indigo-800 hover:text-white transition">
+                                        <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
+                                        Funcionários
+                                    </a>
+                                </div>
                             @endif
                         </div>
 
@@ -98,7 +107,7 @@
                             <div class="flex items-center justify-between">
                                 <div class="truncate">
                                     <p class="text-sm font-semibold text-white truncate">{{ Auth::user()->name }}</p>
-                                    <p class="text-xs text-indigo-300 truncate">{{ Auth::user()->email }}</p>
+                                    <p class="text-xs text-indigo-300 truncate">{{ Auth::user()->email }} • {{ Auth::user()->role->label() }}</p>
                                 </div>
                                 <form method="POST" action="{{ route('logout') }}">
                                     @csrf
@@ -166,6 +175,15 @@
                                         Ajuste Manual
                                     </a>
                                 </div>
+                            @elseif(Auth::user()->role === App\Enums\UserRole::Manager)
+                                <div class="pt-4 mt-4 border-t border-indigo-800 space-y-1">
+                                    <p class="px-3 text-xs font-semibold text-indigo-300 uppercase tracking-wider mb-2">Gestão de Equipe</p>
+                                    
+                                    <a href="{{ route('admin.employees') }}" class="flex items-center px-3 py-2 rounded-lg text-sm font-medium text-indigo-100 hover:text-white hover:bg-indigo-800 transition">
+                                        <svg class="mr-3 h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
+                                        Funcionários
+                                    </a>
+                                </div>
                             @endif
                         </nav>
 
@@ -174,7 +192,7 @@
                             <div class="flex items-center justify-between">
                                 <div class="truncate">
                                     <p class="text-sm font-medium text-white truncate">{{ Auth::user()->name }}</p>
-                                    <p class="text-xs text-indigo-300 truncate">{{ Auth::user()->role === App\Enums\UserRole::Admin ? 'Administrador' : 'Colaborador' }}</p>
+                                    <p class="text-xs text-indigo-300 truncate">{{ Auth::user()->role->label() }}</p>
                                 </div>
                                 <form method="POST" action="{{ route('logout') }}" class="ml-2 flex-shrink-0">
                                     @csrf

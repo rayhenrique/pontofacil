@@ -76,6 +76,17 @@ new #[Layout('layouts.app')] #[Title('Ajuda e Novidades')] class extends Compone
                             <li><strong>Trilha de Auditoria:</strong> Histórico imutável de todas as intervenções manuais realizadas.</li>
                         </ul>
                     </div>
+                    @elseif(Auth::user()->role === App\Enums\UserRole::Manager)
+                    <div class="mt-6 pt-6 border-t border-gray-200">
+                        <h3 class="text-base sm:text-lg font-bold text-indigo-900 flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 inline-flex items-center justify-center text-xs">★</span>
+                            Módulo de Gestão de Equipe
+                        </h3>
+                        <p class="mt-1 text-gray-600">Como gestor, você tem acesso às seguintes ferramentas:</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1.5 text-gray-600 text-xs sm:text-sm">
+                            <li><strong>Gerenciar Funcionários:</strong> Cadastro e visualização dos colaboradores exclusivamente vinculados aos setores sob sua responsabilidade.</li>
+                        </ul>
+                    </div>
                     @endif
                 </div>
             @endif

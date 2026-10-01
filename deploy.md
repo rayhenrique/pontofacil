@@ -69,6 +69,11 @@ A forma mais recomendada para fazer o deploy é via SSH, conectando-se ao servid
    APP_DEBUG=false
    APP_URL=https://pontofacil.kltecnologia.com
 
+   APP_TIMEZONE=America/Maceio
+   APP_LOCALE=pt_BR
+   APP_FALLBACK_LOCALE=pt_BR
+   APP_FAKER_LOCALE=pt_BR
+
    DB_CONNECTION=mysql
    DB_HOST=127.0.0.1
    DB_PORT=3306

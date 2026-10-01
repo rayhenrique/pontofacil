@@ -82,7 +82,7 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
         </div>
         <div class="mt-2 flex items-center justify-center gap-2 text-xs text-indigo-200">
             <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            Horário Oficial de Brasília
+            Horário Oficial de Maceió (GMT-3)
         </div>
     </div>
 
@@ -152,8 +152,9 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
 
                 updateClock() {
                     const now = new Date();
-                    this.currentTime = now.toLocaleTimeString('pt-BR');
+                    this.currentTime = now.toLocaleTimeString('pt-BR', { timeZone: 'America/Maceio' });
                     this.currentDate = now.toLocaleDateString('pt-BR', { 
+                        timeZone: 'America/Maceio',
                         weekday: 'long', 
                         day: '2-digit', 
                         month: 'long', 

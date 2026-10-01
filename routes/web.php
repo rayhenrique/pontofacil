@@ -24,11 +24,15 @@ Route::middleware('auth')->group(function () {
     Route::livewire('/timesheet', 'timesheet')->name('timesheet');
     Route::livewire('/ajuda', 'help')->name('help');
 
-    // Admin Routes (HR)
+    // Management Routes (Admin & Gestor)
+    Route::middleware('can:manageEmployees,App\Models\User')->prefix('admin')->name('admin.')->group(function () {
+        Route::livewire('/employees', 'admin.employees')->name('employees');
+    });
+
+    // Admin Exclusive Routes (RH Total)
     Route::middleware('can:manageTimeEntries,App\Models\User')->prefix('admin')->name('admin.')->group(function () {
         Route::livewire('/adjustment', 'admin.manual-adjustment')->name('adjustment');
         Route::livewire('/sectors', 'admin.sectors')->name('sectors');
-        Route::livewire('/employees', 'admin.employees')->name('employees');
         Route::livewire('/users', 'admin.users')->name('users');
         Route::livewire('/audit', 'admin.audit')->name('audit');
         Route::livewire('/reports', 'admin.reports')->name('reports');

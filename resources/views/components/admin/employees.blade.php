@@ -9,6 +9,7 @@ use App\Models\Sector;
 use App\Enums\UserRole;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends Component
 {
@@ -20,6 +21,21 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
     
     public $showModal = false;
 
+    public function openCreateModal()
+    {
+        $this->reset(['name', 'cpf', 'email', 'phone', 'sector_id']);
+        
+        $user = Auth::user();
+        if ($user->role === UserRole::Manager) {
+            $managedSectors = Sector::where('manager_id', $user->id)->get();
+            if ($managedSectors->count() === 1) {
+                $this->sector_id = (string) $managedSectors->first()->id;
+            }
+        }
+
+        $this->showModal = true;
+    }
+
     public function save()
     {
         $this->validate([
@@ -29,6 +45,18 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
             'phone' => 'nullable|string|max:20',
             'sector_id' => 'required|exists:sectors,id',
         ]);
+
+        $user = Auth::user();
+        if ($user->role === UserRole::Manager) {
+            $isResponsible = Sector::where('id', $this->sector_id)
+                ->where('manager_id', $user->id)
+                ->exists();
+
+            if (!$isResponsible) {
+                $this->addError('sector_id', 'Você só tem autorização para cadastrar funcionários em setores onde você é o responsável.');
+                return;
+            }
+        }
 
         DB::transaction(function () {
             $user = User::create([
@@ -55,10 +83,22 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
     public function delete($id)
     {
         $employee = Employee::findOrFail($id);
-        $user = $employee->user;
+        $user = Auth::user();
+
+        if ($user->role === UserRole::Manager) {
+            $isResponsible = Sector::where('id', $employee->sector_id)
+                ->where('manager_id', $user->id)
+                ->exists();
+
+            if (!$isResponsible) {
+                abort(403, 'Você não tem permissão para excluir funcionários fora dos setores sob sua gestão.');
+            }
+        }
+
+        $userToDelete = $employee->user;
         $employee->delete();
-        if ($user) {
-            $user->delete();
+        if ($userToDelete) {
+            $userToDelete->delete();
         }
         
         session()->flash('message', 'Funcionário e acesso removidos.');
@@ -66,9 +106,29 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
 
     public function with()
     {
+        $user = Auth::user();
+        $isManager = $user->role === UserRole::Manager;
+
+        if ($isManager) {
+            $managedSectors = Sector::where('manager_id', $user->id)->orderBy('name')->get();
+            $managedSectorIds = $managedSectors->pluck('id')->toArray();
+
+            return [
+                'employees' => Employee::with(['user', 'sector'])
+                    ->whereIn('sector_id', $managedSectorIds)
+                    ->orderByDesc('id')
+                    ->get(),
+                'sectors' => $managedSectors,
+                'isManager' => true,
+                'managedSectorsCount' => $managedSectors->count(),
+            ];
+        }
+
         return [
             'employees' => Employee::with(['user', 'sector'])->orderByDesc('id')->get(),
-            'sectors' => Sector::orderBy('name')->get()
+            'sectors' => Sector::orderBy('name')->get(),
+            'isManager' => false,
+            'managedSectorsCount' => null,
         ];
     }
 };
@@ -79,13 +139,23 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
                 <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Gerenciar Funcionários</h2>
-                <p class="text-xs sm:text-sm text-gray-500 mt-0.5">Colaboradores e cadastros da empresa</p>
+                <p class="text-xs sm:text-sm text-gray-500 mt-0.5">{{ $isManager ? 'Colaboradores dos setores sob sua gestão' : 'Colaboradores e cadastros da empresa' }}</p>
             </div>
-            <button wire:click="$set('showModal', true)" class="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-semibold shadow-sm transition">
+            <button wire:click="openCreateModal" class="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-semibold shadow-sm transition">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                 Adicionar Funcionário
             </button>
         </div>
+
+        @if($isManager && $managedSectorsCount === 0)
+            <div class="mb-4 rounded-xl bg-amber-50 border border-amber-200 p-4 text-amber-800 text-sm flex items-start gap-3">
+                <svg class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
+                <div>
+                    <p class="font-bold">Aviso de Gestão</p>
+                    <p class="text-xs text-amber-700 mt-0.5">Seu perfil é de Gestor, porém você ainda não foi designado como responsável por nenhum setor. Solicite ao Administrador (RH) que vincule seu usuário a um setor para que você possa cadastrar colaboradores.</p>
+                </div>
+            </div>
+        @endif
         
         @if (session()->has('message'))
             <div class="mb-4 rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-emerald-800 text-sm font-medium">
@@ -129,8 +199,10 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                     @empty
                         <tr>
                             <td colspan="5" class="px-4 sm:px-6 py-12 text-center text-sm text-gray-500">
-                                Nenhum funcionário cadastrado.<br>
-                                <button wire:click="$set('showModal', true)" class="mt-2 text-indigo-600 hover:text-indigo-900 font-semibold">Clique aqui para adicionar o primeiro.</button>
+                                Nenhum funcionário cadastrado{{ $isManager ? ' nos seus setores' : '' }}.<br>
+                                @if(!$isManager || $managedSectorsCount > 0)
+                                    <button wire:click="openCreateModal" class="mt-2 text-indigo-600 hover:text-indigo-900 font-semibold">Clique aqui para adicionar o primeiro.</button>
+                                @endif
                             </td>
                         </tr>
                     @endforelse
@@ -142,10 +214,11 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
     <!-- Modal Adicionar Funcionário (Mobile Friendly) -->
     @if($showModal)
     <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true" wire:transition>
-        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 bg-gray-900/75 backdrop-blur-xs transition-opacity" aria-hidden="true" wire:click="$set('showModal', false)"></div>
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div class="inline-block align-bottom bg-white rounded-2xl px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-xl sm:w-full sm:p-6">
+        <!-- Backdrop overlay -->
+        <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-xs transition-opacity" aria-hidden="true" wire:click="$set('showModal', false)"></div>
+
+        <div class="flex min-h-screen items-center justify-center p-4 text-center sm:p-0">
+            <div class="relative z-10 w-full max-w-xl transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-2xl transition-all sm:my-8">
                 <div>
                     <h3 class="text-lg leading-6 font-bold text-gray-900 border-b pb-2" id="modal-title">
                         Cadastrar Novo Funcionário
@@ -153,6 +226,13 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                     <p class="mt-2 text-xs text-gray-500">
                         O usuário será criado automaticamente. Senha inicial padrão: <strong class="text-indigo-600 font-mono">12345678</strong>
                     </p>
+
+                    @if($isManager && $managedSectorsCount === 0)
+                        <div class="mt-3 rounded-xl bg-rose-50 border border-rose-200 p-3 text-rose-800 text-xs">
+                            Você não possui setores associados como responsável e não pode cadastrar funcionários no momento.
+                        </div>
+                    @endif
+
                     <div class="mt-4">
                         <form wire:submit="save" class="space-y-4">
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -177,8 +257,10 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                                     @error('phone') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
                                 </div>
                                 <div class="sm:col-span-2">
-                                    <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Setor</label>
-                                    <select wire:model="sector_id" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" required>
+                                    <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+                                        Setor {{ $isManager ? '(Setores sob sua responsabilidade)' : '' }}
+                                    </label>
+                                    <select wire:model="sector_id" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" required {{ $isManager && $managedSectorsCount === 0 ? 'disabled' : '' }}>
                                         <option value="">Selecione um setor</option>
                                         @foreach($sectors as $sector)
                                             <option value="{{ $sector->id }}">{{ $sector->name }}</option>
@@ -192,7 +274,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                                 <button type="button" wire:click="$set('showModal', false)" class="w-full sm:w-auto inline-flex justify-center rounded-xl border border-gray-300 px-4 py-2.5 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50">
                                     Cancelar
                                 </button>
-                                <button type="submit" class="w-full sm:w-auto inline-flex justify-center rounded-xl px-5 py-2.5 bg-indigo-600 text-sm font-semibold text-white hover:bg-indigo-700 shadow-sm">
+                                <button type="submit" @if($isManager && $managedSectorsCount === 0) disabled @endif class="w-full sm:w-auto inline-flex justify-center rounded-xl px-5 py-2.5 bg-indigo-600 text-sm font-semibold text-white hover:bg-indigo-700 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                                     <span wire:loading.remove wire:target="save">Salvar Funcionário</span>
                                     <span wire:loading wire:target="save">Salvando...</span>
                                 </button>

@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 
-new #[Layout('layouts.app')] #[Title('Login')] class extends Component
+new #[Layout('layouts.app')] #[Title('Entrar no Sistema')] class extends Component
 {
     public string $email = '';
     public string $password = '';

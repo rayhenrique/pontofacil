@@ -5,33 +5,57 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use App\Models\Sector;
 use App\Models\User;
+use Illuminate\Validation\Rule;
 
 new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Component
 {
+    public $sectorId = null;
     public $name = '';
     public $description = '';
     public $manager_id = '';
     
     public $showModal = false;
 
+    public function openCreateModal()
+    {
+        $this->reset(['sectorId', 'name', 'description', 'manager_id']);
+        $this->showModal = true;
+    }
+
+    public function openEditModal($id)
+    {
+        $sector = Sector::findOrFail($id);
+        $this->sectorId = $sector->id;
+        $this->name = $sector->name;
+        $this->description = $sector->description ?? '';
+        $this->manager_id = $sector->manager_id ?? '';
+        $this->showModal = true;
+    }
+
     public function save()
     {
         $this->validate([
-            'name' => 'required|string|max:255|unique:sectors,name',
+            'name' => ['required', 'string', 'max:255', Rule::unique('sectors', 'name')->ignore($this->sectorId)],
             'description' => 'nullable|string|max:255',
             'manager_id' => 'nullable|exists:users,id',
         ]);
 
-        Sector::create([
+        $data = [
             'name' => $this->name,
             'description' => $this->description,
             'manager_id' => $this->manager_id ?: null,
-        ]);
+        ];
 
-        $this->reset(['name', 'description', 'manager_id']);
+        if ($this->sectorId) {
+            Sector::findOrFail($this->sectorId)->update($data);
+            session()->flash('message', 'Setor atualizado com sucesso.');
+        } else {
+            Sector::create($data);
+            session()->flash('message', 'Setor criado com sucesso.');
+        }
+
+        $this->reset(['sectorId', 'name', 'description', 'manager_id']);
         $this->showModal = false;
-        
-        session()->flash('message', 'Setor criado com sucesso.');
     }
 
     public function delete($id)
@@ -57,7 +81,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
                 <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Gerenciar Setores</h2>
                 <p class="text-xs sm:text-sm text-gray-500 mt-0.5">Departamentos e áreas organizacionais</p>
             </div>
-            <button wire:click="$set('showModal', true)" class="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-semibold shadow-sm transition">
+            <button wire:click="openCreateModal" class="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-semibold shadow-sm transition">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                 Adicionar Setor
             </button>
@@ -89,13 +113,14 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 @if($sector->manager)
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                                        {{ $sector->manager->name }}
+                                        {{ $sector->manager->name }} ({{ $sector->manager->role->label() }})
                                     </span>
                                 @else
                                     <span class="text-gray-400 italic">Não definido</span>
                                 @endif
                             </td>
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <button wire:click="openEditModal({{ $sector->id }})" class="text-indigo-600 hover:text-indigo-900 font-medium mr-3">Editar</button>
                                 <button wire:click="delete({{ $sector->id }})" wire:confirm="Tem certeza que deseja excluir o setor {{ $sector->name }}?" class="text-red-600 hover:text-red-900 font-medium">Excluir</button>
                             </td>
                         </tr>
@@ -103,7 +128,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
                         <tr>
                             <td colspan="5" class="px-4 sm:px-6 py-12 text-center text-sm text-gray-500">
                                 Nenhum setor cadastrado.<br>
-                                <button wire:click="$set('showModal', true)" class="mt-2 text-indigo-600 hover:text-indigo-900 font-semibold">Clique aqui para adicionar o primeiro setor.</button>
+                                <button wire:click="openCreateModal" class="mt-2 text-indigo-600 hover:text-indigo-900 font-semibold">Clique aqui para adicionar o primeiro setor.</button>
                             </td>
                         </tr>
                     @endforelse
@@ -112,16 +137,17 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
         </div>
     </div>
 
-    <!-- Modal Adicionar Setor (Mobile Friendly) -->
+    <!-- Modal Adicionar/Editar Setor (Mobile Friendly) -->
     @if($showModal)
     <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true" wire:transition>
-        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 bg-gray-900/75 backdrop-blur-xs transition-opacity" aria-hidden="true" wire:click="$set('showModal', false)"></div>
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div class="inline-block align-bottom bg-white rounded-2xl px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+        <!-- Backdrop overlay -->
+        <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-xs transition-opacity" aria-hidden="true" wire:click="$set('showModal', false)"></div>
+
+        <div class="flex min-h-screen items-center justify-center p-4 text-center sm:p-0">
+            <div class="relative z-10 w-full max-w-lg transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-2xl transition-all sm:my-8">
                 <div>
-                    <h3 class="text-lg leading-6 font-bold text-gray-900" id="modal-title">
-                        Cadastrar Novo Setor
+                    <h3 class="text-lg leading-6 font-bold text-gray-900 border-b pb-2" id="modal-title">
+                        {{ $sectorId ? 'Editar Setor' : 'Cadastrar Novo Setor' }}
                     </h3>
                     <div class="mt-4">
                         <form wire:submit="save" class="space-y-4">
@@ -142,18 +168,18 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
                                 <select wire:model="manager_id" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white">
                                     <option value="">Selecione um responsável</option>
                                     @foreach($users as $user)
-                                        <option value="{{ $user->id }}">{{ $user->name }} ({{ $user->email }})</option>
+                                        <option value="{{ $user->id }}">{{ $user->name }} ({{ $user->role->label() }})</option>
                                     @endforeach
                                 </select>
                                 @error('manager_id') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
                             </div>
                             
-                            <div class="mt-5 sm:mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+                            <div class="mt-5 sm:mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-3 border-t pt-4">
                                 <button type="button" wire:click="$set('showModal', false)" class="w-full sm:w-auto inline-flex justify-center rounded-xl border border-gray-300 px-4 py-2.5 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50">
                                     Cancelar
                                 </button>
                                 <button type="submit" class="w-full sm:w-auto inline-flex justify-center rounded-xl px-5 py-2.5 bg-indigo-600 text-sm font-semibold text-white hover:bg-indigo-700 shadow-sm">
-                                    <span wire:loading.remove wire:target="save">Salvar Setor</span>
+                                    <span wire:loading.remove wire:target="save">{{ $sectorId ? 'Atualizar Setor' : 'Salvar Setor' }}</span>
                                     <span wire:loading wire:target="save">Salvando...</span>
                                 </button>
                             </div>
