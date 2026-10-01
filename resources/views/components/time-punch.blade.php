@@ -108,8 +108,6 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
         </div>
     </div>
 
-    <!-- html5-qrcode library -->
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
     <script>
         document.addEventListener('alpine:init', () => {
