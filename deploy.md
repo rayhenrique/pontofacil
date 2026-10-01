@@ -111,37 +111,50 @@ php artisan view:cache
 4. Aguarde a validação. A partir desse momento, o sistema abrirá perfeitamente seguro via `https://`.
 ## 8. Atualizando o Sistema (Deploy Contínuo)
 
-Sempre que você realizar alterações no código localmente e fizer o `push` para o GitHub, siga estes passos para refletir a atualização na VPS:
+Sempre que você realizar alterações no código localmente e fizer o `push` para o GitHub, siga estes passos para refletir a atualização na VPS.
 
-1. Acesse o servidor via SSH:
-   ```bash
-   ssh kltecnologia-pontofacil@72.60.142.2
-   ```
-2. Acesse a pasta do sistema:
-   ```bash
-   cd htdocs/pontofacil.kltecnologia.com
-   ```
-3. Puxe as atualizações do repositório (Git):
-   ```bash
-   git pull origin master
-   ```
-4. Atualize pacotes e banco de dados (se houver novas tabelas):
-   ```bash
-   composer install --optimize-autoloader --no-dev
-   php artisan migrate --force
-   ```
-5. Recompile os assets visuais (CSS/JS):
-   ```bash
-   npm install
-   npm run build
-   ```
-6. Limpe e reconstrua o cache geral do Laravel para que a nova versão entre em vigor perfeitamente:
-   ```bash
-   php artisan optimize:clear
-   php artisan config:cache
-   php artisan route:cache
-   php artisan view:cache
-   ```
+### Opção A: Executar o Script Automático (Recomendado)
+
+Na sua sessão SSH (como `root` ou como `kltecnologia-pontofacil`):
+
+```bash
+cd /home/kltecnologia-pontofacil/htdocs/pontofacil.kltecnologia.com
+git config --global --add safe.directory /home/kltecnologia-pontofacil/htdocs/pontofacil.kltecnologia.com
+git fetch --all && git reset --hard origin/master
+chmod +x deploy.sh
+./deploy.sh
+```
+
+### Opção B: Passo a Passo Manual
+
+Se preferir rodar manualmente comando a comando:
+
+```bash
+cd /home/kltecnologia-pontofacil/htdocs/pontofacil.kltecnologia.com
+git config --global --add safe.directory /home/kltecnologia-pontofacil/htdocs/pontofacil.kltecnologia.com
+git fetch --all && git reset --hard origin/master
+
+# Pacotes e Banco
+composer install --optimize-autoloader --no-dev
+php artisan migrate --force
+
+# Publicar assets do Livewire (essencial no Nginx do CloudPanel)
+php artisan livewire:publish --assets
+
+# Compilar CSS e JS
+npm install
+npm run build
+
+# Limpar e recriar caches
+php artisan optimize:clear
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+
+# Ajustar permissões para o CloudPanel
+chown -R kltecnologia-pontofacil:kltecnologia-pontofacil .
+chmod -R 775 storage bootstrap/cache
+```
 
 ---
 
