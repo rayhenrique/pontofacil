@@ -134,7 +134,7 @@ new #[Layout('layouts.app')] #[Title('Relatórios Gerenciais')] class extends Co
                     @forelse($results as $entry)
                         <tr class="hover:bg-gray-50 transition">
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono font-bold">
-                                {{ Carbon\Carbon::parse($entry->timestamp)->format('d/m/Y H:i') }}
+                                {{ Carbon::parse($entry->timestamp)->format('d/m/Y H:i') }}
                             </td>
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-800">
                                 {{ optional($entry->user)->name ?? 'Desconhecido' }}

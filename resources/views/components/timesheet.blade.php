@@ -83,7 +83,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                 <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Mês</label>
                 <select wire:model.live="month" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white">
                     @for($i = 1; $i <= 12; $i++)
-                        <option value="{{ $i }}">{{ sprintf('%02d', $i) }} - {{ \Carbon\Carbon::create(null, $i, 1)->translatedFormat('F') }}</option>
+                        <option value="{{ $i }}">{{ sprintf('%02d', $i) }} - {{ Carbon::create(null, $i, 1)->translatedFormat('F') }}</option>
                     @endfor
                 </select>
             </div>
@@ -105,7 +105,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                     <div class="bg-gray-50 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
                         <h3 class="text-sm font-bold text-gray-800 capitalize flex items-center gap-2">
                             <svg class="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
-                            {{ \Carbon\Carbon::parse($date)->isoFormat('dddd, LL') }}
+                            {{ Carbon::parse($date)->isoFormat('dddd, LL') }}
                         </h3>
                         <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
                             {{ count($dayEntries) }} {{ count($dayEntries) === 1 ? 'registro' : 'registros' }}
@@ -119,7 +119,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                                         {{ $entry->type === 'in' ? 'Entrada' : 'Saída' }}
                                     </span>
                                     <span class="text-base text-gray-900 font-mono font-bold">
-                                        {{ \Carbon\Carbon::parse($entry->timestamp)->format('H:i:s') }}
+                                        {{ Carbon::parse($entry->timestamp)->format('H:i:s') }}
                                     </span>
                                     @if($entry->is_manual)
                                         <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-amber-100 text-amber-800">
