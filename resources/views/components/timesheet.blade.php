@@ -5,6 +5,8 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Models\Sector;
+use App\Models\Employee;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 use App\Enums\UserRole;
@@ -24,12 +26,28 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
 
     public function with()
     {
-        $isAdmin = Auth::user()->role === UserRole::Admin;
+        $user = Auth::user();
+        $isAdmin = $user->role === UserRole::Admin;
+        $isManager = $user->role === UserRole::Manager;
         
-        // If not admin, force user ID to self
-        if (!$isAdmin) {
-            $this->userId = Auth::id();
+        $selectableUsers = collect([]);
+        if ($isAdmin) {
+            $selectableUsers = User::orderBy('name')->get();
+        } elseif ($isManager) {
+            $managedSectorIds = Sector::where('manager_id', $user->id)->pluck('id');
+            $employeeUserIds = Employee::whereIn('sector_id', $managedSectorIds)->pluck('user_id');
+            $allowedUserIds = $employeeUserIds->push($user->id)->unique();
+
+            if (!in_array((int) $this->userId, $allowedUserIds->map(fn($id) => (int)$id)->toArray())) {
+                $this->userId = $user->id;
+            }
+
+            $selectableUsers = User::whereIn('id', $allowedUserIds)->orderBy('name')->get();
+        } else {
+            $this->userId = $user->id;
         }
+
+        $canSelectUser = $isAdmin || ($isManager && $selectableUsers->count() > 1);
 
         $query = TimeEntry::with('user')
             ->where('user_id', $this->userId)
@@ -46,8 +64,8 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
 
         return [
             'groupedEntries' => $groupedEntries,
-            'isAdmin' => $isAdmin,
-            'users' => $isAdmin ? User::orderBy('name')->get() : collect([]),
+            'canSelectUser' => $canSelectUser,
+            'users' => $selectableUsers,
         ];
     }
 };
@@ -68,9 +86,9 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
 
         <!-- Filters (Responsive Mobile Stack) -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6 pb-6 border-b border-gray-200">
-            @if($isAdmin)
+            @if($canSelectUser)
             <div class="sm:col-span-2 lg:col-span-1">
-                <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Funcionário</label>
+                <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Colaborador</label>
                 <select wire:model.live="userId" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white">
                     @foreach($users as $u)
                         <option value="{{ $u->id }}">{{ $u->name }}</option>

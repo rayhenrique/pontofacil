@@ -11,12 +11,12 @@
 
 - [x] **Fase 2: Autenticação e Autorização**
   - [x] Configurar rotas protegidas pelo middleware `auth`.
-  - [x] Criar Enum `UserRole` (Admin, Employee) e implementá-lo no model `User`.
-  - [x] Criar middleware ou Policies para bloquear rotas de RH para funcionários comuns.
+  - [x] Criar Enum `UserRole` (Admin, Manager, Employee) e implementá-lo no model `User`.
+  - [x] Criar middleware e Policies (`UserPolicy`) para bloquear rotas de RH e restringir acessos.
 
 - [x] **Fase 3: Core (Batida de Ponto - Frontend / API)**
-  - [x] Criar um *View-Based Component* no Livewire 4 (`TimePunch`) para a tela inicial do funcionário, mantendo lógica e view no mesmo arquivo de forma limpa.
-  - [x] Integrar biblioteca JS leve (`html5-qrcode`) no componente para ler o QR Code.
+  - [x] Criar um *View-Based Component* no Livewire 4 (`TimePunch`) para a tela inicial do colaborador.
+  - [x] Integrar biblioteca JS local (`html5-qrcode`) no bundle do Vite para leitura do QR Code sem dependência de CDN.
   - [x] Acionar `navigator.geolocation.getCurrentPosition` via Alpine.js após a leitura.
   - [x] Enviar payload (hash lido + coords) para o backend Livewire usando `$wire`.
 
@@ -24,20 +24,48 @@
   - [x] Validar se o hash lido corresponde a `system_settings` -> `qr_code_hash`.
   - [x] Calcular e validar a distância (Fórmula de Haversine) entre o usuário e a empresa.
   - [x] Salvar o `time_entry` utilizando `now()` do servidor para a coluna `timestamp`.
-  - [x] Utilizar a nova propriedade `data-loading` do Livewire 4 no frontend para exibir feedback visual automático sem criar variáveis de estado extras.
+  - [x] Exibir feedback visual e tratamento de mensagens de sucesso ou erro no raio permitido.
 
 - [x] **Fase 5: Dashboard e Espelho de Ponto**
-  - [x] Criar um Page Component do Livewire chamado `Timesheet` e servi-lo diretamente nas rotas usando `Route::livewire()`.
-  - [x] Agrupar as batidas por dia utilizando Collections e implementar `wire:transition` para suavizar animações ao filtrar meses ou listas de usuários.
+  - [x] Criar Page Component do Livewire `Timesheet` servido via `Route::livewire()`.
+  - [x] Agrupar batidas por dia utilizando Collections e permitir filtro por mês e ano.
+  - [x] Permitir que Gestores selecionem membros da sua equipe e Admins selecionem qualquer funcionário.
 
 - [x] **Fase 6: Ajuste Manual (RH)**
-  - [x] Interface para o Admin adicionar/editar um ponto.
-  - [x] Ao salvar, atualizar/inserir em `time_entries` marcando `is_manual = true`.
-  - [x] Gravar obrigatoriamente um registro na tabela `time_adjustments` com a justificativa.
+  - [x] Interface para o Admin adicionar batidas esquecidas com justificativa.
+  - [x] Gravar registro na tabela `time_entries` marcando `is_manual = true`.
+  - [x] Gravar obrigatoriamente um registro na tabela `time_adjustments` para trilha de auditoria.
 
 - [x] **Fase 7: Módulos Administrativos**
-  - [x] Módulo "Setor": CRUD de setores da empresa.
-  - [x] Módulo "Funcionário": Gerenciamento de funcionários (vinculados a setores).
-  - [x] Módulo "Usuários": Gerenciamento de credenciais e acessos (Admin/Empregado).
-  - [x] Módulo "Auditoria": Visualização da trilha de auditoria (tabela `time_adjustments`).
-  - [x] Módulo "Relatórios": Exportação e visualização de relatórios gerenciais consolidados.
+  - [x] Módulo "Setor": CRUD de setores com designação de gestor responsável.
+  - [x] Módulo "Funcionários": Cadastro de colaboradores vinculados a setores (com CPF e Telefone).
+  - [x] Módulo "Usuários": Gerenciamento de credenciais e papéis (Admin, Gestor, Colaborador).
+  - [x] Módulo "Auditoria": Visualização da trilha de auditoria (`time_adjustments`).
+  - [x] Módulo "Relatórios": Filtros avançados por data, setor e colaborador.
+
+- [x] **Fase 8: Interface Mobile-First & Otimização de Assets**
+  - [x] Navegação inferior fixa (Bottom Tab Bar) para smartphones.
+  - [x] Gaveta lateral deslizante suave (Off-Canvas Drawer) com botão de menu hambúrguer.
+  - [x] Relógio digital em tempo real no padrão relógio de ponto físico.
+  - [x] Empacotamento de assets no Vite sem conexões externas a CDNs.
+
+- [x] **Fase 9: Perfil de Gestor & Gestão de Equipe**
+  - [x] Adicionar `UserRole::Manager` ("Gestor").
+  - [x] Módulo "Gestão de Equipe" (`/admin/employees`) filtrando apenas setores geridos pelo usuário logado.
+  - [x] Bloqueio em `save()` e `delete()` impedindo alterações fora do setor responsável.
+
+- [x] **Fase 10: Localização Integral PT-BR & Fuso Horário de Maceió**
+  - [x] Arquivos de tradução em `lang/pt_BR` (validações, atributos amigáveis, autenticação, paginação).
+  - [x] Configuração de locale `pt_BR` e timezone `America/Maceio` (GMT-3) no Laravel e Carbon.
+  - [x] Relógio digital com fuso travado em Maceió via Alpine.js.
+
+- [x] **Fase 11: Configurações da Empresa & QR Code**
+  - [x] Módulo `/admin/settings` para Administradores.
+  - [x] Exibição de QR Code em tela e ferramenta de impressão A4 para fixação na empresa.
+  - [x] Rotação segura do hash do QR Code com 1 clique.
+  - [x] Calibração de coordenadas GPS com botão de auto-captura.
+
+- [x] **Fase 12: Suíte de Testes Automatizados & Qualidade de Código**
+  - [x] Testes de autorização de gestores e isolamento de setor.
+  - [x] Testes de traduções, validações em português e fuso horário `America/Maceio`.
+  - [x] Testes de trilha de auditoria e permissões de configurações (`13 testes, 38 asserções`).

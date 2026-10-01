@@ -1,7 +1,7 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Route;
 
 // Guest Routes
 Route::middleware('guest')->group(function () {
@@ -18,6 +18,7 @@ Route::middleware('auth')->group(function () {
         Auth::logout();
         session()->invalidate();
         session()->regenerateToken();
+
         return redirect('/login');
     })->name('logout');
 
@@ -36,5 +37,6 @@ Route::middleware('auth')->group(function () {
         Route::livewire('/users', 'admin.users')->name('users');
         Route::livewire('/audit', 'admin.audit')->name('audit');
         Route::livewire('/reports', 'admin.reports')->name('reports');
+        Route::livewire('/settings', 'admin.settings')->name('settings');
     });
 });

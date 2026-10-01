@@ -2,13 +2,23 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable(['user_id', 'timestamp', 'type', 'latitude', 'longitude', 'accuracy', 'is_manual'])]
 class TimeEntry extends Model
 {
+    protected $fillable = [
+        'user_id',
+        'timestamp',
+        'type',
+        'latitude',
+        'longitude',
+        'accuracy',
+        'is_manual',
+    ];
+
     protected function casts(): array
     {
         return [

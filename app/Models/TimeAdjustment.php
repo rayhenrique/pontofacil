@@ -2,13 +2,21 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable(['time_entry_id', 'adjusted_by', 'old_timestamp', 'new_timestamp', 'justification'])]
 class TimeAdjustment extends Model
 {
+    protected $fillable = [
+        'time_entry_id',
+        'adjusted_by',
+        'old_timestamp',
+        'new_timestamp',
+        'justification',
+    ];
+
     protected function casts(): array
     {
         return [
@@ -25,5 +33,10 @@ class TimeAdjustment extends Model
     public function adjustedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'adjusted_by');
+    }
+
+    public function admin(): BelongsTo
+    {
+        return $this->adjustedBy();
     }
 }
