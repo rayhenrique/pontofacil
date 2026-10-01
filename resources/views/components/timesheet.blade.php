@@ -62,10 +62,67 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
             return Carbon::parse($entry->timestamp)->format('Y-m-d');
         });
 
+        $daysCalculated = [];
+        $totalMonthMinutes = 0;
+
+        foreach ($groupedEntries as $date => $dayEntries) {
+            $metrics = $this->calculateDayMetrics($dayEntries);
+            $daysCalculated[$date] = $metrics;
+            $totalMonthMinutes += $metrics['minutes'];
+        }
+
+        $monthHours = intdiv($totalMonthMinutes, 60);
+        $monthRemMinutes = $totalMonthMinutes % 60;
+        $monthFormatted = sprintf('%dh %02dm', $monthHours, $monthRemMinutes);
+
+        $workedDaysCount = count($groupedEntries);
+        $avgMinutesPerDay = $workedDaysCount > 0 ? (int) round($totalMonthMinutes / $workedDaysCount) : 0;
+        $avgFormatted = sprintf('%02dh %02dm', intdiv($avgMinutesPerDay, 60), $avgMinutesPerDay % 60);
+
         return [
             'groupedEntries' => $groupedEntries,
+            'daysCalculated' => $daysCalculated,
+            'totalMonthFormatted' => $monthFormatted,
+            'workedDaysCount' => $workedDaysCount,
+            'totalPunches' => $entries->count(),
+            'avgFormatted' => $avgFormatted,
             'canSelectUser' => $canSelectUser,
             'users' => $selectableUsers,
+        ];
+    }
+
+    public function calculateDayMetrics($dayEntries): array
+    {
+        $totalMinutes = 0;
+        $lastIn = null;
+        $hasOpenInterval = false;
+
+        $sorted = collect($dayEntries)->sortBy('timestamp');
+
+        foreach ($sorted as $entry) {
+            $time = Carbon::parse($entry->timestamp);
+            if ($entry->type === 'in' || $entry->type === 'entrada') {
+                $lastIn = $time;
+            } elseif (($entry->type === 'out' || $entry->type === 'saida') && $lastIn) {
+                $totalMinutes += $lastIn->diffInMinutes($time);
+                $lastIn = null;
+            }
+        }
+
+        if ($lastIn !== null) {
+            $hasOpenInterval = true;
+        }
+
+        $hours = intdiv($totalMinutes, 60);
+        $minutes = $totalMinutes % 60;
+        $formatted = sprintf('%02dh %02dm', $hours, $minutes);
+
+        return [
+            'minutes' => $totalMinutes,
+            'hours' => $hours,
+            'remMinutes' => $minutes,
+            'formatted' => $formatted,
+            'isOpen' => $hasOpenInterval,
         ];
     }
 };
@@ -76,7 +133,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 border-b border-gray-200 pb-4">
             <div>
                 <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Espelho de Ponto</h2>
-                <p class="text-xs sm:text-sm text-gray-500 mt-0.5">Histórico completo de registros de jornada</p>
+                <p class="text-xs sm:text-sm text-gray-500 mt-0.5">Histórico completo de registros de jornada e horas trabalhadas</p>
             </div>
             <a href="{{ route('home') }}" class="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 text-sm font-semibold">
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
@@ -116,18 +173,68 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
             </div>
         </div>
 
+        <!-- Monthly Summary KPI Cards -->
+        @if($totalPunches > 0)
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+            <div class="bg-indigo-50/60 border border-indigo-100 rounded-xl p-4 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-indigo-900 uppercase tracking-wider">Total Trabalhado</p>
+                    <p class="text-xl font-black text-indigo-950 font-mono">{{ $totalMonthFormatted }}</p>
+                </div>
+            </div>
+
+            <div class="bg-emerald-50/60 border border-emerald-100 rounded-xl p-4 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-emerald-900 uppercase tracking-wider">Dias Trabalhados</p>
+                    <p class="text-xl font-black text-emerald-950 font-mono">{{ $workedDaysCount }} {{ $workedDaysCount === 1 ? 'dia' : 'dias' }}</p>
+                </div>
+            </div>
+
+            <div class="bg-purple-50/60 border border-purple-100 rounded-xl p-4 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-purple-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-purple-900 uppercase tracking-wider">Média por Dia</p>
+                    <p class="text-xl font-black text-purple-950 font-mono">{{ $avgFormatted }}</p>
+                </div>
+            </div>
+        </div>
+        @endif
+
         <!-- Timesheet Data -->
         <div class="space-y-4" data-loading-class="opacity-50" wire:transition>
             @forelse($groupedEntries as $date => $dayEntries)
                 <div class="border border-gray-200 rounded-xl overflow-hidden shadow-xs" wire:key="day-{{ $date }}">
-                    <div class="bg-gray-50 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+                    <div class="bg-gray-50 px-4 py-3 border-b border-gray-200 flex flex-wrap justify-between items-center gap-2">
                         <h3 class="text-sm font-bold text-gray-800 capitalize flex items-center gap-2">
                             <svg class="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
                             {{ Carbon::parse($date)->isoFormat('dddd, LL') }}
                         </h3>
-                        <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
-                            {{ count($dayEntries) }} {{ count($dayEntries) === 1 ? 'registro' : 'registros' }}
-                        </span>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            @if(isset($daysCalculated[$date]))
+                                @if($daysCalculated[$date]['isOpen'])
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                                        <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                                        {{ $daysCalculated[$date]['formatted'] }} (em andamento)
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                        <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                                        {{ $daysCalculated[$date]['formatted'] }} trabalhadas
+                                    </span>
+                                @endif
+                            @endif
+                            <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
+                                {{ count($dayEntries) }} {{ count($dayEntries) === 1 ? 'registro' : 'registros' }}
+                            </span>
+                        </div>
                     </div>
                     <ul class="divide-y divide-gray-100">
                         @foreach($dayEntries as $entry)
