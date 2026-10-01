@@ -1,10 +1,12 @@
 # Histórico de Versões (Changelog)
 
-## v1.1.0 (Atual)
-- Adicionados os módulos administrativos: Setor, Funcionário, Usuários, Auditoria e Relatórios.
-- Nova barra de navegação lateral (Sidebar) com ícones.
+## v1.2.0 (Atual)
+- Painel Administrativo concluído com os 5 módulos operacionais.
+- Gerenciamento completo de Funcionários e Usuários (com geração automática de credenciais).
+- Relatórios Gerenciais com filtros de datas, setor e funcionário.
+- Inclusão do campo "Responsável do Setor".
 
-## v1.0.0
+## v1.1.0
 - Lançamento inicial do PontoFácil (REP-A).
 - Implementação da validação dupla (QR Code + GPS).
 - Módulo de Espelho de Ponto (Timesheet) para gestores e funcionários.

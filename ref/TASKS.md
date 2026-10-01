@@ -35,9 +35,9 @@
   - [x] Ao salvar, atualizar/inserir em `time_entries` marcando `is_manual = true`.
   - [x] Gravar obrigatoriamente um registro na tabela `time_adjustments` com a justificativa.
 
-- [ ] **Fase 7: Módulos Administrativos**
-  - [ ] Módulo "Setor": CRUD de setores da empresa.
-  - [ ] Módulo "Funcionário": Gerenciamento de funcionários (vinculados a setores).
-  - [ ] Módulo "Usuários": Gerenciamento de credenciais e acessos (Admin/Empregado).
-  - [ ] Módulo "Auditoria": Visualização da trilha de auditoria (tabela `time_adjustments`).
-  - [ ] Módulo "Relatórios": Exportação e visualização de relatórios gerenciais consolidados.
+- [x] **Fase 7: Módulos Administrativos**
+  - [x] Módulo "Setor": CRUD de setores da empresa.
+  - [x] Módulo "Funcionário": Gerenciamento de funcionários (vinculados a setores).
+  - [x] Módulo "Usuários": Gerenciamento de credenciais e acessos (Admin/Empregado).
+  - [x] Módulo "Auditoria": Visualização da trilha de auditoria (tabela `time_adjustments`).
+  - [x] Módulo "Relatórios": Exportação e visualização de relatórios gerenciais consolidados.
