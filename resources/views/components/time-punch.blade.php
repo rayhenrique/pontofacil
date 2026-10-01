@@ -73,41 +73,68 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
 };
 ?>
 
-<div class="max-w-2xl mx-auto py-10 px-4 sm:px-6 lg:px-8" x-data="timePunchComponent()">
-    <div class="bg-white rounded-lg shadow px-5 py-6 sm:px-6">
-        <h2 class="text-2xl font-bold text-gray-900 mb-6 text-center">Registro de Ponto Inteligente</h2>
+<div class="max-w-xl mx-auto py-2 sm:py-6 px-1 sm:px-6 lg:px-8" x-data="timePunchComponent()">
+    <!-- Digital Clock Card (Mobile First) -->
+    <div class="mb-4 bg-gradient-to-r from-indigo-700 to-indigo-900 rounded-2xl shadow-md p-5 text-white text-center">
+        <p class="text-xs uppercase tracking-widest text-indigo-200 font-semibold mb-1" x-text="currentDate"></p>
+        <div class="text-4xl sm:text-5xl font-extrabold tracking-tight font-mono text-white" x-text="currentTime">
+            {{ now()->format('H:i:s') }}
+        </div>
+        <div class="mt-2 flex items-center justify-center gap-2 text-xs text-indigo-200">
+            <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            Horário Oficial de Brasília
+        </div>
+    </div>
+
+    <!-- Main Scanner Card -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6 text-center">
+        <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Bater Ponto</h2>
+        <p class="text-xs sm:text-sm text-gray-500 mb-5">Aponte a câmera para o QR Code da empresa</p>
         
         <!-- Alerts -->
         @if($message)
-            <div class="mb-4 rounded-md p-4 {{ $status === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800' }}">
-                <p class="text-sm font-medium">{{ $message }}</p>
+            <div class="mb-5 rounded-xl p-4 flex items-center gap-3 text-left {{ $status === 'success' ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' : 'bg-red-50 text-red-900 border border-red-200' }}">
+                @if($status === 'success')
+                    <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 text-emerald-600">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                    </div>
+                @else
+                    <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 text-red-600">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+                    </div>
+                @endif
+                <p class="text-sm font-semibold">{{ $message }}</p>
             </div>
         @endif
 
         <div x-show="!isProcessing">
-            <!-- QR Scanner Container -->
-            <div id="qr-reader" class="w-full max-w-sm mx-auto overflow-hidden rounded-lg border-2 border-indigo-200"></div>
+            <!-- QR Scanner Container with mobile friendly dimensions -->
+            <div id="qr-reader" class="w-full max-w-xs mx-auto overflow-hidden rounded-xl border-2 border-dashed border-indigo-300 bg-gray-50 aspect-square flex items-center justify-center"></div>
             
-            <div class="mt-4 flex justify-center space-x-4">
-                <button @click="startScanner()" x-show="!isScanning" type="button" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
-                    Iniciar Câmera
+            <div class="mt-5 flex flex-col sm:flex-row justify-center gap-3">
+                <button @click="startScanner()" x-show="!isScanning" type="button" class="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3.5 border border-transparent text-base font-semibold rounded-xl shadow-md text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 transition touch-manipulation">
+                    <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" /><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" /></svg>
+                    Escanear QR Code
                 </button>
-                <button @click="stopScanner()" x-show="isScanning" style="display: none;" type="button" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700">
-                    Parar Câmera
+                <button @click="stopScanner()" x-show="isScanning" style="display: none;" type="button" class="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3.5 border border-transparent text-base font-semibold rounded-xl shadow-md text-white bg-red-600 hover:bg-red-700 active:bg-red-800 transition touch-manipulation">
+                    <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    Cancelar Leitura
                 </button>
             </div>
         </div>
 
-        <!-- Processing State -->
-        <div x-show="isProcessing" style="display: none;" class="text-center py-10">
-            <svg class="animate-spin mx-auto h-10 w-10 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <p class="mt-4 text-gray-600">Obtendo localização e processando...</p>
+        <!-- Processing State (Clean mobile spinner) -->
+        <div x-show="isProcessing" style="display: none;" class="text-center py-8">
+            <div class="inline-flex p-4 rounded-full bg-indigo-50 mb-3 animate-pulse">
+                <svg class="animate-spin h-10 w-10 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </div>
+            <p class="text-base font-medium text-gray-900">Validando QR Code e GPS...</p>
+            <p class="text-xs text-gray-500 mt-1">Garantindo registro inviolável do ponto</p>
         </div>
     </div>
-
 
     <script>
         document.addEventListener('alpine:init', () => {
@@ -115,30 +142,50 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                 html5QrcodeScanner: null,
                 isScanning: false,
                 isProcessing: false,
+                currentTime: '',
+                currentDate: '',
+
+                init() {
+                    this.updateClock();
+                    setInterval(() => this.updateClock(), 1000);
+                },
+
+                updateClock() {
+                    const now = new Date();
+                    this.currentTime = now.toLocaleTimeString('pt-BR');
+                    this.currentDate = now.toLocaleDateString('pt-BR', { 
+                        weekday: 'long', 
+                        day: '2-digit', 
+                        month: 'long', 
+                        year: 'numeric' 
+                    });
+                },
 
                 startScanner() {
                     if (!this.html5QrcodeScanner) {
                         this.html5QrcodeScanner = new Html5Qrcode("qr-reader");
                     }
                     
-                    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+                    const config = { fps: 10, qrbox: { width: 220, height: 220 } };
                     
                     this.html5QrcodeScanner.start(
                         { facingMode: "environment" },
                         config,
-                        (decodedText, decodedResult) => this.onScanSuccess(decodedText),
-                        (errorMessage) => { /* ignore */ }
+                        (decodedText) => this.onScanSuccess(decodedText),
+                        () => { /* silent frame errors */ }
                     ).then(() => {
                         this.isScanning = true;
                     }).catch((err) => {
-                        console.error("Failed to start scanner:", err);
-                        alert("Não foi possível acessar a câmera. Certifique-se de usar HTTPS e conceder as permissões necessárias.");
+                        console.error("Scanner start error:", err);
+                        alert("Não foi possível acessar a câmera. Certifique-se de usar HTTPS e autorizar a permissão da câmera no navegador.");
                     });
                 },
 
                 stopScanner() {
                     if (this.html5QrcodeScanner && this.isScanning) {
                         this.html5QrcodeScanner.stop().then(() => {
+                            this.isScanning = false;
+                        }).catch(() => {
                             this.isScanning = false;
                         });
                     }
@@ -157,13 +204,13 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                                     });
                             },
                             (error) => {
-                                alert("Erro ao obter localização: " + error.message);
+                                alert("Erro ao capturar localização (GPS): " + error.message + ". A localização é obrigatória para o registro.");
                                 this.isProcessing = false;
                             },
                             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                         );
                     } else {
-                        alert("Geolocalização não é suportada por este navegador.");
+                        alert("Geolocalização não é suportada por este dispositivo.");
                         this.isProcessing = false;
                     }
                 }

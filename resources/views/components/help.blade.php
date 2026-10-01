@@ -21,51 +21,67 @@ new #[Layout('layouts.app')] #[Title('Ajuda e Novidades')] class extends Compone
 };
 ?>
 
-<div class="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
-    <div class="bg-white rounded-lg shadow">
-        <!-- Tabs Header -->
-        <div class="border-b border-gray-200">
-            <nav class="-mb-px flex" aria-label="Tabs">
-                <button wire:click="$set('activeTab', 'manual')" class="w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm {{ $activeTab === 'manual' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
+<div class="max-w-4xl mx-auto py-2 sm:py-6 px-1 sm:px-6 lg:px-8">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 overflow-hidden">
+        <!-- Tabs Header (Touch Friendly) -->
+        <div class="border-b border-gray-200 bg-gray-50/50">
+            <nav class="flex" aria-label="Tabs">
+                <button wire:click="$set('activeTab', 'manual')" class="w-1/2 py-3.5 px-3 text-center border-b-2 font-semibold text-sm transition {{ $activeTab === 'manual' ? 'border-indigo-600 text-indigo-600 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700' }}">
                     Manual do Usuário
                 </button>
-                <button wire:click="$set('activeTab', 'changelog')" class="w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm {{ $activeTab === 'changelog' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
+                <button wire:click="$set('activeTab', 'changelog')" class="w-1/2 py-3.5 px-3 text-center border-b-2 font-semibold text-sm transition {{ $activeTab === 'changelog' ? 'border-indigo-600 text-indigo-600 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700' }}">
                     Novidades e Versões
                 </button>
             </nav>
         </div>
 
         <!-- Tab Content -->
-        <div class="p-6">
+        <div class="p-4 sm:p-8">
             @if($activeTab === 'manual')
-                <div class="prose max-w-none text-gray-700" wire:transition>
-                    <h2>Como usar o PontoFácil</h2>
+                <div class="prose max-w-none text-gray-700 text-sm sm:text-base space-y-4" wire:transition>
+                    <h2 class="text-xl sm:text-2xl font-bold text-gray-900 border-b pb-3">Como usar o PontoFácil</h2>
                     
-                    <h3>1. Batida de Ponto Diária</h3>
-                    <p>Ao acessar o sistema, vá para a tela inicial <strong>"Bater Ponto"</strong>. O sistema ativará a câmera do seu dispositivo.</p>
-                    <ul>
-                        <li>Aponte a câmera para o QR Code fornecido pela empresa.</li>
-                        <li>Autorize o uso da localização GPS (obrigatório para validar a batida).</li>
-                        <li>O sistema identificará a leitura e gravará seu ponto.</li>
-                    </ul>
+                    <div>
+                        <h3 class="text-base sm:text-lg font-bold text-indigo-900 flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 inline-flex items-center justify-center text-xs">1</span>
+                            Batida de Ponto Diária
+                        </h3>
+                        <p class="mt-1 text-gray-600">Ao acessar o sistema, vá para a tela inicial <strong>"Bater Ponto"</strong>. O sistema ativará a câmera do seu dispositivo.</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-gray-600 text-xs sm:text-sm">
+                            <li>Aponte a câmera para o QR Code físico fixado na empresa.</li>
+                            <li>Autorize o uso da localização GPS do navegador (necessário para validação da distância).</li>
+                            <li>O sistema fará a leitura e gravará a batida com carimbo de tempo inviolável do servidor.</li>
+                        </ul>
+                    </div>
                     
-                    <h3>2. Espelho de Ponto</h3>
-                    <p>No menu <strong>"Espelho de Ponto"</strong>, você pode visualizar todo o histórico das suas entradas e saídas. As informações estão agrupadas por dia e podem ser filtradas por mês e ano.</p>
+                    <div class="pt-2">
+                        <h3 class="text-base sm:text-lg font-bold text-indigo-900 flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 inline-flex items-center justify-center text-xs">2</span>
+                            Espelho de Ponto
+                        </h3>
+                        <p class="mt-1 text-gray-600">No menu <strong>"Espelho de Ponto"</strong>, você visualiza todo o histórico de entradas e saídas agrupadas por dia, com opção de filtrar por mês e ano.</p>
+                    </div>
 
                     @if(Auth::user()->role === App\Enums\UserRole::Admin)
-                    <hr class="my-6">
-                    <h3 class="text-indigo-600">Módulo Administrativo (RH)</h3>
-                    <p>Como administrador, você possui acessos adicionais:</p>
-                    <ul>
-                        <li><strong>Espelho Geral:</strong> Você pode visualizar o espelho de ponto de qualquer funcionário através do menu suspenso.</li>
-                        <li><strong>Ajuste Manual:</strong> Na guia "Ajuste Manual", você pode lançar ou corrigir pontos esquecidos ou falhos. Para garantir a segurança antifraude, toda inclusão exige uma justificativa que ficará cravada na <em>Trilha de Auditoria</em> do banco de dados, associada ao seu usuário.</li>
-                    </ul>
+                    <div class="mt-6 pt-6 border-t border-gray-200">
+                        <h3 class="text-base sm:text-lg font-bold text-purple-900 flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full bg-purple-100 text-purple-700 inline-flex items-center justify-center text-xs">★</span>
+                            Módulo Administrativo (RH)
+                        </h3>
+                        <p class="mt-1 text-gray-600">Como administrador, você tem acesso às seguintes ferramentas:</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1.5 text-gray-600 text-xs sm:text-sm">
+                            <li><strong>Setores e Funcionários:</strong> Cadastro e manutenção dos departamentos e colaboradores.</li>
+                            <li><strong>Espelho Geral & Relatórios:</strong> Filtragem por período, colaborador ou setor para fechamento de folha.</li>
+                            <li><strong>Ajuste Manual:</strong> Lançamento retroativo de batidas esquecidas com justificativa obrigatória.</li>
+                            <li><strong>Trilha de Auditoria:</strong> Histórico imutável de todas as intervenções manuais realizadas.</li>
+                        </ul>
+                    </div>
                     @endif
                 </div>
             @endif
 
             @if($activeTab === 'changelog')
-                <div class="prose max-w-none text-gray-700 bg-gray-50 p-6 rounded-md border border-gray-100" wire:transition>
+                <div class="prose max-w-none text-gray-700 bg-gray-50 p-4 sm:p-6 rounded-xl border border-gray-200 text-xs sm:text-sm" wire:transition>
                     {!! $changelogHtml !!}
                 </div>
             @endif

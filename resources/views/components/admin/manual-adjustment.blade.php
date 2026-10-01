@@ -71,69 +71,70 @@ new #[Layout('layouts.app')] #[Title('Ajuste Manual de Ponto')] class extends Co
 };
 ?>
 
-<div class="max-w-3xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
-    <div class="bg-white rounded-lg shadow p-6">
-        <div class="flex justify-between items-center mb-6 border-b border-gray-200 pb-4">
-            <h2 class="text-2xl font-bold text-gray-900">Ajuste Manual de Ponto (RH)</h2>
-            <a href="{{ route('timesheet') }}" class="text-indigo-600 hover:text-indigo-900 text-sm font-medium">Ver Espelho</a>
+<div class="max-w-3xl mx-auto py-2 sm:py-6 px-1 sm:px-6 lg:px-8">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 border-b border-gray-200 pb-4">
+            <div>
+                <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Ajuste Manual de Ponto</h2>
+                <p class="text-xs sm:text-sm text-gray-500 mt-0.5">Correção de batidas esquecidas com justificativa</p>
+            </div>
+            <a href="{{ route('timesheet') }}" class="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 text-sm font-semibold">
+                Ver Espelho
+            </a>
         </div>
         
         @if($message)
-            <div class="mb-6 rounded-md p-4 {{ $status === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800' }}">
-                <p class="text-sm font-medium">{{ $message }}</p>
+            <div class="mb-6 rounded-xl p-4 {{ $status === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200' }}">
+                <p class="text-sm font-semibold">{{ $message }}</p>
             </div>
         @endif
         
-        <form wire:submit="saveAdjustment" class="space-y-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Funcionário</label>
-                    <select wire:model="userId" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm border" required>
+        <form wire:submit="saveAdjustment" class="space-y-5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="sm:col-span-2">
+                    <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Colaborador</label>
+                    <select wire:model="userId" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" required>
                         <option value="">Selecione um funcionário</option>
                         @foreach($users as $user)
-                            <option value="{{ $user->id }}">{{ $user->name }}</option>
+                            <option value="{{ $user->id }}">{{ $user->name }} ({{ $user->email }})</option>
                         @endforeach
                     </select>
-                    @error('userId') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                    @error('userId') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
                 </div>
                 
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Tipo de Batida</label>
-                    <select wire:model="type" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm border" required>
+                    <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Tipo de Batida</label>
+                    <select wire:model="type" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" required>
                         <option value="in">Entrada</option>
                         <option value="out">Saída</option>
                     </select>
-                    @error('type') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                    @error('type') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Horário</label>
+                    <input type="time" wire:model="time" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" required>
+                    @error('time') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
                 </div>
                 
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Data</label>
-                    <input type="date" wire:model="date" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" required>
-                    @error('date') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Horário</label>
-                    <input type="time" wire:model="time" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" required>
-                    @error('time') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                <div class="sm:col-span-2">
+                    <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Data</label>
+                    <input type="date" wire:model="date" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" required>
+                    @error('date') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
                 </div>
             </div>
             
             <div>
-                <label class="block text-sm font-medium text-gray-700">Justificativa da Auditoria</label>
-                <textarea wire:model="justification" rows="3" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Ex: Esquecimento, Falta de bateria no celular, etc." required></textarea>
-                <p class="mt-2 text-sm text-gray-500">Esta justificativa ficará permanentemente gravada na trilha de auditoria, associada ao seu usuário ({{ Auth::user()->name }}).</p>
-                @error('justification') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Justificativa da Auditoria</label>
+                <textarea wire:model="justification" rows="3" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Esquecimento, bateria descarregada, etc." required></textarea>
+                <p class="mt-1.5 text-xs text-gray-500">Esta justificativa será salva permanentemente na trilha de auditoria sob sua responsabilidade ({{ Auth::user()->name }}).</p>
+                @error('justification') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
             </div>
             
-            <div class="flex justify-end">
-                <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                    <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" data-loading style="display: none;">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span data-loading-remove>Salvar Ajuste Manual</span>
-                    <span data-loading style="display: none;">Salvando...</span>
+            <div class="flex justify-end pt-3 border-t">
+                <button type="submit" class="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-semibold shadow-sm transition">
+                    <span wire:loading.remove wire:target="saveAdjustment">Salvar Ajuste Manual</span>
+                    <span wire:loading wire:target="saveAdjustment">Salvando...</span>
                 </button>
             </div>
         </form>

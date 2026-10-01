@@ -61,23 +61,26 @@ new #[Layout('layouts.app')] #[Title('Relatórios Gerenciais')] class extends Co
 };
 ?>
 
-<div class="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
-    <div class="bg-white rounded-lg shadow p-6 mb-8">
-        <h2 class="text-2xl font-bold text-gray-900 mb-6">Relatórios de Ponto</h2>
+<div class="max-w-7xl mx-auto py-2 sm:py-6 px-1 sm:px-6 lg:px-8">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6 mb-6">
+        <div class="mb-6">
+            <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Relatórios de Ponto</h2>
+            <p class="text-xs sm:text-sm text-gray-500 mt-0.5">Filtros avançados e conferência de jornadas</p>
+        </div>
         
         <form wire:submit="generateReport" class="space-y-4">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Data Inicial</label>
-                    <input type="date" wire:model="startDate" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" required>
+                    <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Data Inicial</label>
+                    <input type="date" wire:model="startDate" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" required>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Data Final</label>
-                    <input type="date" wire:model="endDate" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" required>
+                    <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Data Final</label>
+                    <input type="date" wire:model="endDate" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" required>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Setor</label>
-                    <select wire:model="sectorId" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Setor</label>
+                    <select wire:model="sectorId" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white">
                         <option value="">Todos os Setores</option>
                         @foreach($sectors as $sector)
                             <option value="{{ $sector->id }}">{{ $sector->name }}</option>
@@ -85,8 +88,8 @@ new #[Layout('layouts.app')] #[Title('Relatórios Gerenciais')] class extends Co
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Funcionário</label>
-                    <select wire:model="employeeId" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Funcionário</label>
+                    <select wire:model="employeeId" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white">
                         <option value="">Todos os Funcionários</option>
                         @foreach($employees as $employee)
                             <option value="{{ $employee->id }}">{{ optional($employee->user)->name ?? 'S/ Nome' }}</option>
@@ -95,10 +98,10 @@ new #[Layout('layouts.app')] #[Title('Relatórios Gerenciais')] class extends Co
                 </div>
             </div>
             
-            <div class="flex justify-end pt-2 border-t mt-4">
-                <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium shadow-sm flex items-center">
-                    <span wire:loading.remove wire:target="generateReport">
-                        <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            <div class="flex justify-end pt-3 border-t mt-4">
+                <button type="submit" class="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-semibold shadow-sm transition">
+                    <span wire:loading.remove wire:target="generateReport" class="flex items-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                         Gerar Relatório
                     </span>
                     <span wire:loading wire:target="generateReport">Processando...</span>
@@ -108,65 +111,57 @@ new #[Layout('layouts.app')] #[Title('Relatórios Gerenciais')] class extends Co
     </div>
 
     @if($hasSearched)
-    <div class="bg-white rounded-lg shadow overflow-hidden">
-        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-            <h3 class="text-lg font-medium text-gray-900">Resultados da Pesquisa</h3>
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 overflow-hidden">
+        <div class="px-4 sm:px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-gray-50">
+            <h3 class="text-base font-bold text-gray-900">Resultados da Pesquisa</h3>
+            <span class="inline-flex items-center self-start sm:self-auto px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
                 {{ count($results) }} registros encontrados
             </span>
         </div>
         
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto -mx-4 sm:mx-0">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data / Hora</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Funcionário</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Setor</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Origem</th>
+                        <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Data / Hora</th>
+                        <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Funcionário</th>
+                        <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Setor</th>
+                        <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Tipo</th>
+                        <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Origem</th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
                     @forelse($results as $entry)
-                        <tr>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                        <tr class="hover:bg-gray-50 transition">
+                            <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono font-bold">
                                 {{ Carbon\Carbon::parse($entry->timestamp)->format('d/m/Y H:i') }}
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                            <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-800">
                                 {{ optional($entry->user)->name ?? 'Desconhecido' }}
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 {{ optional(optional(optional($entry->user)->employee)->sector)->name ?? '-' }}
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                @if($entry->type === 'entrada')
-                                    <span class="text-green-600 font-semibold flex items-center">
-                                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path></svg>
-                                        Entrada
-                                    </span>
-                                @else
-                                    <span class="text-blue-600 font-semibold flex items-center">
-                                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-                                        Saída
-                                    </span>
-                                @endif
+                            <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm">
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold {{ $entry->type === 'in' || $entry->type === 'entrada' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
+                                    {{ $entry->type === 'in' || $entry->type === 'entrada' ? 'Entrada' : 'Saída' }}
+                                </span>
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 @if($entry->is_manual)
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                                        Ajuste Manual
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-amber-100 text-amber-800">
+                                        Manual (RH)
                                     </span>
                                 @else
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
-                                        Aplicativo
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
+                                        QR Code + GPS
                                     </span>
                                 @endif
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="px-6 py-8 text-center text-sm text-gray-500">
+                            <td colspan="5" class="px-4 sm:px-6 py-12 text-center text-sm text-gray-500">
                                 Nenhum registro encontrado para os filtros selecionados.
                             </td>
                         </tr>
