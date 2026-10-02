@@ -138,10 +138,21 @@
   - [ ] Validar cadeia do certificado, validade, algoritmo e integridade das assinaturas.
   - [ ] Somente após esses requisitos, habilitar documentos como saída oficial REP-P.
 
-- [ ] **Fase 20: Motor de Tratamento PTRP, Tolerância Legal & Banco de Horas**
-  - [ ] Tabela `treatment_events` para registro imutável de ajustes, abonos e justificativas (sem alterar a batida bruta original).
-  - [ ] Motor analítico de apuração minuto a minuto aplicando a regra legal de tolerância do Art. 58 § 1º da CLT (5 min por batida, até 10 min diários).
-  - [ ] Ledger do Banco de Horas (`time_bank_accounts` e `time_bank_transactions`) com validade contratual e compensação.
+- [x] **Fase 20: Motor de Tratamento PTRP, Jornada & Banco de Horas Configurável**
+  - [x] **20.1 Eventos de Tratamento (`treatment_events`):** Tabela de ajustes, inclusões manuais, desconsiderações e abonos sem alterar `punch_events`. Tipos: `manual_punch_added`, `punch_disregarded`, `absence_added`, `absence_justified`, `classification_override` com status `pending`, `approved`, `rejected` e auditoria administrativa.
+  - [x] **20.2 Jornada de Trabalho (`work_schedules`):** Modelagem de jornadas e escalas esperadas sem hardcode, suportando horários por dia da semana, intervalo intrajornada, folgas e vinculação ao `Employee`/`Employment`.
+  - [x] **20.3 Motor de Apuração (`CalculateDailyJourneyAction`):** Combinação de `PunchEvents` originais + `TreatmentEvents` aprovados + `WorkSchedule` + `LaborPolicy` -> `CalculatedJourney` apurando minutos previstos, trabalhados, ordinários, extras, atrasos, saídas antecipadas, intervalos, ausências e créditos/débitos de banco.
+  - [x] **20.4 Tolerância Legal (Art. 58 § 1º CLT):** Regra exclusivamente da camada de apuração (5 min por batida, até 10 min diários), mantendo a marcação bruta em `punch_events` estritamente inalterada.
+  - [x] **20.5 Banco de Horas em Ledger Imutável:** Tabelas `time_bank_accounts` e `time_bank_transactions` (ULID) com saldo SEMPRE calculado via `SUM(minutes)`, nunca sobrescrito como campo numérico.
+  - [x] **20.6 Configuração Admin/RH (`time_bank_policies`):** Painel em `Admin → Configurações → Banco de Horas` (desativado por padrão) com seleção de modo de fechamento: `CARRY_OVER` (acumular) ou `MONTHLY_RESET` (zerar).
+  - [x] **20.7 a 20.10 Regras CARRY_OVER, MONTHLY_RESET e Fechamento Formal:**
+    - `CARRY_OVER`: o saldo é transportado automaticamente para o próximo mês sem movimentação artificial.
+    - `MONTHLY_RESET`: gera transação contábil compensatória de zeramento (`monthly_reset = -saldo`) preservando 100% do histórico anterior no ledger (inclusive saldo devedor/negativo).
+    - Não zera por virada de calendário: zeramento ocorre exclusivamente no ato formal de **Fechar Competência** (`CloseMonthlyPeriodAction`).
+  - [x] **20.11 Interface do Colaborador (Espelho de Ponto):** Exibição do card do Banco de Horas (saldo anterior, créditos, débitos, ajustes, saldo atual, encerramento mensal) e botão de solicitação de ajuste/justificativa.
+  - [x] **20.12 a 20.15 Gestão Admin/RH, Extrato e Permissões:** Tela de extrato com filtros (`/admin/time-bank`), modal de ajuste manual (`AdjustTimeBankAction`), gestão de solicitações (`/admin/treatment-requests`) e autorização RBAC.
+  - [x] **20.16 Auditoria Forense:** Registro estruturado de logs (`time_bank.enabled`, `time_bank.policy_changed`, `time_bank.monthly_reset`, `treatment.requested`, `treatment.approved`, `period.closed`).
+  - [x] **20.17 Suíte de Testes Automatizados:** Cobertura de acúmulo, zeramento com histórico, saldo negativo, fechamento formal, tolerância legal e fluxo de aprovação/rejeição de tratamentos.
 
 - [ ] **Fase 21: Fechamento de Competência Mensal & Exportação AEJ**
   - [ ] Tabela `closed_periods` com congelamento de espelho de ponto e hash de integridade do período.

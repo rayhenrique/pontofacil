@@ -13,6 +13,10 @@ new #[Layout('layouts.app')] #[Title('Configurações da Empresa e QR Code')] cl
     public string $company_longitude = '-35.7350';
     public string $allowed_radius_meters = '100';
 
+    public bool $time_bank_enabled = false;
+    public string $time_bank_closing_mode = 'CARRY_OVER';
+    public string $time_bank_policy_name = 'Regra de Banco de Horas da Empresa';
+
     public string $message = '';
     public string $status = '';
 
@@ -36,6 +40,11 @@ new #[Layout('layouts.app')] #[Title('Configurações da Empresa e QR Code')] cl
         $this->company_latitude = $settings['company_latitude'] ?? '-9.6658';
         $this->company_longitude = $settings['company_longitude'] ?? '-35.7350';
         $this->allowed_radius_meters = $settings['allowed_radius_meters'] ?? '100';
+
+        $currentPolicy = \App\Models\TimeBankPolicy::current();
+        $this->time_bank_enabled = (bool) $currentPolicy->enabled;
+        $this->time_bank_closing_mode = $currentPolicy->closing_mode?->value ?? 'CARRY_OVER';
+        $this->time_bank_policy_name = $currentPolicy->name ?? 'Regra de Banco de Horas da Empresa';
     }
 
     public function regenerateQrCode()
@@ -71,6 +80,47 @@ new #[Layout('layouts.app')] #[Title('Configurações da Empresa e QR Code')] cl
             'type' => 'success',
             'title' => 'Parâmetros GPS Atualizados!',
             'message' => 'As coordenadas da sede e o raio de segurança antifraude foram salvos com sucesso.',
+            'buttonText' => 'OK'
+        ]);
+    }
+
+    public function saveTimeBank()
+    {
+        $this->validate([
+            'time_bank_policy_name' => 'required|string|max:120',
+            'time_bank_closing_mode' => 'required|in:CARRY_OVER,MONTHLY_RESET',
+        ]);
+
+        $previousPolicy = \App\Models\TimeBankPolicy::current();
+        $wasEnabled = $previousPolicy->enabled;
+
+        $policy = \App\Models\TimeBankPolicy::create([
+            'name' => $this->time_bank_policy_name,
+            'enabled' => $this->time_bank_enabled,
+            'closing_mode' => $this->time_bank_closing_mode,
+            'valid_from' => now()->startOfMonth()->toDateString(),
+            'created_by' => \Illuminate\Support\Facades\Auth::id(),
+        ]);
+
+        if ($wasEnabled !== $this->time_bank_enabled) {
+            \Illuminate\Support\Facades\Log::info($this->time_bank_enabled ? 'time_bank.enabled' : 'time_bank.disabled', [
+                'policy_id' => $policy->id,
+                'by' => \Illuminate\Support\Facades\Auth::id(),
+            ]);
+        } else {
+            \Illuminate\Support\Facades\Log::info('time_bank.policy_changed', [
+                'policy_id' => $policy->id,
+                'closing_mode' => $this->time_bank_closing_mode,
+                'by' => \Illuminate\Support\Facades\Auth::id(),
+            ]);
+        }
+
+        $this->dispatch('app-modal-alert', [
+            'type' => 'success',
+            'title' => 'Regras de Banco de Horas Atualizadas!',
+            'message' => $this->time_bank_enabled
+                ? 'O Banco de Horas está ATIVADO com política ' . ($this->time_bank_closing_mode === 'CARRY_OVER' ? 'de Acúmulo Contínuo.' : 'de Zeramento Mensal no fechamento.')
+                : 'O Banco de Horas foi DESATIVADO para a empresa.',
             'buttonText' => 'OK'
         ]);
     }
@@ -188,6 +238,84 @@ new #[Layout('layouts.app')] #[Title('Configurações da Empresa e QR Code')] cl
                 <button type="submit" class="w-full sm:w-auto inline-flex items-center justify-center px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold shadow-sm transition">
                     <span wire:loading.remove wire:target="saveGps">Salvar Coordenadas</span>
                     <span wire:loading wire:target="saveGps">Salvando...</span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Banco de Horas Section -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6">
+        <div class="border-b border-gray-100 pb-4 mb-6">
+            <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <svg class="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                Banco de Horas & Fechamento de Competência (PTRP)
+            </h3>
+            <p class="text-xs text-gray-500 mt-1">Defina se a empresa utiliza regime de banco de horas e a regra aplicada no fechamento formal de cada mês.</p>
+        </div>
+
+        <form wire:submit="saveTimeBank" class="space-y-6">
+            <!-- Ativação Geral -->
+            <div class="flex items-center justify-between p-4 rounded-xl border {{ $time_bank_enabled ? 'bg-indigo-50/50 border-indigo-200' : 'bg-gray-50 border-gray-200' }}">
+                <div>
+                    <span class="text-sm font-bold text-gray-900">Regime de Banco de Horas</span>
+                    <p class="text-xs text-gray-500 mt-0.5">
+                        {{ $time_bank_enabled ? 'O banco de horas está ATIVADO. Horas extras e déficits serão computados no ledger.' : 'O banco de horas está DESATIVADO (padrão). Horas extras e atrasos serão tratados fora do banco.' }}
+                    </p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" wire:model.live="time_bank_enabled" class="sr-only peer">
+                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                </label>
+            </div>
+
+            @if($time_bank_enabled)
+                <div class="space-y-4 pt-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Nome / Identificação da Política</label>
+                        <input type="text" wire:model="time_bank_policy_name" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" placeholder="Ex: Acordo Coletivo 2026 - Banco de Horas Semestral" required>
+                        @error('time_bank_policy_name') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Comportamento no Fechamento Mensal da Competência</label>
+                        
+                        <div class="grid sm:grid-cols-2 gap-4">
+                            <!-- Opção CARRY_OVER -->
+                            <label class="relative flex flex-col p-4 border rounded-2xl cursor-pointer transition {{ $time_bank_closing_mode === 'CARRY_OVER' ? 'border-indigo-600 bg-indigo-50/40 ring-2 ring-indigo-500/20' : 'border-gray-200 hover:border-gray-300 bg-white' }}">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <input type="radio" wire:model="time_bank_closing_mode" value="CARRY_OVER" class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300">
+                                    <span class="text-sm font-bold text-gray-900">Acumular para o mês seguinte</span>
+                                </div>
+                                <p class="text-xs text-gray-500 leading-relaxed pl-7">
+                                    O saldo positivo ou negativo permanece íntegro e continua no mês subsequente. Nenhuma movimentação artificial é criada.
+                                </p>
+                            </label>
+
+                            <!-- Opção MONTHLY_RESET -->
+                            <label class="relative flex flex-col p-4 border rounded-2xl cursor-pointer transition {{ $time_bank_closing_mode === 'MONTHLY_RESET' ? 'border-indigo-600 bg-indigo-50/40 ring-2 ring-indigo-500/20' : 'border-gray-200 hover:border-gray-300 bg-white' }}">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <input type="radio" wire:model="time_bank_closing_mode" value="MONTHLY_RESET" class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300">
+                                    <span class="text-sm font-bold text-gray-900">Zerar ao fechar o mês</span>
+                                </div>
+                                <p class="text-xs text-gray-500 leading-relaxed pl-7">
+                                    No fechamento formal pelo RH, é registrado um lançamento compensatório no ledger (positivo ou negativo) para iniciar o próximo mês com saldo zero, preservando o histórico integral.
+                                </p>
+                            </label>
+                        </div>
+                        @error('time_bank_closing_mode') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div class="p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-xl text-xs text-amber-900 leading-relaxed flex items-start gap-2.5">
+                        <svg class="w-4 h-4 text-amber-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" /></svg>
+                        <span><strong>Regra de Auditoria:</strong> O zeramento nunca acontece automaticamente pela virada do relógio à meia-noite. Ele só é acionado quando o RH executa o procedimento formal de <strong>Fechar Competência</strong>.</span>
+                    </div>
+                </div>
+            @endif
+
+            <div class="flex justify-end pt-3 border-t border-gray-100">
+                <button type="submit" class="w-full sm:w-auto inline-flex items-center justify-center px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold shadow-sm transition">
+                    <span wire:loading.remove wire:target="saveTimeBank">Salvar Regras de Banco de Horas</span>
+                    <span wire:loading wire:target="saveTimeBank">Salvando Regras...</span>
                 </button>
             </div>
         </form>

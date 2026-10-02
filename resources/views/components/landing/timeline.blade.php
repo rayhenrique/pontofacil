@@ -25,7 +25,7 @@
 
             <div class="space-y-12">
                 
-                <!-- Versão Atual: v1.9.0 -->
+                <!-- Versão Atual: v2.0.0 -->
                 <div class="gsap-timeline-item relative pl-12 sm:pl-20">
                     <!-- Nó / Marcador com Destaque Pulsante -->
                     <div class="absolute left-2.5 sm:left-6.5 top-1.5 -translate-x-1/2 flex items-center justify-center">
@@ -40,10 +40,57 @@
                         <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
                             <div class="flex items-center gap-3">
                                 <span class="px-3 py-1 rounded-full bg-indigo-600 text-white font-black text-xs tracking-wider">
-                                    v1.9.0
+                                    v2.0.0
                                 </span>
                                 <span class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">
                                     Versão Atual (Ativa)
+                                </span>
+                            </div>
+                            <span class="text-xs font-semibold text-slate-600">PTRP, Jornada & Banco de Horas</span>
+                        </div>
+
+                        <h3 class="text-xl font-bold text-slate-900 mb-2">
+                            Motor de Tratamento PTRP, Jornadas, Tolerância CLT Art. 58 e Banco de Horas
+                        </h3>
+
+                        <p class="text-sm text-slate-600 mb-4 leading-relaxed">
+                            Implementação do ledger inalterável de eventos de tratamento (inclusão manual, desconsideração, abonos), motor de apuração com tolerância legal estrita sem adulterar o fato bruto, banco de horas como ledger de soma auditável com suporte a CARRY_OVER ou MONTHLY_RESET e fechamento formal de competência.
+                        </p>
+
+                        <div class="grid sm:grid-cols-2 gap-3 text-xs text-slate-700">
+                            <div class="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                <span class="text-emerald-500 font-bold">✓</span>
+                                <span>Ledger treatment_events com fluxo de solicitação e aprovação com segregação</span>
+                            </div>
+                            <div class="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                <span class="text-emerald-500 font-bold">✓</span>
+                                <span>Motor CalculateDailyJourneyAction e tolerância legal Art. 58 § 1º CLT</span>
+                            </div>
+                            <div class="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                <span class="text-emerald-500 font-bold">✓</span>
+                                <span>Banco de horas em ledger SUM(minutes) com CARRY_OVER e MONTHLY_RESET</span>
+                            </div>
+                            <div class="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                <span class="text-emerald-500 font-bold">✓</span>
+                                <span>Fechamento formal mensal pelo RH sem zeramento automático de virada de mês</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Versão: v1.9.0 -->
+                <div class="gsap-timeline-item relative pl-12 sm:pl-20">
+                    <!-- Nó / Marcador -->
+                    <div class="absolute left-2.5 sm:left-6.5 top-1.5 -translate-x-1/2 flex items-center justify-center">
+                        <div class="w-4 h-4 rounded-full bg-indigo-600 border-4 border-white shadow-sm"></div>
+                    </div>
+
+                    <!-- Card de Versão -->
+                    <div class="bg-white/80 backdrop-blur-sm border border-slate-200/80 rounded-3xl p-6 sm:p-8 shadow-xs hover:shadow-md transition-shadow">
+                        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                            <div class="flex items-center gap-3">
+                                <span class="px-3 py-1 rounded-full bg-slate-800 text-white font-black text-xs tracking-wider">
+                                    v1.9.0
                                 </span>
                             </div>
                             <span class="text-xs font-semibold text-slate-600">Comprovantes, AFD 2026 & Validação</span>

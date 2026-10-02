@@ -1,0 +1,214 @@
+<?php
+
+namespace App\Domain\PTRP\Actions;
+
+use App\Domain\PTRP\DTOs\CalculatedJourney;
+use App\Domain\PTRP\Enums\TreatmentEventStatus;
+use App\Domain\PTRP\Enums\TreatmentEventType;
+use App\Domain\PTRP\Policies\LaborPolicy;
+use App\Models\Employee;
+use App\Models\PunchEvent;
+use App\Models\TreatmentEvent;
+use App\Models\WorkSchedule;
+use Carbon\Carbon;
+use Carbon\CarbonInterface;
+
+class CalculateDailyJourneyAction
+{
+    /**
+     * Combina fatos brutos do REP (PunchEvent) + Tratamentos Aprovados (TreatmentEvent)
+     * + Escala de Trabalho (WorkSchedule) + Diretrizes Legais (LaborPolicy)
+     * para apurar a jornada analítica do trabalhador.
+     *
+     * A MARCAÇÃO ORIGINAL EM PUNCH_EVENTS NUNCA É ALTERADA.
+     */
+    public function execute(
+        Employee $employee,
+        CarbonInterface $date,
+        ?WorkSchedule $schedule = null,
+        ?LaborPolicy $policy = null,
+    ): CalculatedJourney {
+        $dateStr = $date->format('Y-m-d');
+
+        // 1. Escala de trabalho esperada
+        $workSchedule = $schedule ?? $employee->workSchedule ?? WorkSchedule::first();
+        if (! $workSchedule) {
+            $workSchedule = WorkSchedule::createDefault40h();
+        }
+
+        $daySchedule = $workSchedule->getScheduleForDay($date->dayOfWeek);
+        $scheduledMinutes = (int) ($daySchedule['expected_minutes'] ?? 0);
+        $expectedPeriods = $daySchedule['periods'] ?? [];
+
+        // 2. Política de tolerância CLT (Art. 58, § 1º)
+        $laborPolicy = $policy ?? new LaborPolicy(
+            $workSchedule->tolerance_minutes ?? 5,
+            $workSchedule->daily_tolerance_minutes ?? 10
+        );
+
+        // 3. Obter marcações brutas do REP (somente leitura)
+        $rawPunches = PunchEvent::where(function ($q) use ($employee) {
+            $q->where('employee_id', $employee->id)
+                ->orWhere('user_id', $employee->user_id);
+        })
+            ->whereDate('occurred_at_local', $dateStr)
+            ->orderBy('occurred_at_local', 'asc')
+            ->get();
+
+        // 4. Obter eventos de tratamento aprovados (PTRP)
+        $approvedTreatments = TreatmentEvent::where(function ($q) use ($employee) {
+            $q->where('employee_id', $employee->id)
+                ->orWhere('employment_id', $employee->id);
+        })
+            ->where('status', TreatmentEventStatus::Approved)
+            ->whereDate('effective_at', $dateStr)
+            ->get();
+
+        // Identificar desconsiderações e justificativas de ausência
+        $disregardedPunchIds = $approvedTreatments
+            ->where('type', TreatmentEventType::PunchDisregarded)
+            ->pluck('reference_punch_id')
+            ->filter()
+            ->all();
+
+        $justifiedAbsence = $approvedTreatments
+            ->where('type', TreatmentEventType::AbsenceJustified)
+            ->first();
+
+        $treatmentNotes = [];
+
+        // 5. Construir lista de batidas efetivas (Efetivo = Bruto - Desconsideradas + Inclusões Manuais)
+        $effectivePunches = [];
+
+        foreach ($rawPunches as $punch) {
+            if (in_array($punch->id, $disregardedPunchIds)) {
+                $treatmentNotes[] = sprintf('Marcação #%s (%s) desconsiderada por justificativa aprovada.', $punch->nsr, $punch->occurred_at_local->format('H:i'));
+
+                continue;
+            }
+
+            $effectivePunches[] = [
+                'id' => $punch->id,
+                'time' => $punch->occurred_at_local->format('H:i'),
+                'timestamp' => $punch->occurred_at_local,
+                'type' => $punch->direction ?? 'punch',
+                'source' => 'rep_p',
+            ];
+        }
+
+        // Adicionar batidas manuais tratadas
+        foreach ($approvedTreatments->where('type', TreatmentEventType::ManualPunchAdded) as $manual) {
+            $effectivePunches[] = [
+                'id' => $manual->id,
+                'time' => $manual->effective_at->format('H:i'),
+                'timestamp' => $manual->effective_at,
+                'type' => 'manual',
+                'source' => 'ptrp_manual',
+            ];
+            $treatmentNotes[] = sprintf('Batida manual inserida às %s (%s).', $manual->effective_at->format('H:i'), $manual->reason_text);
+        }
+
+        // Ordenar cronologicamente
+        usort($effectivePunches, fn ($a, $b) => strcmp($a['time'], $b['time']));
+
+        $punchCount = count($effectivePunches);
+        $isIncomplete = ($punchCount % 2 !== 0);
+
+        // 6. Calcular minutos trabalhados e intervalos intrajornada
+        $workedMinutes = 0;
+        $breakMinutes = 0;
+
+        for ($i = 0; $i + 1 < $punchCount; $i += 2) {
+            $entry = Carbon::parse($dateStr.' '.$effectivePunches[$i]['time']);
+            $exit = Carbon::parse($dateStr.' '.$effectivePunches[$i + 1]['time']);
+            if ($exit->greaterThanOrEqualTo($entry)) {
+                $workedMinutes += $entry->diffInMinutes($exit);
+            }
+
+            // Intervalo entre a saída do período anterior e a entrada do próximo
+            if ($i + 2 < $punchCount) {
+                $nextEntry = Carbon::parse($dateStr.' '.$effectivePunches[$i + 2]['time']);
+                if ($nextEntry->greaterThanOrEqualTo($exit)) {
+                    $breakMinutes += $exit->diffInMinutes($nextEntry);
+                }
+            }
+        }
+
+        // 7. Apuração comparativa com a escala e aplicação da tolerância legal (Art. 58 CLT)
+        $ordinaryMinutes = 0;
+        $overtimeMinutes = 0;
+        $lateMinutes = 0;
+        $earlyLeaveMinutes = 0;
+        $absenceMinutes = 0;
+        $missingBreakMinutes = 0;
+
+        $expectedBreakMinutes = (int) ($daySchedule['break_minutes'] ?? 0);
+        if ($expectedBreakMinutes > 0 && $breakMinutes > 0 && $breakMinutes < $expectedBreakMinutes) {
+            $missingBreakMinutes = $expectedBreakMinutes - $breakMinutes;
+        }
+
+        if ($scheduledMinutes > 0) {
+            if ($workedMinutes === 0) {
+                if ($justifiedAbsence) {
+                    $absenceMinutes = 0;
+                    $treatmentNotes[] = 'Ausência integral abonada/justificada: '.$justifiedAbsence->reason_text;
+                } else {
+                    $absenceMinutes = $scheduledMinutes;
+                }
+            } else {
+                $netDifference = $workedMinutes - $scheduledMinutes;
+
+                if ($netDifference > 0) {
+                    // Sobrejornada: verificar tolerância
+                    $toleratedOvertime = $laborPolicy->applyPunchTolerance($netDifference);
+                    if ($toleratedOvertime === 0) {
+                        $ordinaryMinutes = $workedMinutes; // Dentro dos 5/10 min: sem horas extras
+                        $overtimeMinutes = 0;
+                    } else {
+                        $ordinaryMinutes = $scheduledMinutes;
+                        $overtimeMinutes = $netDifference;
+                    }
+                } elseif ($netDifference < 0) {
+                    // Déficit: verificar tolerância
+                    $deficit = abs($netDifference);
+                    $toleratedDeficit = $laborPolicy->applyPunchTolerance($deficit);
+                    if ($toleratedDeficit === 0) {
+                        $ordinaryMinutes = $scheduledMinutes; // Dentro dos 5/10 min: sem desconto
+                        $lateMinutes = 0;
+                    } else {
+                        $ordinaryMinutes = $workedMinutes;
+                        $lateMinutes = $deficit;
+                    }
+                } else {
+                    $ordinaryMinutes = $scheduledMinutes;
+                }
+            }
+        } else {
+            // Dia sem expediente previsto (DSR/Folga): todo o tempo trabalhado é hora extra
+            $overtimeMinutes = $workedMinutes;
+            $ordinaryMinutes = 0;
+        }
+
+        // 8. Crédito e Débito de Banco de Horas
+        $bankCreditMinutes = $overtimeMinutes;
+        $bankDebitMinutes = $lateMinutes + $earlyLeaveMinutes + $absenceMinutes;
+
+        return new CalculatedJourney(
+            date: $dateStr,
+            scheduledMinutes: $scheduledMinutes,
+            workedMinutes: $workedMinutes,
+            ordinaryMinutes: $ordinaryMinutes,
+            overtimeMinutes: $overtimeMinutes,
+            lateMinutes: $lateMinutes,
+            earlyLeaveMinutes: $earlyLeaveMinutes,
+            breakMinutes: $breakMinutes,
+            missingBreakMinutes: $missingBreakMinutes,
+            absenceMinutes: $absenceMinutes,
+            isIncomplete: $isIncomplete,
+            bankCreditMinutes: $bankCreditMinutes,
+            bankDebitMinutes: $bankDebitMinutes,
+            effectivePunches: $effectivePunches,
+            treatmentNotes: $treatmentNotes,
+        );
+    }
+}

@@ -1,6 +1,22 @@
 # Histórico de Versões (Changelog)
 
-## v1.9.0 (Atual)
+## v2.0.0 (Atual)
+- **Motor de Tratamento PTRP, Jornadas, Tolerância Legal & Banco de Horas Configurável (Fase 20):**
+  - **Ledger de Eventos de Tratamento (`treatment_events`):** Registros inalteráveis em ULID para ajustes, batidas esquecidas manuais (`manual_punch_added`), desconsiderações de marcações indevidas (`punch_disregarded`) e abonos de faltas/atestados (`absence_justified`), preservando intacto o fato bruto em `punch_events`.
+  - **Fluxo de Solicitações do Trabalhador & Gestão RH (`treatment-requests`):** Colaboradores solicitam ajustes com justificativa obrigatória e carimbo de auditoria; administradores e gestores analisam, aprovam ou rejeitam formalmente com justificativa registrada. Separação rigorosa de funções (trabalhador não pode autoaprovar sua solicitação).
+  - **Jornada de Trabalho e Escalas Versionadas (`work_schedules`):** Modelagem desacoplada sem hardcode, com grade horária semanal, intervalos intrajornada, folgas contratuais e tolerâncias legais vinculadas ao colaborador.
+  - **Motor de Apuração Analítica (`CalculateDailyJourneyAction`):** Combinação do fato bruto do REP + tratamentos aprovados + escala + diretrizes legais para apurar minutos previstos, trabalhados, ordinários, horas extras, atrasos, saídas antecipadas, intervalos e créditos/débitos para banco de horas.
+  - **Tolerância Legal do Art. 58, § 1º da CLT:** Aplicada estritamente na camada de cálculo (até 5 min por batida, com limite de 10 min diários), sem qualquer alteração retroativa do horário registrado no `PunchEvent`.
+  - **Banco de Horas em Ledger Imutável (`time_bank_accounts` e `time_bank_transactions`):** Saldo SEMPRE apurado a partir de `SUM(minutes)` de lançamentos auditáveis, jamais sobrescrito como campo numérico mutável.
+  - **Configuração da Política de Banco de Horas (`time_bank_policies`):** Painel administrativo em `Admin → Configurações → Banco de Horas`, desativado por padrão e ativado formalmente pelo RH com escolha do modo de fechamento:
+    - `CARRY_OVER`: Saldo acumulado transportado integralmente para a próxima competência sem movimentação artificial.
+    - `MONTHLY_RESET`: Geração de lançamento compensatório contábil (`monthly_reset = -saldo`) no fechamento formal, zerando o saldo para o próximo mês sem destruir o histórico anterior (inclusive para saldos devedores).
+  - **Processo Formal de Fechamento de Competência (`CloseMonthlyPeriodAction`):** Bloqueio estrito de zeramento automático por virada de calendário. O encerramento ocorre exclusivamente por ação formal do RH, congelando a competência em `closed_periods`.
+  - **Extrato do Banco de Horas (`/admin/time-bank`):** Painel gerencial com filtros por mês, ano, funcionário e tipo de movimentação, com resumo de créditos, débitos, saldo líquido e modais para ajuste manual e fechamento.
+  - **Integração no Espelho de Ponto (`timesheet`):** Card dinâmico de Banco de Horas apresentando saldo anterior, créditos, débitos, ajustes e saldo atual, além de modal direto para solicitação de tratamento pelo trabalhador.
+  - **Suíte de Testes Automatizados Expandida:** `68 testes e 280 asserções 100% aprovados`.
+
+## v1.9.0
 - **Central de Comprovantes do Trabalhador, Gerador AFD (MTE 2026) & Validação Pública:**
   - **Tabela e Modelo `punch_receipts`:** Vínculo 1:1 rigoroso com `punch_events` via chave estrangeira com proteção de integridade (`restrictOnDelete`), armazenando código de verificação amigável (`PF-XXXX-XXXX-XXXX`), hash SHA-256 e metadados de assinatura.
   - **Central de Comprovantes do Trabalhador:** Painel interativo permanente (`/receipts`) para consulta e visualização de comprovantes de ponto por mês/ano, com busca por código de verificação, detalhes da marcação e download instantâneo.

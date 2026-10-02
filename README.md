@@ -17,9 +17,23 @@ O PontoFácil adota uma rigorosa filosofia de **Instância Dedicada**:
 
 ---
 
-## 🚀 Principais Módulos e Funcionalidades (v1.9.0)
+## 🚀 Principais Módulos e Funcionalidades (v2.0.0)
 
-### 1. Central de Comprovantes do Trabalhador & Validação Pública (Fase 19A)
+### 1. Motor de Tratamento PTRP, Jornadas, Tolerância Legal & Banco de Horas (Fase 20)
+- **Tratamento de Ponto sem Alterar Fatos Brutos (`treatment_events`):** Registro inalterável em ULID para inclusão manual de batidas esquecidas, desconsideração de marcações indevidas e justificativas de faltas/atestados, mantendo a tabela `punch_events` estritamente imutável.
+- **Workflow de Solicitações & Aprovação Segregada:** Colaboradores solicitam correções pelo espelho de ponto; administradores e gestores analisam em painel dedicado (`/admin/treatment-requests`) com justificativa formal e auditoria.
+- **Jornada de Trabalho e Escalas Flexíveis (`work_schedules`):** Configuração desacoplada de escalas de trabalho com suporte a horários por dia da semana, intervalo intrajornada e folgas contratuais vinculadas ao colaborador.
+- **Motor de Apuração Analítica (`CalculateDailyJourneyAction`):** Combina dados brutos do REP, tratamentos aprovados, escala e regras legais, apurando horas ordinárias, extras, atrasos, faltas, saídas antecipadas e créditos/débitos.
+- **Tolerância Legal Conforme Art. 58, § 1º da CLT:** Limite de até 5 minutos por batida e até 10 minutos diários aplicado estritamente na apuração matemática, sem adulterar o horário original registrado.
+- **Banco de Horas em Ledger Imutável (`time_bank_accounts` e `time_bank_transactions`):** O saldo é sempre o resultado de `SUM(minutes)` — nunca um valor sobrescrito.
+- **Política Configurável pelo RH (`time_bank_policies`):** Desativado por padrão no painel `Admin → Configurações → Banco de Horas`. Quando ativado, o gestor escolhe:
+  - `CARRY_OVER`: Saldo acumulado é transportado diretamente para a competência seguinte.
+  - `MONTHLY_RESET`: Geração de transação de compensação contábil (`monthly_reset = -saldo`) no fechamento formal, zerando o saldo sem apagar o histórico (inclusive para saldo negativo/devedor).
+- **Fechamento Formal de Competência (`CloseMonthlyPeriodAction`):** Bloqueio de zeramentos automáticos por mera virada de calendário à meia-noite; encerramento e congelamento executados formalmente pelo RH em `closed_periods`.
+- **Extrato do Banco de Horas (`/admin/time-bank`):** Filtros detalhados por colaborador, competência e tipo de movimentação, saldo acumulado em tempo real, modal de ajuste manual e fechamento mensal.
+- **Espelho com Banco de Horas Integrado:** Apresentação clara ao trabalhador de saldo anterior, créditos, débitos, ajustes e saldo atual no espelho de ponto.
+
+### 2. Central de Comprovantes do Trabalhador & Validação Pública (Fase 19A)
 - **Central de Comprovantes (`/receipts`):** Interface permanente de autoatendimento para o trabalhador consultar, visualizar e baixar comprovantes de todas as suas marcações de ponto históricas.
 - **Emissão de Comprovante em PDF Padronizado:** Emissão sem dependência de bibliotecas externas pesadas, incluindo: Dados da Empresa, Estabelecimento, Nome do Trabalhador, CPF, Data e Horário no fuso oficial, NSR oficial, chave SHA-256 e código de verificação amigável (`PF-XXXX-XXXX-XXXX`).
 - **Página Pública de Verificação (`/receipts/verify`):** Consulta pública onde qualquer auditor ou trabalhador pode digitar o código ou apontar para a URL de verificação para checar a autenticidade e o hash contra o ledger inviolável.
@@ -222,7 +236,7 @@ Para rodar a suíte completa de testes automatizados cobrindo autorização, cá
 php artisan test
 ```
 
-> **Status da Suíte:** `50 testes, 216 asserções — 100% aprovados.`
+> **Status da Suíte:** `68 testes, 280 asserções — 100% aprovados.`
 
 ---
 

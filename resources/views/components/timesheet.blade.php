@@ -16,12 +16,82 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
     public $month;
     public $year;
     public $userId;
-    
+
+    public $showTreatmentModal = false;
+    public $reqDate = '';
+    public $reqTime = '08:00';
+    public $reqType = 'manual_punch_added';
+    public $reqReason = '';
+
     public function mount()
     {
         $this->month = now()->month;
         $this->year = now()->year;
         $this->userId = Auth::id();
+        $this->reqDate = now()->toDateString();
+    }
+
+    public function openTreatmentModal(?string $date = null)
+    {
+        $this->reqDate = $date ?? now()->toDateString();
+        $this->reqTime = '08:00';
+        $this->reqType = 'manual_punch_added';
+        $this->reqReason = '';
+        $this->showTreatmentModal = true;
+    }
+
+    public function submitTreatmentRequest()
+    {
+        $this->validate([
+            'reqDate' => 'required|date',
+            'reqTime' => 'required|date_format:H:i',
+            'reqType' => 'required|in:manual_punch_added,absence_justified,punch_disregarded',
+            'reqReason' => 'required|string|min:5|max:500',
+        ]);
+
+        $employee = Employee::where('user_id', $this->userId)->first();
+        if (!$employee) {
+            $this->dispatch('app-modal-alert', [
+                'type' => 'error',
+                'title' => 'Perfil Incompleto',
+                'message' => 'Colaborador não possui cadastro funcional ativo.',
+                'buttonText' => 'OK'
+            ]);
+            return;
+        }
+
+        $typeEnum = match($this->reqType) {
+            'manual_punch_added' => \App\Domain\PTRP\Enums\TreatmentEventType::ManualPunchAdded,
+            'absence_justified' => \App\Domain\PTRP\Enums\TreatmentEventType::AbsenceJustified,
+            'punch_disregarded' => \App\Domain\PTRP\Enums\TreatmentEventType::PunchDisregarded,
+        };
+
+        $effectiveAt = Carbon::parse($this->reqDate . ' ' . $this->reqTime);
+
+        try {
+            app(\App\Domain\PTRP\Actions\RequestTreatmentEventAction::class)->execute(
+                employee: $employee,
+                type: $typeEnum,
+                effectiveAt: $effectiveAt,
+                reasonText: $this->reqReason,
+                requestedBy: Auth::user(),
+            );
+
+            $this->showTreatmentModal = false;
+            $this->dispatch('app-modal-alert', [
+                'type' => 'success',
+                'title' => 'Solicitação Enviada com Sucesso!',
+                'message' => 'Sua solicitação de tratamento/justificativa foi enviada ao RH para análise e aprovação.',
+                'buttonText' => 'OK'
+            ]);
+        } catch (\Throwable $e) {
+            $this->dispatch('app-modal-alert', [
+                'type' => 'error',
+                'title' => 'Erro ao Enviar Solicitação',
+                'message' => $e->getMessage(),
+                'buttonText' => 'Fechar'
+            ]);
+        }
     }
 
     public function with()
@@ -79,6 +149,16 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
         $avgMinutesPerDay = $workedDaysCount > 0 ? (int) round($totalMonthMinutes / $workedDaysCount) : 0;
         $avgFormatted = sprintf('%02dh %02dm', intdiv($avgMinutesPerDay, 60), $avgMinutesPerDay % 60);
 
+        $employee = Employee::where('user_id', $this->userId)->first();
+        $periodDate = Carbon::createFromDate($this->year, $this->month, 1)->endOfMonth();
+        $policy = \App\Models\TimeBankPolicy::forDate($periodDate);
+
+        $timeBankSummary = null;
+        if ($policy && $policy->enabled && $employee) {
+            $timeBankSummary = app(\App\Domain\PTRP\Services\TimeBankStatementService::class)
+                ->getMonthlySummary($employee, (int) $this->year, (int) $this->month);
+        }
+
         return [
             'groupedEntries' => $groupedEntries,
             'daysCalculated' => $daysCalculated,
@@ -88,6 +168,9 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
             'avgFormatted' => $avgFormatted,
             'canSelectUser' => $canSelectUser,
             'users' => $selectableUsers,
+            'timeBankSummary' => $timeBankSummary,
+            'policy' => $policy,
+            'employee' => $employee,
         ];
     }
 
@@ -135,7 +218,11 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                 <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Espelho de Ponto</h2>
                 <p class="text-xs sm:text-sm text-gray-500 mt-0.5">Histórico completo de registros de jornada e horas trabalhadas</p>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center gap-2">
+                <button wire:click="openTreatmentModal" class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-2xs transition">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                    <span>Solicitar Ajuste</span>
+                </button>
                 <a href="{{ route('folha-ponto', ['userId' => $this->userId, 'month' => $this->month, 'year' => $this->year]) }}" 
                    class="inline-flex items-center gap-2 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs sm:text-sm font-bold shadow-2xs transition">
                     <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
@@ -181,6 +268,57 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                 </select>
             </div>
         </div>
+
+        <!-- Card Banco de Horas (Se ativado na política vigente) -->
+        @if($policy && $policy->enabled && $timeBankSummary)
+        <div class="bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-950 text-white rounded-2xl p-5 mb-6 shadow-md border border-indigo-800/60">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-800/80 pb-3 mb-4">
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-300 flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold tracking-tight text-white">Banco de Horas</h3>
+                        <p class="text-[11px] text-indigo-300">Regra: {{ $policy->closing_mode->label() }}</p>
+                    </div>
+                </div>
+
+                <div class="text-right">
+                    <span class="text-[10px] uppercase font-bold text-indigo-300 tracking-wider block">Saldo Atual</span>
+                    <span class="text-2xl font-black font-mono {{ $timeBankSummary->currentBalanceMinutes >= 0 ? 'text-emerald-400' : 'text-rose-400' }}">
+                        {{ $timeBankSummary->formattedCurrentBalance() }}
+                    </span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
+                <div>
+                    <span class="text-indigo-300 text-[10px] uppercase font-sans font-semibold block">Saldo Anterior</span>
+                    <span class="font-bold text-slate-200 text-sm">{{ $timeBankSummary->formattedPreviousBalance() }}</span>
+                </div>
+                <div>
+                    <span class="text-emerald-300 text-[10px] uppercase font-sans font-semibold block">Créditos do Mês</span>
+                    <span class="font-bold text-emerald-400 text-sm">+{{ $timeBankSummary->formattedMonthCredits() }}</span>
+                </div>
+                <div>
+                    <span class="text-rose-300 text-[10px] uppercase font-sans font-semibold block">Débitos do Mês</span>
+                    <span class="font-bold text-rose-400 text-sm">{{ $timeBankSummary->formattedMonthDebits() }}</span>
+                </div>
+                <div>
+                    <span class="text-amber-300 text-[10px] uppercase font-sans font-semibold block">Ajustes Manuais</span>
+                    <span class="font-bold text-amber-400 text-sm">{{ $timeBankSummary->formattedMonthAdjustments() }}</span>
+                </div>
+            </div>
+
+            @if($timeBankSummary->closingResetMinutes !== 0)
+                <div class="mt-4 pt-3 border-t border-indigo-800/80 flex flex-wrap items-center justify-between gap-2 text-xs font-mono bg-indigo-950/60 p-2.5 rounded-xl">
+                    <span class="text-purple-300 font-sans font-bold">Encerramento mensal / Zeramento formal:</span>
+                    <span class="font-bold text-purple-300">{{ $timeBankSummary->formattedClosingReset() }}</span>
+                    <span class="text-indigo-200 font-sans">Saldo transportado: <strong>00:00</strong></span>
+                </div>
+            @endif
+        </div>
+        @endif
 
         <!-- Monthly Summary KPI Cards -->
         @if($totalPunches > 0)
@@ -277,4 +415,61 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
             @endforelse
         </div>
     </div>
+
+    <!-- Modal Solicitação de Tratamento / Justificativa -->
+    @if($showTreatmentModal)
+        <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+                <div class="flex items-center justify-between border-b pb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                        </div>
+                        <h3 class="text-base font-bold text-gray-900">Solicitar Ajuste ou Justificativa</h3>
+                    </div>
+                    <button wire:click="$set('showTreatmentModal', false)" class="text-gray-400 hover:text-gray-600">✕</button>
+                </div>
+
+                <form wire:submit="submitTreatmentRequest" class="space-y-4 text-xs">
+                    <div>
+                        <label class="block font-bold text-gray-700 uppercase mb-1">Tipo de Solicitação</label>
+                        <select wire:model="reqType" class="w-full px-3 py-2.5 border rounded-xl bg-white font-medium">
+                            <option value="manual_punch_added">Inclusão de Batida Manual (Esquecimento)</option>
+                            <option value="absence_justified">Abono de Falta / Atestado Médico</option>
+                            <option value="punch_disregarded">Desconsideração de Marcação Indevida</option>
+                        </select>
+                        @error('reqType') <span class="text-red-500 mt-1 block">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block font-bold text-gray-700 uppercase mb-1">Data da Ocorrência</label>
+                            <input type="date" wire:model="reqDate" class="w-full px-3 py-2 border rounded-xl font-mono" required>
+                            @error('reqDate') <span class="text-red-500 mt-1 block">{{ $message }}</span> @enderror
+                        </div>
+                        <div>
+                            <label class="block font-bold text-gray-700 uppercase mb-1">Horário Previsto</label>
+                            <input type="time" wire:model="reqTime" class="w-full px-3 py-2 border rounded-xl font-mono" required>
+                            @error('reqTime') <span class="text-red-500 mt-1 block">{{ $message }}</span> @enderror
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block font-bold text-gray-700 uppercase mb-1">Justificativa e Motivo Legal (Obrigatório)</label>
+                        <textarea wire:model="reqReason" rows="3" class="w-full px-3 py-2 border rounded-xl" placeholder="Descreva detalhadamente a justificativa para avaliação do RH/Gestor..." required></textarea>
+                        @error('reqReason') <span class="text-red-500 mt-1 block">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div class="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl text-indigo-900 leading-relaxed">
+                        Sua solicitação será enviada ao RH com carimbo de auditoria e status <strong>Pendente</strong>, sendo aplicada à apuração somente após aprovação formal.
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-3 border-t">
+                        <button type="button" wire:click="$set('showTreatmentModal', false)" class="px-4 py-2 border rounded-xl font-bold text-gray-600 hover:bg-gray-50">Cancelar</button>
+                        <button type="submit" class="px-5 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-sm">Enviar Solicitação</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endif
 </div>
