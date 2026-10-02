@@ -18,8 +18,8 @@
     - Filtros dinâmicos por Status, Tipo de Evento, Setor e Colaborador.
     - Badges de alerta destacando solicitações feitas por gestores e bloqueio visual dos botões de ação para o próprio solicitante.
     - Histórico detalhado de decisão identificando expressamente se o evento foi aprovado pela Coordenação de RH ou pelo Gestor do Setor.
-  - **Navegação RBAC:** Rota `/admin/treatment-requests` liberada via política `manageTreatments` para perfis `Admin` e `Manager`, com links nos menus desktop e mobile.
-  - **Suíte de Testes Expandida:** `107 testes e 462 asserções 100% aprovados`.
+  - **Modal Automático de Novidades no Primeiro Login (`version-notifier`):** Notificador reativo que detecta dinamicamente a versão atual em `versoes.md` e exibe um modal ilustrado com as notas de release na primeira autenticação do colaborador pós-atualização, registrando a confirmação em `last_seen_version` para não incomodar novamente.
+  - **Suíte de Testes Expandida:** `108 testes e 466 asserções 100% aprovados`.
 
 ## v2.2.0
 - **Melhorias de Usabilidade, Impressão Limpa e Conformidade Operacional:**

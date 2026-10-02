@@ -36,18 +36,36 @@ class ModalAndChangelogTest extends TestCase
             'email' => 'admin_notifier@test.com',
             'password' => 'secret123',
             'role' => UserRole::Admin,
-            'last_seen_version' => 'v1.9.0',
+            'last_seen_version' => 'v2.2.0',
         ]);
 
-        Livewire::actingAs($user)
+        $test = Livewire::actingAs($user)
             ->test('version-notifier')
             ->assertSet('showModal', true)
-            ->assertSet('currentVersion', 'v2.0.0')
+            ->assertSet('currentVersion', 'v2.3.0')
+            ->assertSee('PontoFácil v2.3.0')
+            ->assertSee('Modelo Ideal de Tratamento')
             ->call('close')
             ->assertSet('showModal', false);
 
         $user->refresh();
-        $this->assertEquals('v2.0.0', $user->last_seen_version);
+        $this->assertEquals('v2.3.0', $user->last_seen_version);
+    }
+
+    public function test_version_notifier_does_not_show_modal_if_user_already_viewed_current_version(): void
+    {
+        $user = User::create([
+            'name' => 'Colaborador Atualizado',
+            'email' => 'colab_updated@test.com',
+            'password' => 'secret123',
+            'role' => UserRole::Employee,
+            'last_seen_version' => 'v2.3.0',
+        ]);
+
+        Livewire::actingAs($user)
+            ->test('version-notifier')
+            ->assertSet('showModal', false)
+            ->assertSet('currentVersion', 'v2.3.0');
     }
 
     public function test_help_page_changelog_items_are_properly_parsed_without_empty_melhoria_titles(): void
