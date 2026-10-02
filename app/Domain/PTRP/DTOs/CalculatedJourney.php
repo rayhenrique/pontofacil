@@ -7,6 +7,7 @@ class CalculatedJourney
     /**
      * @param  array<int, array{time: string, type: string, source: string, id: ?string}>  $effectivePunches
      * @param  array<int, string>  $treatmentNotes
+     * @param  array<int, array{date: string, type: string, name: string, scope: string, work_behavior: string}>  $calendarSnapshot  Snapshot dos eventos de calendário utilizados na apuração
      */
     public function __construct(
         public string $date,
@@ -22,8 +23,11 @@ class CalculatedJourney
         public bool $isIncomplete,
         public int $bankCreditMinutes,
         public int $bankDebitMinutes,
+        public int $holidayMinutes = 0,
+        public bool $requiresCompensation = false,
         public array $effectivePunches = [],
         public array $treatmentNotes = [],
+        public array $calendarSnapshot = [],
     ) {}
 
     public static function formatMinutes(int $minutes, bool $withSign = false): string
@@ -79,8 +83,11 @@ class CalculatedJourney
             'is_incomplete' => $this->isIncomplete,
             'bank_credit_minutes' => $this->bankCreditMinutes,
             'bank_debit_minutes' => $this->bankDebitMinutes,
+            'holiday_minutes' => $this->holidayMinutes,
+            'requires_compensation' => $this->requiresCompensation,
             'effective_punches' => $this->effectivePunches,
             'treatment_notes' => $this->treatmentNotes,
+            'calendar_snapshot' => $this->calendarSnapshot,
         ];
     }
 }

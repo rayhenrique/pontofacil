@@ -434,6 +434,44 @@ new #[Layout('layouts.app')] #[Title('Ajuda e Novidades')] class extends Compone
                         </ul>
                     </div>
 
+                    <!-- Card 9: Central de Fiscalização Trabalhista & AEJ (MTE 2026) -->
+                    <div class="p-5 rounded-2xl border border-indigo-200 bg-indigo-50/40 space-y-3">
+                        <div class="flex items-center gap-3">
+                            <span class="w-8 h-8 rounded-xl bg-indigo-700 text-white font-bold text-sm inline-flex items-center justify-center shadow-xs">9</span>
+                            <div class="flex items-center gap-2">
+                                <h3 class="font-bold text-gray-900 text-base">Central de Fiscalização & AEJ</h3>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-200 text-indigo-900">Fase 21</span>
+                            </div>
+                        </div>
+                        <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">
+                            No menu <strong>"Fiscalização (AEJ)"</strong> (`/admin/fiscalizacao`):
+                        </p>
+                        <ul class="text-xs sm:text-sm text-gray-600 space-y-1.5 list-disc list-inside">
+                            <li><strong>Snapshots Imutáveis:</strong> Cada competência fechada congela a escala, jornadas e tratamentos com hash canônico SHA-256.</li>
+                            <li><strong>Emissão do AEJ:</strong> Geração do Arquivo Eletrônico de Jornada oficial (Portaria 671/2021 MTP) para a Auditoria Fiscal do Trabalho.</li>
+                            <li><strong>Prévia vs. Oficial:</strong> Emita prévias operacionais para validação antes do fechamento formal de competência.</li>
+                        </ul>
+                    </div>
+
+                    <!-- Card 10: Calendário Laboral — Feriados & Pontos Facultativos -->
+                    <div class="p-5 rounded-2xl border border-sky-200 bg-sky-50/40 space-y-3">
+                        <div class="flex items-center gap-3">
+                            <span class="w-8 h-8 rounded-xl bg-sky-700 text-white font-bold text-sm inline-flex items-center justify-center shadow-xs">10</span>
+                            <div class="flex items-center gap-2">
+                                <h3 class="font-bold text-gray-900 text-base">Calendário Laboral & Dias Especiais</h3>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-200 text-sky-900">Fase 20.18</span>
+                            </div>
+                        </div>
+                        <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">
+                            No menu <strong>"Calendário"</strong> (`/admin/calendar`):
+                        </p>
+                        <ul class="text-xs sm:text-sm text-gray-600 space-y-1.5 list-disc list-inside">
+                            <li><strong>Feriados vs. Pontos Facultativos:</strong> Feriados legais (Lei 9.093/1995) e pontos facultativos com regras personalizáveis pelo RH.</li>
+                            <li><strong>Escopo Territorial:</strong> Diferenciação estrita entre eventos Nacionais, Estaduais, Municipais e por Estabelecimento.</li>
+                            <li><strong>Eventos Parciais & Horas em Feriado:</strong> Suporte a meio período (Quarta de Cinzas) e classificação isolada de `holiday_minutes` sem criar horas extras automáticas.</li>
+                        </ul>
+                    </div>
+
                 </div>
             </div>
         </div>

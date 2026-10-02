@@ -2,11 +2,13 @@
 
 namespace App\Domain\PTRP\Actions;
 
+use App\Domain\Calendar\Services\WorkCalendarService;
 use App\Domain\PTRP\DTOs\CalculatedJourney;
 use App\Domain\PTRP\Enums\TreatmentEventStatus;
 use App\Domain\PTRP\Enums\TreatmentEventType;
 use App\Domain\PTRP\Policies\LaborPolicy;
 use App\Models\Employee;
+use App\Models\Establishment;
 use App\Models\PunchEvent;
 use App\Models\TreatmentEvent;
 use App\Models\WorkSchedule;
@@ -17,8 +19,8 @@ class CalculateDailyJourneyAction
 {
     /**
      * Combina fatos brutos do REP (PunchEvent) + Tratamentos Aprovados (TreatmentEvent)
-     * + Escala de Trabalho (WorkSchedule) + Diretrizes Legais (LaborPolicy)
-     * para apurar a jornada analítica do trabalhador.
+     * + Escala de Trabalho (WorkSchedule) + Calendário Laboral (CalendarEvent)
+     * + Diretrizes Legais (LaborPolicy) para apurar a jornada analítica do trabalhador.
      *
      * A MARCAÇÃO ORIGINAL EM PUNCH_EVENTS NUNCA É ALTERADA.
      */
@@ -37,7 +39,7 @@ class CalculateDailyJourneyAction
         }
 
         $daySchedule = $workSchedule->getScheduleForDay($date->dayOfWeek);
-        $scheduledMinutes = (int) ($daySchedule['expected_minutes'] ?? 0);
+        $originalScheduledMinutes = (int) ($daySchedule['expected_minutes'] ?? 0);
         $expectedPeriods = $daySchedule['periods'] ?? [];
 
         // 2. Política de tolerância CLT (Art. 58, § 1º)
@@ -46,7 +48,29 @@ class CalculateDailyJourneyAction
             $workSchedule->daily_tolerance_minutes ?? 10
         );
 
-        // 3. Obter marcações brutas do REP (somente leitura)
+        // 3. Consultar Calendário Laboral (20.18.8)
+        $establishment = $employee->sector?->establishment ?? Establishment::first();
+        $calendarService = app(WorkCalendarService::class);
+        $calendarDay = $calendarService->resolveDay($date, $establishment, $originalScheduledMinutes, $expectedPeriods);
+
+        // Os minutos esperados podem ser alterados pelo calendário
+        $scheduledMinutes = $calendarDay->expectedMinutes;
+        $calendarSnapshot = $calendarDay->toSnapshotArray();
+
+        $treatmentNotes = [];
+
+        // Anotar eventos de calendário aplicados
+        foreach ($calendarDay->appliedEvents as $event) {
+            $treatmentNotes[] = sprintf(
+                '%s: %s (%s — %s).',
+                $event->type->label(),
+                $event->name,
+                $event->scope->label(),
+                $event->work_behavior->label()
+            );
+        }
+
+        // 4. Obter marcações brutas do REP (somente leitura)
         $rawPunches = PunchEvent::where(function ($q) use ($employee) {
             $q->where('employee_id', $employee->id)
                 ->orWhere('user_id', $employee->user_id);
@@ -55,7 +79,7 @@ class CalculateDailyJourneyAction
             ->orderBy('occurred_at_local', 'asc')
             ->get();
 
-        // 4. Obter eventos de tratamento aprovados (PTRP)
+        // 5. Obter eventos de tratamento aprovados (PTRP)
         $approvedTreatments = TreatmentEvent::where(function ($q) use ($employee) {
             $q->where('employee_id', $employee->id)
                 ->orWhere('employment_id', $employee->id);
@@ -75,9 +99,7 @@ class CalculateDailyJourneyAction
             ->where('type', TreatmentEventType::AbsenceJustified)
             ->first();
 
-        $treatmentNotes = [];
-
-        // 5. Construir lista de batidas efetivas (Efetivo = Bruto - Desconsideradas + Inclusões Manuais)
+        // 6. Construir lista de batidas efetivas (Efetivo = Bruto - Desconsideradas + Inclusões Manuais)
         $effectivePunches = [];
 
         foreach ($rawPunches as $punch) {
@@ -114,7 +136,7 @@ class CalculateDailyJourneyAction
         $punchCount = count($effectivePunches);
         $isIncomplete = ($punchCount % 2 !== 0);
 
-        // 6. Calcular minutos trabalhados e intervalos intrajornada
+        // 7. Calcular minutos trabalhados e intervalos intrajornada
         $workedMinutes = 0;
         $breakMinutes = 0;
 
@@ -134,20 +156,45 @@ class CalculateDailyJourneyAction
             }
         }
 
-        // 7. Apuração comparativa com a escala e aplicação da tolerância legal (Art. 58 CLT)
+        // 8. Apuração comparativa com a escala e aplicação da tolerância legal (Art. 58 CLT)
         $ordinaryMinutes = 0;
         $overtimeMinutes = 0;
         $lateMinutes = 0;
         $earlyLeaveMinutes = 0;
         $absenceMinutes = 0;
         $missingBreakMinutes = 0;
+        $holidayMinutes = 0;
 
         $expectedBreakMinutes = (int) ($daySchedule['break_minutes'] ?? 0);
         if ($expectedBreakMinutes > 0 && $breakMinutes > 0 && $breakMinutes < $expectedBreakMinutes) {
             $missingBreakMinutes = $expectedBreakMinutes - $breakMinutes;
         }
 
-        if ($scheduledMinutes > 0) {
+        // 8.1 — Integração com Calendário Laboral
+        if ($calendarDay->isHoliday && ! $calendarDay->expectedWork) {
+            // 20.18.9 — Feriado com jornada suspensa
+            if ($workedMinutes === 0) {
+                $absenceMinutes = 0;
+                $ordinaryMinutes = 0;
+            } else {
+                // 20.18.10 — Trabalho em feriado: classificar separadamente como holiday_minutes
+                $holidayMinutes = $workedMinutes;
+                $ordinaryMinutes = 0;
+                $overtimeMinutes = 0; // NÃO assumir hora extra automaticamente
+            }
+        } elseif (! $calendarDay->expectedWork && ($calendarDay->isOptionalDay || ! empty($calendarDay->appliedEvents))) {
+            // 20.18.11, 20.18.12 — Ponto facultativo ou recesso sem expediente
+            if ($workedMinutes === 0) {
+                $absenceMinutes = 0;
+                $ordinaryMinutes = 0;
+            } else {
+                // Trabalho em dia de ponto facultativo/recesso sem expediente
+                $holidayMinutes = $workedMinutes;
+                $ordinaryMinutes = 0;
+                $overtimeMinutes = 0;
+            }
+        } elseif ($scheduledMinutes > 0) {
+            // Dia com expediente previsto (normal, reduzido, ou ponto fac. com expediente normal)
             if ($workedMinutes === 0) {
                 if ($justifiedAbsence) {
                     $absenceMinutes = 0;
@@ -162,7 +209,7 @@ class CalculateDailyJourneyAction
                     // Sobrejornada: verificar tolerância
                     $toleratedOvertime = $laborPolicy->applyPunchTolerance($netDifference);
                     if ($toleratedOvertime === 0) {
-                        $ordinaryMinutes = $workedMinutes; // Dentro dos 5/10 min: sem horas extras
+                        $ordinaryMinutes = $workedMinutes;
                         $overtimeMinutes = 0;
                     } else {
                         $ordinaryMinutes = $scheduledMinutes;
@@ -173,7 +220,7 @@ class CalculateDailyJourneyAction
                     $deficit = abs($netDifference);
                     $toleratedDeficit = $laborPolicy->applyPunchTolerance($deficit);
                     if ($toleratedDeficit === 0) {
-                        $ordinaryMinutes = $scheduledMinutes; // Dentro dos 5/10 min: sem desconto
+                        $ordinaryMinutes = $scheduledMinutes;
                         $lateMinutes = 0;
                     } else {
                         $ordinaryMinutes = $workedMinutes;
@@ -189,7 +236,8 @@ class CalculateDailyJourneyAction
             $ordinaryMinutes = 0;
         }
 
-        // 8. Crédito e Débito de Banco de Horas
+        // 9. Crédito e Débito de Banco de Horas
+        // holiday_minutes NÃO entram automaticamente no banco — será definido pela política trabalhista
         $bankCreditMinutes = $overtimeMinutes;
         $bankDebitMinutes = $lateMinutes + $earlyLeaveMinutes + $absenceMinutes;
 
@@ -207,8 +255,11 @@ class CalculateDailyJourneyAction
             isIncomplete: $isIncomplete,
             bankCreditMinutes: $bankCreditMinutes,
             bankDebitMinutes: $bankDebitMinutes,
+            holidayMinutes: $holidayMinutes,
+            requiresCompensation: $calendarDay->requiresCompensation,
             effectivePunches: $effectivePunches,
             treatmentNotes: $treatmentNotes,
+            calendarSnapshot: $calendarSnapshot,
         );
     }
 }

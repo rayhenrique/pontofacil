@@ -20,6 +20,7 @@ class ClosedPeriodEmployeeSnapshot extends Model
         'journey_snapshot',
         'treatment_snapshot',
         'time_bank_snapshot',
+        'calendar_snapshot',
         'snapshot_hash',
     ];
 
@@ -30,6 +31,7 @@ class ClosedPeriodEmployeeSnapshot extends Model
         'journey_snapshot' => 'array',
         'treatment_snapshot' => 'array',
         'time_bank_snapshot' => 'array',
+        'calendar_snapshot' => 'array',
     ];
 
     public function closedPeriod(): BelongsTo

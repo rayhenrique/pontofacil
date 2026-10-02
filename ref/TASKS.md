@@ -153,6 +153,18 @@
   - [x] **20.12 a 20.15 Gestão Admin/RH, Extrato e Permissões:** Tela de extrato com filtros (`/admin/time-bank`), modal de ajuste manual (`AdjustTimeBankAction`), gestão de solicitações (`/admin/treatment-requests`) e autorização RBAC.
   - [x] **20.16 Auditoria Forense:** Registro estruturado de logs (`time_bank.enabled`, `time_bank.policy_changed`, `time_bank.monthly_reset`, `treatment.requested`, `treatment.approved`, `period.closed`).
   - [x] **20.17 Suíte de Testes Automatizados:** Cobertura de acúmulo, zeramento com histórico, saldo negativo, fechamento formal, tolerância legal e fluxo de aprovação/rejeição de tratamentos.
+  - [x] **20.18 Calendário Laboral — Feriados, Pontos Facultativos e Dias Especiais:**
+    - [x] **20.18.1 Tabela `calendar_events`:** ULID, name, event_date, type, scope, state, city, establishment_id, all_day, starts_at, ends_at, work_behavior, requires_compensation, legal_reference, notes, active, created_by.
+    - [x] **20.18.2 Tipos:** Enums `HOLIDAY` (feriado legal), `OPTIONAL_DAY` (ponto facultativo), `INSTITUTIONAL_CLOSURE` (suspensão administrativa / recesso), `SPECIAL_WORKDAY` (expediente especial).
+    - [x] **20.18.3 Escopo Territorial:** `NATIONAL`, `STATE`, `MUNICIPAL`, `ESTABLISHMENT`.
+    - [x] **20.18.4 Comportamento sobre a Jornada:** `NO_WORK_EXPECTED`, `NORMAL_WORKDAY`, `REDUCED_WORKDAY`, `OPTIONAL_NO_WORK`, `OPTIONAL_WITH_COMPENSATION`.
+    - [x] **20.18.5 Pontos Facultativos Configuráveis:** RH decide como cada ponto facultativo é aplicado por estabelecimento ou município. Não deduzir automaticamente feriado.
+    - [x] **20.18.6 Eventos Parciais (Meio Período):** Suporte a eventos com início/fim específicos (ex: Quarta-feira de Cinzas até 14h), descontando o período suspenso da escala normal e mantendo o saldo restante (ex: 180 min).
+    - [x] **20.18.7 Hierarquia de Resolução Territorial:** Prioridade `ESTABLISHMENT` > `MUNICIPAL` > `STATE` > `NATIONAL`.
+    - [x] **20.18.8 a 20.12 Integração no Motor PTRP (`CalculateDailyJourneyAction`):** Invocação de `WorkCalendarService::resolveDay()`, zeramento de falta em feriados/pontos sem expediente, classificação estrita de horas trabalhadas como `holiday_minutes` (sem assumir hora extra automaticamente) e sinalização de compensação obrigatória.
+    - [x] **20.18.13 a 20.17 Painel Admin (`/admin/calendar`):** Visão de calendário mensal, filtros por ano/tipo/estabelecimento, CRUD com fundamentação legal (`legal_reference`), importação de feriados nacionais móveis/fixos (`BrazilianHolidaysService`) sem dependência de API externa obrigatória.
+    - [x] **20.18.18 a 20.19 Congelamento no Fechamento Mensal e AEJ:** Snapshot do calendário registrado em `ClosedPeriodEmployeeSnapshot` e imutabilidade total (alterações futuras no calendário não afetam competências fechadas nem o AEJ).
+    - [x] **20.18.20 Testes Obrigatórios:** Feriado sem batida (scheduled=0, absence=0), trabalho em feriado (holiday_minutes), ponto facultativo normal (ausência se faltar), ponto facultativo sem expediente (absence=0), ponto facultativo parcial (180 min restante), isolamento territorial municipal/estadual e imutabilidade de snapshot/AEJ após fechamento.
 
 - [x] **Fase 21A: Fechamento de Competência, Snapshot Imutável & AEJ — MVP**
   - [x] **21.0 Auditoria e Correções Prévias Obrigatórias:**

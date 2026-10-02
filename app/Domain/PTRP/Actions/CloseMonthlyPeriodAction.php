@@ -5,6 +5,7 @@ namespace App\Domain\PTRP\Actions;
 use App\Domain\PTRP\Enums\TimeBankClosingMode;
 use App\Domain\PTRP\Enums\TimeBankTransactionType;
 use App\Domain\PTRP\Enums\TreatmentEventStatus;
+use App\Models\CalendarEvent;
 use App\Models\ClosedPeriod;
 use App\Models\ClosedPeriodEmployeeSnapshot;
 use App\Models\Employee;
@@ -213,19 +214,32 @@ class CloseMonthlyPeriodAction
                     'final_balance' => ($policy?->enabled && $policy->closing_mode === TimeBankClosingMode::MonthlyReset) ? 0 : $balanceAtClosing,
                 ];
 
-                // f) Hash individual do snapshot do trabalhador (SHA-256 canônico)
+                // f) Snapshot do calendário laboral utilizado na competência (20.18.18)
+                $calendarEvents = CalendarEvent::forMonth($year, $month, $establishment)
+                    ->get();
+                $calendarSnapshotData = $calendarEvents->map(fn (CalendarEvent $e) => $e->toSnapshotArray())->values()->all();
+
+                // Extrair calendar_snapshot dos journeys individuais (apenas dias que possuem eventos)
+                $journeyCalendarSnapshots = collect($journeysData)
+                    ->pluck('calendar_snapshot')
+                    ->filter(fn ($s) => ! empty($s))
+                    ->values()
+                    ->all();
+
+                // g) Hash individual do snapshot do trabalhador (SHA-256 canônico)
                 $canonicalPayload = json_encode([
                     'employee' => $employeeSnapshot,
                     'schedule' => $scheduleSnapshot,
                     'journey' => $journeysData,
                     'treatments' => $treatmentsData,
                     'time_bank' => $timeBankSnapshot,
+                    'calendar' => $calendarSnapshotData,
                 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
                 $empSnapshotHash = hash('sha256', $canonicalPayload);
                 $employeeHashes[$employee->id] = $empSnapshotHash;
 
-                // g) Gravar snapshot imutável
+                // h) Gravar snapshot imutável
                 ClosedPeriodEmployeeSnapshot::create([
                     'closed_period_id' => $closedPeriod->id,
                     'employee_id' => $employee->id,
@@ -235,6 +249,7 @@ class CloseMonthlyPeriodAction
                     'journey_snapshot' => $journeysData,
                     'treatment_snapshot' => $treatmentsData,
                     'time_bank_snapshot' => $timeBankSnapshot,
+                    'calendar_snapshot' => $calendarSnapshotData,
                     'snapshot_hash' => $empSnapshotHash,
                 ]);
             }

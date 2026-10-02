@@ -58,6 +58,7 @@ Route::middleware('auth')->group(function () {
         Route::livewire('/time-bank', 'admin.time-bank')->name('time-bank');
         Route::livewire('/treatment-requests', 'admin.treatment-requests')->name('treatment-requests');
         Route::livewire('/settings', 'admin.settings')->name('settings');
+        Route::livewire('/calendar', 'admin.calendar')->name('calendar');
         Route::get('/exportar-afd', [ReceiptController::class, 'exportAfd'])->name('export-afd');
     });
 

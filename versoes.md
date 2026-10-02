@@ -1,6 +1,21 @@
 # Histórico de Versões (Changelog)
 
-## v2.0.0 (Atual)
+## v2.1.0 (Atual)
+- **Calendário Laboral, Feriados e Pontos Facultativos (Fase 20.18):**
+  - **Diferenciação Jurídica Rigorosa (Lei 9.093/1995 & Portarias Administrativas):** Feriados legais e pontos facultativos modelados com comportamentos distintos (`work_behavior`). Pontos facultativos não eliminam jornadas automaticamente nem são tratados como feriados sem decisão expressa do Admin/RH.
+  - **Tipologia e Escopo Territorial Hierárquico:** Eventos classificados em Feriados (`HOLIDAY`), Pontos Facultativos (`OPTIONAL_DAY`), Recessos/Suspensões (`INSTITUTIONAL_CLOSURE`) e Expedientes Especiais (`SPECIAL_WORKDAY`), com resolução hierárquica por escopo: Estabelecimento -> Municipal -> Estadual -> Nacional.
+  - **Suporte a Eventos Parciais (Meio Período):** Permite configurar eventos de meio período (ex: Quarta-feira de Cinzas até as 14h), recalculando a jornada restante com base na intersecção exata com os períodos da escala do trabalhador.
+  - **Trabalho em Feriado (`holiday_minutes`):** Horas laboradas em feriados são apuradas separadamente como `holiday_minutes` no DTO da jornada, sem assumir automaticamente horas extras ou banco de horas sem política de convenção aplicável.
+  - **Painel Administrativo do Calendário (`/admin/calendar`):** Visão de calendário mensal interativa, filtros por ano/tipo/estabelecimento, cadastro de novos eventos, formulário com fundamentação legal e importação inteligente de feriados nacionais móveis (Páscoa, Sexta-feira Santa, Carnaval sugerido).
+- **Central de Fiscalização Trabalhista, Snapshots Imutáveis & Emissão do AEJ (Fase 21):**
+  - **Fechamento de Competência Imutável:** Congelamento determinístico com hash SHA-256 canônico englobando colaboradores, escalas, jornadas apuradas, tratamentos, banco de horas e o calendário laboral da competência. Modificações futuras no calendário não alteram meses já encerrados.
+  - **Emissão do AEJ (Arquivo Eletrônico de Jornada - Leiaute MTE 31/07/2026):** Geração do arquivo fiscal oficial padronizado (Registros Tipo 1, 2, 3, 4 e 5) com validação posicional e de integridade para a Inspeção do Trabalho.
+  - **Modo Prévia vs. Oficial:** Prévia para conferência antes do fechamento e geração definitiva auditada vinculada ao hash da competência.
+- **Identidade Visual Corporativa & Logomarca na Folha de Ponto:**
+  - Configuração de Razão Social, Nome Fantasia, CNPJ/CNO e upload de logotipo em `/admin/settings`, renderizado no cabeçalho da Folha de Ponto A4 Oficial.
+- **Suíte de Testes Automatizados Expandida:** `99 testes e 442 asserções 100% aprovados`.
+
+## v2.0.0
 - **Motor de Tratamento PTRP, Jornadas, Tolerância Legal & Banco de Horas Configurável (Fase 20):**
   - **Ledger de Eventos de Tratamento (`treatment_events`):** Registros inalteráveis em ULID para ajustes, batidas esquecidas manuais (`manual_punch_added`), desconsiderações de marcações indevidas (`punch_disregarded`) e abonos de faltas/atestados (`absence_justified`), preservando intacto o fato bruto em `punch_events`.
   - **Fluxo de Solicitações do Trabalhador & Gestão RH (`treatment-requests`):** Colaboradores solicitam ajustes com justificativa obrigatória e carimbo de auditoria; administradores e gestores analisam, aprovam ou rejeitam formalmente com justificativa registrada. Separação rigorosa de funções (trabalhador não pode autoaprovar sua solicitação).
