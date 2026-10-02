@@ -28,6 +28,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário • Modelo 
     public $headerCnpj = '11.780.685/0001-52';
     public $headerPhone = '(82) 3543-1114';
     public $headerEmail = 'rhsaudetv@gmail.com';
+    public ?string $companyLogoUrl = null;
 
     // Metadados do Servidor
     public $workload = '40h';
@@ -65,6 +66,21 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário • Modelo 
 
     public function loadSettings()
     {
+        $company = \App\Domain\Company\Services\CurrentCompany::get();
+        if (!empty($company->header_state)) $this->headerState = $company->header_state;
+        if (!empty($company->header_entity)) $this->headerEntity = $company->header_entity;
+        if (!empty($company->header_sub_entity)) $this->headerSubEntity = $company->header_sub_entity;
+        if (!empty($company->address)) {
+            $addr = $company->address;
+            if ($company->city) $addr .= " – {$company->city}";
+            if ($company->state) $addr .= " – {$company->state}";
+            $this->headerAddress = $addr;
+        }
+        if (!empty($company->cnpj)) $this->headerCnpj = $company->formatted_cnpj;
+        if (!empty($company->phone)) $this->headerPhone = $company->phone;
+        if (!empty($company->email)) $this->headerEmail = $company->email;
+        if (!empty($company->logo_url)) $this->companyLogoUrl = $company->logo_url;
+
         $settings = SystemSetting::whereIn('key', [
             'report_header_state',
             'report_header_entity',
@@ -73,6 +89,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário • Modelo 
             'report_header_cnpj',
             'report_header_phone',
             'report_header_email',
+            'company_logo_url',
         ])->pluck('value', 'key');
 
         if (!empty($settings['report_header_state'])) $this->headerState = $settings['report_header_state'];
@@ -82,6 +99,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário • Modelo 
         if (!empty($settings['report_header_cnpj'])) $this->headerCnpj = $settings['report_header_cnpj'];
         if (!empty($settings['report_header_phone'])) $this->headerPhone = $settings['report_header_phone'];
         if (!empty($settings['report_header_email'])) $this->headerEmail = $settings['report_header_email'];
+        if (!empty($settings['company_logo_url'])) $this->companyLogoUrl = $settings['company_logo_url'];
     }
 
     public function updatedUserId()
@@ -368,16 +386,20 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário • Modelo 
         
         <!-- CABEÇALHO DO ÓRGÃO PÚBLICO / EMPRESA -->
         <div class="flex items-center gap-4 border-b border-black pb-2 mb-2">
-            <!-- Brasão / Logo Teotônio Vilela -->
-            <div class="w-16 h-16 shrink-0 flex items-center justify-center">
-                <svg viewBox="0 0 100 100" class="w-14 h-14" xmlns="http://www.w3.org/2000/svg">
-                    <!-- Faixas tricolores estilizadas do município -->
-                    <rect x="15" y="10" width="18" height="65" rx="3" fill="#0284c7" />
-                    <rect x="38" y="10" width="18" height="65" rx="3" fill="#eab308" />
-                    <rect x="61" y="10" width="18" height="65" rx="3" fill="#dc2626" />
-                    <path d="M10 82h80v8H10z" fill="#0f172a" />
-                    <text x="50" y="98" font-size="7" font-weight="900" text-anchor="middle" fill="#0f172a">TEOTÔNIO VILELA</text>
-                </svg>
+            <!-- Brasão / Logo -->
+            <div class="w-16 h-16 shrink-0 flex items-center justify-center overflow-hidden">
+                @if(!empty($companyLogoUrl))
+                    <img src="{{ $companyLogoUrl }}" alt="Logotipo da Empresa" class="max-h-16 max-w-16 object-contain" />
+                @else
+                    <svg viewBox="0 0 100 100" class="w-14 h-14" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Faixas tricolores estilizadas do município -->
+                        <rect x="15" y="10" width="18" height="65" rx="3" fill="#0284c7" />
+                        <rect x="38" y="10" width="18" height="65" rx="3" fill="#eab308" />
+                        <rect x="61" y="10" width="18" height="65" rx="3" fill="#dc2626" />
+                        <path d="M10 82h80v8H10z" fill="#0f172a" />
+                        <text x="50" y="98" font-size="7" font-weight="900" text-anchor="middle" fill="#0f172a">TEOTÔNIO VILELA</text>
+                    </svg>
+                @endif
             </div>
 
             <!-- Dados Institucionais Centralizados -->

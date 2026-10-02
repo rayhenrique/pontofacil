@@ -3,11 +3,35 @@
 use Livewire\Component;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
+use Livewire\WithFileUploads;
 use App\Models\SystemSetting;
+use App\Models\Company;
+use App\Domain\Company\Services\CurrentCompany;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 
-new #[Layout('layouts.app')] #[Title('Configurações da Empresa e QR Code')] class extends Component
+new #[Layout('layouts.app')] #[Title('Configurações')] class extends Component
 {
+    use WithFileUploads;
+
+    public $logo;
+    public ?string $current_logo_url = null;
+
+    public string $company_legal_name = '';
+    public string $company_trade_name = '';
+    public string $company_cnpj = '';
+    public string $company_phone = '';
+    public string $company_email = '';
+    public string $company_address = '';
+    public string $company_city = '';
+    public string $company_state = '';
+    public string $company_postal_code = '';
+    public string $company_header_state = '';
+    public string $company_header_entity = '';
+    public string $company_header_sub_entity = '';
+
     public string $qr_code_hash = '';
     public string $company_latitude = '-9.6658';
     public string $company_longitude = '-35.7350';
@@ -22,6 +46,21 @@ new #[Layout('layouts.app')] #[Title('Configurações da Empresa e QR Code')] cl
 
     public function mount()
     {
+        $company = CurrentCompany::get();
+        $this->company_legal_name = (string) ($company->legal_name ?? '');
+        $this->company_trade_name = (string) ($company->trade_name ?? '');
+        $this->company_cnpj = (string) ($company->formatted_cnpj ?? $company->cnpj ?? '');
+        $this->company_phone = (string) ($company->phone ?? '(82) 3543-1114');
+        $this->company_email = (string) ($company->email ?? 'rhsaudetv@gmail.com');
+        $this->company_address = (string) ($company->address ?? 'Rua Vereador Manoel Firmino, 108 – Centro');
+        $this->company_city = (string) ($company->city ?? 'Teotônio Vilela');
+        $this->company_state = (string) ($company->state ?? 'AL');
+        $this->company_postal_code = (string) ($company->postal_code ?? '57265-000');
+        $this->company_header_state = (string) ($company->header_state ?? 'ESTADO DE ALAGOAS');
+        $this->company_header_entity = (string) ($company->header_entity ?? ($company->legal_name ?: 'PREFEITURA MUNICIPAL DE TEOTÔNIO VILELA'));
+        $this->company_header_sub_entity = (string) ($company->header_sub_entity ?? ($company->trade_name ?: 'SECRETARIA MUNICIPAL DE SAÚDE'));
+        $this->current_logo_url = $company->logo_url;
+
         $settings = SystemSetting::whereIn('key', [
             'qr_code_hash',
             'company_latitude',
@@ -45,6 +84,104 @@ new #[Layout('layouts.app')] #[Title('Configurações da Empresa e QR Code')] cl
         $this->time_bank_enabled = (bool) $currentPolicy->enabled;
         $this->time_bank_closing_mode = $currentPolicy->closing_mode?->value ?? 'CARRY_OVER';
         $this->time_bank_policy_name = $currentPolicy->name ?? 'Regra de Banco de Horas da Empresa';
+    }
+
+    public function saveCompany()
+    {
+        $this->validate([
+            'company_legal_name' => 'required|string|max:150',
+            'company_trade_name' => 'required|string|max:100',
+            'company_cnpj' => 'required|string|max:25',
+            'company_header_state' => 'nullable|string|max:100',
+            'company_header_entity' => 'nullable|string|max:150',
+            'company_header_sub_entity' => 'nullable|string|max:150',
+            'company_address' => 'nullable|string|max:255',
+            'company_city' => 'nullable|string|max:100',
+            'company_state' => 'nullable|string|max:50',
+            'company_postal_code' => 'nullable|string|max:20',
+            'company_phone' => 'nullable|string|max:30',
+            'company_email' => 'nullable|email|max:100',
+            'logo' => 'nullable|image|max:2048',
+        ]);
+
+        $company = CurrentCompany::get();
+        $cleanCnpj = preg_replace('/\D/', '', $this->company_cnpj);
+
+        $data = [
+            'legal_name' => $this->company_legal_name,
+            'trade_name' => $this->company_trade_name,
+            'cnpj' => $cleanCnpj ?: $this->company_cnpj,
+            'header_state' => $this->company_header_state,
+            'header_entity' => $this->company_header_entity,
+            'header_sub_entity' => $this->company_header_sub_entity,
+            'address' => $this->company_address,
+            'city' => $this->company_city,
+            'state' => $this->company_state,
+            'postal_code' => $this->company_postal_code,
+            'phone' => $this->company_phone,
+            'email' => $this->company_email,
+        ];
+
+        if ($this->logo) {
+            $path = $this->logo->store('company', 'public');
+            $data['logo_path'] = $path;
+            $this->current_logo_url = asset('storage/' . $path);
+            $this->logo = null;
+        }
+
+        $company->update($data);
+
+        $establishment = $company->defaultEstablishment();
+        if ($establishment) {
+            $establishment->update([
+                'identifier_number' => $cleanCnpj ?: $establishment->identifier_number,
+                'address' => $this->company_address ?: $establishment->address,
+                'city' => $this->company_city ?: $establishment->city,
+                'state' => $this->company_state ?: $establishment->state,
+                'postal_code' => $this->company_postal_code ?: $establishment->postal_code,
+            ]);
+        }
+
+        // Sincroniza em SystemSetting para manter retrocompatibilidade com relatórios existentes
+        SystemSetting::updateOrCreate(['key' => 'report_header_state'], ['value' => $this->company_header_state]);
+        SystemSetting::updateOrCreate(['key' => 'report_header_entity'], ['value' => $this->company_header_entity]);
+        SystemSetting::updateOrCreate(['key' => 'report_header_sub_entity'], ['value' => $this->company_header_sub_entity]);
+        SystemSetting::updateOrCreate(['key' => 'report_header_address'], ['value' => $this->company_address]);
+        SystemSetting::updateOrCreate(['key' => 'report_header_cnpj'], ['value' => $company->formatted_cnpj]);
+        SystemSetting::updateOrCreate(['key' => 'report_header_phone'], ['value' => $this->company_phone]);
+        SystemSetting::updateOrCreate(['key' => 'report_header_email'], ['value' => $this->company_email]);
+        if (!empty($data['logo_path'])) {
+            SystemSetting::updateOrCreate(['key' => 'company_logo_url'], ['value' => $this->current_logo_url]);
+        }
+
+        CurrentCompany::clear();
+
+        $this->dispatch('app-modal-alert', [
+            'type' => 'success',
+            'title' => 'Dados da Empresa Atualizados!',
+            'message' => 'As informações cadastrais e o logotipo da empresa foram salvos com sucesso e já estão vigentes na Folha de Ponto.',
+            'buttonText' => 'OK'
+        ]);
+    }
+
+    public function removeLogo()
+    {
+        $company = CurrentCompany::get();
+        if ($company->logo_path) {
+            Storage::disk('public')->delete($company->logo_path);
+            $company->update(['logo_path' => null]);
+            SystemSetting::where('key', 'company_logo_url')->delete();
+        }
+        $this->current_logo_url = null;
+        $this->logo = null;
+        CurrentCompany::clear();
+
+        $this->dispatch('app-modal-alert', [
+            'type' => 'info',
+            'title' => 'Logotipo Removido',
+            'message' => 'O logotipo personalizado foi removido. A Folha de Ponto voltará a utilizar o brasão padrão.',
+            'buttonText' => 'OK'
+        ]);
     }
 
     public function regenerateQrCode()
@@ -99,19 +236,19 @@ new #[Layout('layouts.app')] #[Title('Configurações da Empresa e QR Code')] cl
             'enabled' => $this->time_bank_enabled,
             'closing_mode' => $this->time_bank_closing_mode,
             'valid_from' => now()->startOfMonth()->toDateString(),
-            'created_by' => \Illuminate\Support\Facades\Auth::id(),
+            'created_by' => Auth::id(),
         ]);
 
         if ($wasEnabled !== $this->time_bank_enabled) {
-            \Illuminate\Support\Facades\Log::info($this->time_bank_enabled ? 'time_bank.enabled' : 'time_bank.disabled', [
+            Log::info($this->time_bank_enabled ? 'time_bank.enabled' : 'time_bank.disabled', [
                 'policy_id' => $policy->id,
-                'by' => \Illuminate\Support\Facades\Auth::id(),
+                'by' => Auth::id(),
             ]);
         } else {
-            \Illuminate\Support\Facades\Log::info('time_bank.policy_changed', [
+            Log::info('time_bank.policy_changed', [
                 'policy_id' => $policy->id,
                 'closing_mode' => $this->time_bank_closing_mode,
-                'by' => \Illuminate\Support\Facades\Auth::id(),
+                'by' => Auth::id(),
             ]);
         }
 
@@ -127,11 +264,11 @@ new #[Layout('layouts.app')] #[Title('Configurações da Empresa e QR Code')] cl
 };
 ?>
 
-<div class="max-w-4xl mx-auto py-2 sm:py-6 px-1 sm:px-6 lg:px-8 space-y-6" x-data="settingsComponent(@js($qr_code_hash))">
-    <!-- Header -->
+<div class="max-w-5xl mx-auto py-2 sm:py-6 px-1 sm:px-6 lg:px-8 space-y-6" x-data="settingsComponent(@js($qr_code_hash))">
+    <!-- Header Principal -->
     <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6">
-        <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Configurações da Empresa & QR Code</h2>
-        <p class="text-xs sm:text-sm text-gray-500 mt-0.5">Gestão do QR Code corporativo físico e parâmetros de geolocalização antifraude (Portaria 671)</p>
+        <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Configurações</h2>
+        <p class="text-xs sm:text-sm text-gray-500 mt-0.5">Gestão cadastral da empresa, logotipo oficial, QR Code corporativo, geolocalização e banco de horas</p>
     </div>
 
     @if($message)
@@ -140,7 +277,160 @@ new #[Layout('layouts.app')] #[Title('Configurações da Empresa e QR Code')] cl
         </div>
     @endif
 
-    <!-- QR Code Section -->
+    <!-- Card 1: Dados da Empresa & Logotipo Oficial -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6">
+        <div class="border-b border-gray-100 pb-4 mb-6">
+            <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <svg class="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008Zm0 3h.008v.008h-.008v-.008Zm0 3h.008v.008h-.008v-.008Z" />
+                </svg>
+                Dados da Empresa & Logotipo Oficial
+            </h3>
+            <p class="text-xs text-gray-500 mt-1">Configure as informações institucionais da organização e o logotipo impresso no cabeçalho da Folha de Ponto.</p>
+        </div>
+
+        <form wire:submit="saveCompany" class="space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Coluna Esquerda: Logotipo e Preview -->
+                <div class="flex flex-col items-center p-5 bg-slate-50/80 border border-slate-200 rounded-2xl text-center space-y-4">
+                    <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Logotipo da Organização</span>
+                    
+                    <div class="w-full h-36 border-2 border-dashed border-slate-300 rounded-2xl bg-white flex items-center justify-center p-3 relative overflow-hidden group">
+                        @if($logo)
+                            <img src="{{ $logo->temporaryUrl() }}" alt="Preview Novo Logotipo" class="max-h-full max-w-full object-contain" />
+                            <div class="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-indigo-600 text-[10px] font-bold text-white shadow-xs">
+                                Novo Selecionado
+                            </div>
+                        @elseif($current_logo_url)
+                            <img src="{{ $current_logo_url }}" alt="Logotipo Atual" class="max-h-full max-w-full object-contain" />
+                            <div class="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-emerald-600 text-[10px] font-bold text-white shadow-xs">
+                                Ativo na Folha
+                            </div>
+                        @else
+                            <div class="flex flex-col items-center justify-center text-slate-400 space-y-1">
+                                <svg class="w-10 h-10 stroke-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                                </svg>
+                                <span class="text-xs font-medium">Nenhum logotipo anexado</span>
+                                <span class="text-[10px] text-slate-400">(Usa brasão padrão)</span>
+                            </div>
+                        @endif
+                    </div>
+
+                    <div class="w-full space-y-2">
+                        <label class="block">
+                            <span class="sr-only">Escolher logotipo</span>
+                            <input type="file" wire:model="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" class="block w-full text-xs text-slate-500 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer border border-slate-200 rounded-xl bg-white p-1" />
+                        </label>
+                        @error('logo') <span class="text-red-500 text-xs block text-left">{{ $message }}</span> @enderror
+                        
+                        <div wire:loading wire:target="logo" class="text-xs text-indigo-600 font-semibold flex items-center justify-center gap-1.5">
+                            <svg class="animate-spin h-3.5 w-3.5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            Enviando imagem...
+                        </div>
+
+                        <p class="text-[11px] text-slate-500 text-left leading-relaxed">
+                            Formato PNG, JPG, WebP ou SVG (máx. 2MB). Ideal fundo transparente.
+                        </p>
+
+                        @if($current_logo_url || $logo)
+                            <button type="button" wire:click="removeLogo" class="w-full py-1.5 px-3 bg-red-50 hover:bg-red-100 text-red-700 rounded-xl text-xs font-semibold transition border border-red-200/80">
+                                Remover Logotipo Customizado
+                            </button>
+                        @endif
+                    </div>
+                </div>
+
+                <!-- Coluna Direita: Informações Cadastrais e do Cabeçalho -->
+                <div class="lg:col-span-2 space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Razão Social</label>
+                            <input type="text" wire:model="company_legal_name" class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" placeholder="Empresa S/A" required>
+                            @error('company_legal_name') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Nome Fantasia</label>
+                            <input type="text" wire:model="company_trade_name" class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" placeholder="Nome Fantasia" required>
+                            @error('company_trade_name') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">CNPJ</label>
+                            <input type="text" wire:model="company_cnpj" class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white font-mono" placeholder="00.000.000/0001-00" required>
+                            @error('company_cnpj') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Telefone</label>
+                            <input type="text" wire:model="company_phone" class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" placeholder="(82) 3543-1114">
+                            @error('company_phone') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">E-mail de Contato / RH</label>
+                            <input type="email" wire:model="company_email" class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" placeholder="rh@empresa.com">
+                            @error('company_email') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Endereço da Sede (Logradouro e Número)</label>
+                        <input type="text" wire:model="company_address" class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" placeholder="Rua / Av., 100 - Bairro">
+                        @error('company_address') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Cidade</label>
+                            <input type="text" wire:model="company_city" class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" placeholder="Maceió">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">UF / Estado</label>
+                            <input type="text" wire:model="company_state" class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" placeholder="AL">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">CEP</label>
+                            <input type="text" wire:model="company_postal_code" class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white font-mono" placeholder="57000-000">
+                        </div>
+                    </div>
+
+                    <!-- Campos do Cabeçalho da Folha de Ponto -->
+                    <div class="pt-3 border-t border-slate-100">
+                        <span class="text-xs font-bold text-slate-800 uppercase tracking-wider block mb-2">Cabeçalho da Folha de Ponto Oficial</span>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-[11px] font-semibold text-gray-600 uppercase mb-0.5">Órgão / Entidade Principal</label>
+                                <input type="text" wire:model="company_header_entity" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg" placeholder="PREFEITURA MUNICIPAL...">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold text-gray-600 uppercase mb-0.5">Sub-Entidade / Secretaria</label>
+                                <input type="text" wire:model="company_header_sub_entity" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg" placeholder="SECRETARIA DE SAÚDE...">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold text-gray-600 uppercase mb-0.5">Linha Superior (Estado/UF)</label>
+                                <input type="text" wire:model="company_header_state" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg" placeholder="ESTADO DE ALAGOAS">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-3 border-t border-gray-100">
+                <button type="submit" class="w-full sm:w-auto inline-flex items-center justify-center px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold shadow-sm transition">
+                    <span wire:loading.remove wire:target="saveCompany, logo">Salvar Dados da Empresa</span>
+                    <span wire:loading wire:target="saveCompany, logo">Salvando Dados...</span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Card 2: QR Code Section -->
     <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6">
         <div class="border-b border-gray-100 pb-4 mb-6">
             <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
@@ -154,8 +444,8 @@ new #[Layout('layouts.app')] #[Title('Configurações da Empresa e QR Code')] cl
             <!-- Canvas QR Code Display -->
             <div id="print-area" class="flex flex-col items-center p-6 bg-gray-50 border border-gray-200 rounded-2xl shadow-xs text-center">
                 <div class="mb-3">
-                    <span class="text-sm font-bold text-gray-900 tracking-tight">PontoFácil • KL Tecnologia</span>
-                    <p class="text-xs text-gray-500">Ponto Eletrônico (REP-A)</p>
+                    <span class="text-sm font-bold text-gray-900 tracking-tight">{{ $company_trade_name ?: 'PontoFácil' }}</span>
+                    <p class="text-xs text-gray-500">Ponto Eletrônico (REP-P / REP-A)</p>
                 </div>
                 
                 <canvas id="qrcode-canvas" class="rounded-xl shadow-xs bg-white p-3 border border-gray-200"></canvas>
@@ -198,7 +488,7 @@ new #[Layout('layouts.app')] #[Title('Configurações da Empresa e QR Code')] cl
         </div>
     </div>
 
-    <!-- GPS & Geolocation Settings -->
+    <!-- Card 3: GPS & Geolocation Settings -->
     <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6">
         <div class="border-b border-gray-100 pb-4 mb-6">
             <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
@@ -243,7 +533,7 @@ new #[Layout('layouts.app')] #[Title('Configurações da Empresa e QR Code')] cl
         </form>
     </div>
 
-    <!-- Banco de Horas Section -->
+    <!-- Card 4: Banco de Horas Section -->
     <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6">
         <div class="border-b border-gray-100 pb-4 mb-6">
             <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
