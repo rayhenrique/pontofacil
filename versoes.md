@@ -1,6 +1,20 @@
 # Histórico de Versões (Changelog)
 
-## v1.5.0 (Atual)
+## v1.6.0 (Atual)
+- **Landing Page Cinematográfica & Página Inicial Oficial:**
+  - Implementação da Landing Page moderna do PontoFácil com tipografia Swiss-Modern, tema de cores em tons de índigo e slate, animações cinematográficas de scroll via GSAP (Core + ScrollTrigger com `matchMedia` responsivo) e interatividade com Alpine.js.
+  - Mockup de relógio em tempo real com precisão cirúrgica por segundo no fuso oficial de Brasília/Maceió (GMT-3) e simulação de batida instantânea.
+  - Demonstração interativa com abas "Visão Colaborador" (com efeito de scanner laser contínuo) e "Visão Gestor/RH" (com métricas consolidadas e tabela auditada em tempo real).
+  - A Landing Page agora é a página inicial padrão do sistema (`/`), com links institucionais para a KL Tecnologia (`https://kltecnologia.com`).
+- **Relatório Oficial de Folha de Ponto de Funcionário:**
+  - Novo módulo de impressão oficial de frequência em formato A4 idêntico ao modelo da Prefeitura Municipal de Teotônio Vilela / Secretaria Municipal de Saúde.
+  - Tabela completa de 31 dias dividida em Horário Matutino e Horário Vespertino com demarcação automática de sábados e domingos.
+  - Suporte ao modo duplo: preenchimento automático a partir das batidas eletrônicas do sistema ou geração de folha em branco com marcadores (`: `) para preenchimento manual.
+  - Metadados customizáveis de Carga Horária, Cargo, Vínculo, Zona e Local/Setor com bloco de assinaturas regulamentares (Servidor, Coordenador, Responsável pelo Setor e Recursos Humanos).
+- **Suíte de Testes Automatizados Expandida:**
+  - Novos testes automatizados para a Landing Page (`LandingPageTest`) e para o relatório oficial de Folha de Ponto (`FolhaPontoTest`).
+
+## v1.5.0
 - **Estrutura Híbrida Inteligente de Setores (Fallback):**
   - Adicionados campos opcionais ao cadastro de cada Setor: QR Code próprio (`qr_code_hash`), Latitude (`latitude`), Longitude (`longitude`) e Raio permitido (`allowed_radius_meters`).
   - **Regra Inteligente com Fallback Automático:**

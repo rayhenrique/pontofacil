@@ -20,7 +20,7 @@ new #[Layout('layouts.app')] #[Title('Entrar no Sistema • PontoFácil')] class
 
         if (Auth::attempt($credentials, $this->remember)) {
             session()->regenerate();
-            return redirect()->intended('/');
+            return redirect()->intended(route('home'));
         }
 
         $this->addError('email', 'As credenciais fornecidas estão incorretas. Verifique seu e-mail e senha.');
@@ -144,6 +144,16 @@ new #[Layout('layouts.app')] #[Title('Entrar no Sistema • PontoFácil')] class
                 </button>
             </div>
         </form>
+
+        <!-- Link para Landing Page -->
+        <div class="text-center pt-1">
+            <a href="{{ route('landing') }}" class="text-xs text-indigo-600 hover:text-indigo-800 font-semibold inline-flex items-center gap-1.5 hover:underline">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+                </svg>
+                <span>Conheça a plataforma PontoFácil</span>
+            </a>
+        </div>
 
         <!-- Rodapé Institucional com Link da KL Tecnologia -->
         <div class="pt-6 border-t border-gray-100 text-center space-y-1.5">

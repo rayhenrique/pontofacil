@@ -3,6 +3,15 @@
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
+// Página Inicial (Landing Page)
+Route::get('/', function () {
+    return view('landing');
+})->name('landing');
+
+Route::get('/landing', function () {
+    return view('landing');
+});
+
 // Guest Routes
 Route::middleware('guest')->group(function () {
     Route::livewire('/login', 'auth.login')->name('login');
@@ -10,8 +19,8 @@ Route::middleware('guest')->group(function () {
 
 // Authenticated Routes
 Route::middleware('auth')->group(function () {
-    // Tela Inicial (Employee & Admin)
-    Route::livewire('/', 'time-punch')->name('home');
+    // Bater Ponto (Tela Inicial do Sistema Autenticado)
+    Route::livewire('/ponto', 'time-punch')->name('home');
 
     // Logout
     Route::post('/logout', function () {
@@ -23,6 +32,7 @@ Route::middleware('auth')->group(function () {
     })->name('logout');
 
     Route::livewire('/timesheet', 'timesheet')->name('timesheet');
+    Route::livewire('/folha-ponto', 'folha-ponto')->name('folha-ponto');
     Route::livewire('/ajuda', 'help')->name('help');
 
     // Management Routes (Admin & Gestor)

@@ -24,7 +24,7 @@ class ModalAndChangelogTest extends TestCase
         $response = $this->actingAs($user)->get(route('help'));
         $response->assertOk();
         $response->assertSee('Novidades e Versões');
-        $response->assertSee('v1.5.0');
+        $response->assertSee('v1.6.0');
         $response->assertSee('Versão Atual');
         $response->assertSee('Manual do Usuário');
     }
@@ -36,18 +36,18 @@ class ModalAndChangelogTest extends TestCase
             'email' => 'admin_notifier@test.com',
             'password' => 'secret123',
             'role' => UserRole::Admin,
-            'last_seen_version' => 'v1.4.0',
+            'last_seen_version' => 'v1.5.0',
         ]);
 
         Livewire::actingAs($user)
             ->test('version-notifier')
             ->assertSet('showModal', true)
-            ->assertSet('currentVersion', 'v1.5.0')
+            ->assertSet('currentVersion', 'v1.6.0')
             ->call('close')
             ->assertSet('showModal', false);
 
         $user->refresh();
-        $this->assertEquals('v1.5.0', $user->last_seen_version);
+        $this->assertEquals('v1.6.0', $user->last_seen_version);
     }
 
     public function test_login_page_renders_with_kl_tecnologia_link(): void
