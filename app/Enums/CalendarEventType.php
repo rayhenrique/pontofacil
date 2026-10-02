@@ -30,20 +30,20 @@ enum CalendarEventType: string
     public function badgeClass(): string
     {
         return match ($this) {
-            self::Holiday => 'bg-red-500/10 text-red-400 border border-red-500/30',
-            self::OptionalDay => 'bg-amber-500/10 text-amber-400 border border-amber-500/30',
-            self::InstitutionalClosure => 'bg-purple-500/10 text-purple-400 border border-purple-500/30',
-            self::SpecialWorkday => 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30',
+            self::Holiday => 'bg-rose-50 text-rose-700 border border-rose-200',
+            self::OptionalDay => 'bg-amber-50 text-amber-800 border border-amber-200',
+            self::InstitutionalClosure => 'bg-purple-50 text-purple-700 border border-purple-200',
+            self::SpecialWorkday => 'bg-sky-50 text-sky-700 border border-sky-200',
         };
     }
 
     public function dotColor(): string
     {
         return match ($this) {
-            self::Holiday => 'bg-red-500',
+            self::Holiday => 'bg-rose-500',
             self::OptionalDay => 'bg-amber-500',
             self::InstitutionalClosure => 'bg-purple-500',
-            self::SpecialWorkday => 'bg-cyan-500',
+            self::SpecialWorkday => 'bg-sky-500',
         };
     }
 }
