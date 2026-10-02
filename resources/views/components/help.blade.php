@@ -369,6 +369,7 @@ new #[Layout('layouts.app')] #[Title('Ajuda e Novidades')] class extends Compone
                         <ul class="text-xs text-gray-600 space-y-2 list-disc pl-4 leading-relaxed">
                             <li>Acesse <strong>"Espelho de Ponto"</strong> (`/timesheet`).</li>
                             <li>Veja os pares de batidas do dia (Entrada, Almoço, Retorno, Saída).</li>
+                            <li><strong>Tolerância Legal:</strong> O sistema aplica automaticamente a tolerância legal de 10 minutos diários (art. 58 §1º da CLT), calculando horas normais e extraordinárias com máxima fidelidade.</li>
                             <li>Consulte o <strong>Card de Banco de Horas</strong> no topo: saldo anterior acumulado, créditos do mês, débitos e saldo líquido em tempo real.</li>
                             <li>Filtre qualquer mês ou ano para verificar seu histórico de jornada.</li>
                         </ul>
@@ -392,11 +393,11 @@ new #[Layout('layouts.app')] #[Title('Ajuda e Novidades')] class extends Compone
                     <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
                         <div class="flex items-center gap-2.5">
                             <span class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">D</span>
-                            <h4 class="font-bold text-gray-900 text-sm">Comprovantes Trabalhistas & Folha A4</h4>
+                            <h4 class="font-bold text-gray-900 text-sm">Central de Comprovantes & Folha de Ponto Oficial A4</h4>
                         </div>
                         <ul class="text-xs text-gray-600 space-y-2 list-disc pl-4 leading-relaxed">
                             <li><strong>Central de Comprovantes (`/comprovantes`):</strong> Baixe o PDF assinado digitalmente de cada batida com hash SHA-256 e código de validação pública.</li>
-                            <li><strong>Folha de Ponto Oficial (`/folha-ponto`):</strong> Visualize sua folha mensal completa com horários, horas trabalhadas e saldo. Clique em <strong>"Imprimir Folha de Ponto"</strong> para gerar a folha limpa em formato A4 para assinatura.</li>
+                            <li><strong>Folha de Ponto Oficial A4 (`/folha-ponto`):</strong> Visualize sua folha mensal completa com horários, horas trabalhadas e saldo. Clique em <strong>"Imprimir Folha de Ponto"</strong> para gerar a folha limpa em formato A4 para assinatura.</li>
                         </ul>
                     </div>
                 </div>
@@ -430,13 +431,13 @@ new #[Layout('layouts.app')] #[Title('Ajuda e Novidades')] class extends Compone
                     <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
                         <div class="flex items-center gap-2.5">
                             <span class="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">B</span>
-                            <h4 class="font-bold text-gray-900 text-sm">Aprovação de Tratamento de Ponto (PTRP)</h4>
+                            <h4 class="font-bold text-gray-900 text-sm">PTRP — Tratamento de Ponto</h4>
                         </div>
                         <ul class="text-xs text-gray-600 space-y-2 list-disc pl-4 leading-relaxed">
                             <li>Acesse <strong>"Tratamento de Ponto"</strong> (`/admin/treatment-requests`).</li>
-                            <li>Analise os pedidos de inclusão de batida esquecida, atestados e justificativas da equipe.</li>
-                            <li>Ao aprovar ou rejeitar, informe a justificativa formal exigida pela Portaria 671 MTP.</li>
-                            <li><strong>Segregação de Funções:</strong> Gestores não podem autoaprovar seus próprios pedidos de ajuste.</li>
+                            <li><strong>Aprova o Operacional:</strong> batidas esquecidas do dia a dia (inclusão), marcações duplicadas ou erradas (desconsideração) e ciência/validação prévia de atestados dos colaboradores do seu setor.</li>
+                            <li>Ao aprovar ou recusar, informe a justificativa formal exigida pela Portaria 671 MTP.</li>
+                            <li><strong>Segregação de Funções:</strong> Gestores não podem autoaprovar seus próprios pedidos de ajuste. Solicitações feitas pelo Gestor são analisadas exclusivamente pela Coordenação de RH.</li>
                         </ul>
                     </div>
 
@@ -503,14 +504,12 @@ new #[Layout('layouts.app')] #[Title('Ajuda e Novidades')] class extends Compone
                     <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
                         <div class="flex items-center gap-2.5">
                             <span class="w-7 h-7 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-xs">C</span>
-                            <h4 class="font-bold text-gray-900 text-sm">Banco de Horas, Ledger & Fechamento</h4>
+                            <h4 class="font-bold text-gray-900 text-sm">Banco de Horas em Ledger & Fechamento</h4>
                         </div>
                         <ul class="text-xs text-gray-600 space-y-2 list-disc pl-4 leading-relaxed">
-                            <li>Ative o regime de banco de horas em <strong>"Configurações"</strong> e escolha entre:
-                                <br>• <strong>Acumular (CARRY_OVER):</strong> saldo positivo ou negativo passa integralmente para o próximo mês.
-                                <br>• <strong>Zerar ao fechar o mês (MONTHLY_RESET):</strong> cria lançamento compensatório no fechamento da competência.
-                            </li>
+                            <li>Ative o regime de banco de horas em <strong>"Configurações"</strong> e escolha entre acumular (CARRY_OVER) ou zerar no fechamento (MONTHLY_RESET).</li>
                             <li>Acesse <strong>"Banco de Horas"</strong> (`/admin/time-bank`) para lançar créditos/débitos manuais auditados e executar o <strong>Fechamento Formal de Competência</strong>.</li>
+                            <li><strong>Auditoria e Poder Total do RH:</strong> Possui visão global de todos os setores, aprova ausências do gestor, aprova com exclusividade solicitações de gestores e realiza a auditoria final dos atestados anexados antes de rodar o fechamento e emitir os arquivos fiscais (AEJ/AFD).</li>
                         </ul>
                     </div>
 

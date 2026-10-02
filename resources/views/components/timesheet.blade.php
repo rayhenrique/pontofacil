@@ -10,9 +10,11 @@ use App\Models\Employee;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 use App\Enums\UserRole;
+use Livewire\WithFileUploads;
 
 new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Component
 {
+    use WithFileUploads;
     public $month;
     public $year;
     public $userId;
@@ -22,6 +24,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
     public $reqTime = '08:00';
     public $reqType = 'manual_punch_added';
     public $reqReason = '';
+    public $reqAttachment = null;
 
     public function mount()
     {
@@ -37,6 +40,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
         $this->reqTime = '08:00';
         $this->reqType = 'manual_punch_added';
         $this->reqReason = '';
+        $this->reqAttachment = null;
         $this->showTreatmentModal = true;
     }
 
@@ -68,6 +72,14 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
 
         $effectiveAt = Carbon::parse($this->reqDate . ' ' . $this->reqTime);
 
+        $attachmentPath = null;
+        if ($this->reqAttachment) {
+            $this->validate([
+                'reqAttachment' => 'file|mimes:pdf,jpg,jpeg,png|max:5120',
+            ]);
+            $attachmentPath = $this->reqAttachment->store('treatment_attachments', 'public');
+        }
+
         try {
             app(\App\Domain\PTRP\Actions\RequestTreatmentEventAction::class)->execute(
                 employee: $employee,
@@ -75,9 +87,11 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                 effectiveAt: $effectiveAt,
                 reasonText: $this->reqReason,
                 requestedBy: Auth::user(),
+                attachmentPath: $attachmentPath,
             );
 
             $this->showTreatmentModal = false;
+            $this->reqAttachment = null;
             $this->dispatch('app-modal-alert', [
                 'type' => 'success',
                 'title' => 'Solicitação Enviada com Sucesso!',
@@ -549,8 +563,18 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                         @error('reqReason') <span class="text-red-500 mt-1 block">{{ $message }}</span> @enderror
                     </div>
 
+                    <div>
+                        <label class="block font-bold text-gray-700 uppercase mb-1">Anexo / Atestado Médico (Opcional / Obrigatório para Abono)</label>
+                        <input type="file" wire:model="reqAttachment" accept=".pdf,.jpg,.jpeg,.png" class="w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border border-gray-200 rounded-xl p-1 bg-gray-50">
+                        <p class="text-[10px] text-gray-400 mt-1">Formatos aceitos: PDF, PNG, JPG (máx. 5MB). Indispensável para auditoria do RH e abono legal de faltas.</p>
+                        @error('reqAttachment') <span class="text-red-500 mt-1 block">{{ $message }}</span> @enderror
+                        <div wire:loading wire:target="reqAttachment" class="text-[11px] text-indigo-600 font-semibold mt-1">
+                            Enviando anexo... aguarde.
+                        </div>
+                    </div>
+
                     <div class="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl text-indigo-900 leading-relaxed">
-                        Sua solicitação será enviada ao RH com carimbo de auditoria e status <strong>Pendente</strong>, sendo aplicada à apuração somente após aprovação formal.
+                        Sua solicitação será enviada com carimbo de auditoria e status <strong>Pendente</strong>, sendo validada pelo Gestor do Setor e pela Coordenação de RH antes da apuração final.
                     </div>
 
                     <div class="flex justify-end gap-2 pt-3 border-t">

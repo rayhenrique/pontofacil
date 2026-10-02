@@ -1,6 +1,27 @@
 # Histórico de Versões (Changelog)
 
-## v2.2.0 (Atual)
+## v2.3.0 (Atual)
+- **Modelo Ideal de Tratamento de Ponto & Segregação de Funções (Portaria MTP 671 / PTRP):**
+  - **Gestor Imediato (Aprova o Operacional):**
+    - Aprovação e recusa de solicitações de inclusão de batida esquecida (`manual_punch_added`) e desconsiderações de marcações duplicadas ou erradas (`punch_disregarded`).
+    - Ciência e validação prévia de atestados médicos e justificativas de ausência (`absence_justified`) exclusivamente para colaboradores dos setores sob sua gestão direta.
+    - **Segregação de Funções:** Bloqueio formal e técnico de autoaprovação. Solicitações feitas pelo próprio Gestor exigem análise e aprovação exclusiva da Coordenação de RH.
+  - **Coordenação de RH / Admin (Auditoria, Poder Total & Fechamento):**
+    - Visão global e irrestrita de todos os setores e colaboradores da empresa.
+    - Autoridade universal: o Admin possui poder total para aprovar ou recusar qualquer solicitação (em casos de gestores de férias, afastados ou em ausências operacionais).
+    - Competência exclusiva para aprovar ou rejeitar solicitações originadas por Gestores.
+    - Auditoria final de atestados anexados antes de executar o Fechamento Formal de Competência e emitir os arquivos fiscais oficiais (AEJ / AFD).
+  - **Upload e Auditoria de Atestados Médicos:**
+    - Campo de anexo de arquivo (PDF, PNG, JPG até 5MB) adicionado ao modal de solicitação de tratamento no Espelho de Ponto (`/timesheet`).
+    - Rota de streaming seguro (`/treatment-attachment/{id}`) protegida sob regras de LGPD e Portaria 671, acessível apenas pelo Admin, pelo Gestor do setor correspondente ou pelo próprio trabalhador.
+  - **Painel PTRP Aprimorado (`/admin/treatment-requests`):**
+    - Filtros dinâmicos por Status, Tipo de Evento, Setor e Colaborador.
+    - Badges de alerta destacando solicitações feitas por gestores e bloqueio visual dos botões de ação para o próprio solicitante.
+    - Histórico detalhado de decisão identificando expressamente se o evento foi aprovado pela Coordenação de RH ou pelo Gestor do Setor.
+  - **Navegação RBAC:** Rota `/admin/treatment-requests` liberada via política `manageTreatments` para perfis `Admin` e `Manager`, com links nos menus desktop e mobile.
+  - **Suíte de Testes Expandida:** `107 testes e 462 asserções 100% aprovados`.
+
+## v2.2.0
 - **Melhorias de Usabilidade, Impressão Limpa e Conformidade Operacional:**
   - **Busca em Tempo Real no Espelho de Ponto (`/timesheet`):** Campo de seleção de colaborador convertido em busca reativa instantânea por Nome ou CPF, com dropdown estilizado e filtro dinâmico.
   - **Impressão Exclusiva da Folha de Ponto (`/folha-ponto`):** Configuração de regras `@media print` para suprimir navegação, sidebar, filtros e menus, imprimindo estritamente a Folha de Ponto Oficial A4 pronta para assinatura física.

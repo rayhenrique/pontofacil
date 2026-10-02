@@ -14,6 +14,7 @@ use App\Enums\UserRole;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Establishment;
+use App\Models\Sector;
 use App\Models\TreatmentEvent;
 use App\Models\User;
 use App\Models\WorkSchedule;
@@ -214,5 +215,205 @@ class TreatmentEventWorkflowTest extends TestCase
         $this->assertEquals(TreatmentEventStatus::Rejected, $event->status);
         $this->assertEquals('Não há comprovação de permanência nas dependências da empresa', $event->rejection_reason);
         $this->assertEquals($this->admin->id, $event->rejected_by);
+    }
+
+    public function test_sector_manager_can_approve_treatment_for_employee_in_managed_sector(): void
+    {
+        $manager = User::create([
+            'name' => 'Gestor do Setor',
+            'email' => 'gestor@test.com',
+            'password' => 'secret123',
+            'role' => UserRole::Manager,
+        ]);
+
+        $sector = Sector::create([
+            'establishment_id' => $this->establishment->id,
+            'name' => 'Operacional',
+            'manager_id' => $manager->id,
+        ]);
+
+        $this->employee->update(['sector_id' => $sector->id]);
+
+        $event = app(RequestTreatmentEventAction::class)->execute(
+            employee: $this->employee,
+            type: TreatmentEventType::ManualPunchAdded,
+            effectiveAt: Carbon::parse('2026-10-05 18:00:00'),
+            reasonText: 'Batida de saída esquecida',
+            requestedBy: $this->employeeUser,
+        );
+
+        app(ApproveTreatmentEventAction::class)->execute(
+            event: $event,
+            approvedBy: $manager,
+            note: 'Aprovado pelo gestor imediato'
+        );
+
+        $event->refresh();
+        $this->assertEquals(TreatmentEventStatus::Approved, $event->status);
+        $this->assertEquals($manager->id, $event->approved_by);
+    }
+
+    public function test_manager_cannot_approve_treatment_for_employee_in_another_sector(): void
+    {
+        $manager = User::create([
+            'name' => 'Gestor de Outro Setor',
+            'email' => 'gestor2@test.com',
+            'password' => 'secret123',
+            'role' => UserRole::Manager,
+        ]);
+
+        Sector::create([
+            'establishment_id' => $this->establishment->id,
+            'name' => 'Financeiro',
+            'manager_id' => $manager->id,
+        ]);
+
+        $mySector = Sector::create([
+            'establishment_id' => $this->establishment->id,
+            'name' => 'Operacional',
+            'manager_id' => null,
+        ]);
+
+        $this->employee->update(['sector_id' => $mySector->id]);
+
+        $event = app(RequestTreatmentEventAction::class)->execute(
+            employee: $this->employee,
+            type: TreatmentEventType::ManualPunchAdded,
+            effectiveAt: Carbon::parse('2026-10-05 18:00:00'),
+            reasonText: 'Batida esquecida',
+            requestedBy: $this->employeeUser,
+        );
+
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('O Gestor Imediato só possui autorização para aprovar solicitações de colaboradores dos seus setores de gestão.');
+
+        app(ApproveTreatmentEventAction::class)->execute(
+            event: $event,
+            approvedBy: $manager,
+        );
+    }
+
+    public function test_manager_cannot_approve_their_own_treatment_request_segregation_of_duties(): void
+    {
+        $manager = User::create([
+            'name' => 'Gestor Operacional',
+            'email' => 'gestor_operacional@test.com',
+            'password' => 'secret123',
+            'role' => UserRole::Manager,
+        ]);
+
+        $sector = Sector::create([
+            'establishment_id' => $this->establishment->id,
+            'name' => 'Operacional',
+            'manager_id' => $manager->id,
+        ]);
+
+        $managerEmployee = Employee::create([
+            'user_id' => $manager->id,
+            'sector_id' => $sector->id,
+            'work_schedule_id' => $this->schedule->id,
+            'registration_number' => 'GEST-001',
+            'cpf' => '99988877766',
+        ]);
+
+        $event = app(RequestTreatmentEventAction::class)->execute(
+            employee: $managerEmployee,
+            type: TreatmentEventType::ManualPunchAdded,
+            effectiveAt: Carbon::parse('2026-10-05 18:00:00'),
+            reasonText: 'Esqueci de bater o ponto na saída da reunião',
+            requestedBy: $manager,
+        );
+
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('Segregação de Funções: Solicitações do próprio Gestor devem ser aprovadas exclusivamente pela Coordenação de RH.');
+
+        app(ApproveTreatmentEventAction::class)->execute(
+            event: $event,
+            approvedBy: $manager,
+        );
+    }
+
+    public function test_admin_rh_can_approve_manager_treatment_request(): void
+    {
+        $manager = User::create([
+            'name' => 'Gestor Operacional',
+            'email' => 'gestor_rh_appr@test.com',
+            'password' => 'secret123',
+            'role' => UserRole::Manager,
+        ]);
+
+        $sector = Sector::create([
+            'establishment_id' => $this->establishment->id,
+            'name' => 'Operacional',
+            'manager_id' => $manager->id,
+        ]);
+
+        $managerEmployee = Employee::create([
+            'user_id' => $manager->id,
+            'sector_id' => $sector->id,
+            'work_schedule_id' => $this->schedule->id,
+            'registration_number' => 'GEST-002',
+            'cpf' => '99988877755',
+        ]);
+
+        $event = app(RequestTreatmentEventAction::class)->execute(
+            employee: $managerEmployee,
+            type: TreatmentEventType::ManualPunchAdded,
+            effectiveAt: Carbon::parse('2026-10-05 18:00:00'),
+            reasonText: 'Esqueci de bater o ponto',
+            requestedBy: $manager,
+        );
+
+        // Admin RH aprova solicitação do próprio gestor
+        app(ApproveTreatmentEventAction::class)->execute(
+            event: $event,
+            approvedBy: $this->admin,
+            note: 'Aprovado pela coordenação de RH garantindo a segregação de funções'
+        );
+
+        $event->refresh();
+        $this->assertEquals(TreatmentEventStatus::Approved, $event->status);
+        $this->assertEquals($this->admin->id, $event->approved_by);
+    }
+
+    public function test_manager_cannot_reject_their_own_treatment_request(): void
+    {
+        $manager = User::create([
+            'name' => 'Gestor Operacional',
+            'email' => 'gestor_rej@test.com',
+            'password' => 'secret123',
+            'role' => UserRole::Manager,
+        ]);
+
+        $sector = Sector::create([
+            'establishment_id' => $this->establishment->id,
+            'name' => 'Operacional',
+            'manager_id' => $manager->id,
+        ]);
+
+        $managerEmployee = Employee::create([
+            'user_id' => $manager->id,
+            'sector_id' => $sector->id,
+            'work_schedule_id' => $this->schedule->id,
+            'registration_number' => 'GEST-003',
+            'cpf' => '99988877744',
+        ]);
+
+        $event = app(RequestTreatmentEventAction::class)->execute(
+            employee: $managerEmployee,
+            type: TreatmentEventType::ManualPunchAdded,
+            effectiveAt: Carbon::parse('2026-10-05 18:00:00'),
+            reasonText: 'Esqueci de bater o ponto',
+            requestedBy: $manager,
+        );
+
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('Segregação de Funções: Solicitações do próprio Gestor devem ser decididas exclusivamente pela Coordenação de RH.');
+
+        app(RejectTreatmentEventAction::class)->execute(
+            event: $event,
+            rejectedBy: $manager,
+            rejectionReason: 'Motivo qualquer'
+        );
     }
 }

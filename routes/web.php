@@ -3,6 +3,8 @@
 use App\Domain\Company\Services\CurrentCompany;
 use App\Http\Controllers\FiscalizacaoController;
 use App\Http\Controllers\ReceiptController;
+use App\Models\Sector;
+use App\Models\TreatmentEvent;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
@@ -50,6 +52,35 @@ Route::middleware('auth')->group(function () {
         Route::livewire('/employees', 'admin.employees')->name('employees');
     });
 
+    // PTRP Treatment Requests (Admin & Gestor - Segregação Operacional / RH)
+    Route::middleware('can:manageTreatments,App\Models\User')->prefix('admin')->name('admin.')->group(function () {
+        Route::livewire('/treatment-requests', 'admin.treatment-requests')->name('treatment-requests');
+    });
+
+    // Visualização Segura de Atestados / Comprovantes de Tratamento (Admin, Gestor do Setor ou Próprio Colaborador)
+    Route::get('/treatment-attachment/{id}', function (string $id) {
+        $event = TreatmentEvent::with('employee.sector')->findOrFail($id);
+        $user = Auth::user();
+
+        $canView = false;
+        if ($user->isAdmin()) {
+            $canView = true;
+        } elseif ($user->isManager()) {
+            $managedSectorIds = Sector::where('manager_id', $user->id)->pluck('id');
+            if ($event->employee && $managedSectorIds->contains($event->employee->sector_id)) {
+                $canView = true;
+            }
+        } elseif ($event->requested_by === $user->id || ($event->employee && $event->employee->user_id === $user->id)) {
+            $canView = true;
+        }
+
+        if (! $canView || ! $event->attachment_path || ! Storage::disk('public')->exists($event->attachment_path)) {
+            abort(403, 'Acesso não autorizado ao comprovante/atestado médico ou arquivo não encontrado.');
+        }
+
+        return Storage::disk('public')->response($event->attachment_path);
+    })->name('treatment.attachment');
+
     // Admin Exclusive Routes (RH Total)
     Route::middleware('can:manageTimeEntries,App\Models\User')->prefix('admin')->name('admin.')->group(function () {
         Route::livewire('/adjustment', 'admin.manual-adjustment')->name('adjustment');
@@ -58,7 +89,6 @@ Route::middleware('auth')->group(function () {
         Route::livewire('/audit', 'admin.audit')->name('audit');
         Route::livewire('/reports', 'admin.reports')->name('reports');
         Route::livewire('/time-bank', 'admin.time-bank')->name('time-bank');
-        Route::livewire('/treatment-requests', 'admin.treatment-requests')->name('treatment-requests');
         Route::livewire('/settings', 'admin.settings')->name('settings');
         Route::livewire('/calendar', 'admin.calendar')->name('calendar');
         Route::get('/exportar-afd', [ReceiptController::class, 'exportAfd'])->name('export-afd');
