@@ -50,6 +50,42 @@ class ModalAndChangelogTest extends TestCase
         $this->assertEquals('v2.0.0', $user->last_seen_version);
     }
 
+    public function test_help_page_changelog_items_are_properly_parsed_without_empty_melhoria_titles(): void
+    {
+        $user = User::create([
+            'name' => 'Colaborador Teste',
+            'email' => 'colab_parse@test.com',
+            'password' => 'secret123',
+            'role' => UserRole::Employee,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('help'));
+        $response->assertOk();
+        $response->assertSee('Motor de Tratamento PTRP, Jornadas, Tolerância Legal &amp; Banco de Horas', false);
+        $response->assertSee('treatment_events');
+        $response->assertSee('work_schedules');
+        $response->assertSee('CalculateDailyJourneyAction');
+        $response->assertDontSee('>Melhoria<', false);
+    }
+
+    public function test_help_page_manual_tab_renders_updated_features(): void
+    {
+        $user = User::create([
+            'name' => 'Colaborador Teste',
+            'email' => 'colab_manual@test.com',
+            'password' => 'secret123',
+            'role' => UserRole::Employee,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('help', ['tab' => 'manual']));
+        $response->assertOk();
+        $response->assertSee('Central de Comprovantes');
+        $response->assertSee('PTRP — Tratamento de Ponto');
+        $response->assertSee('Banco de Horas em Ledger');
+        $response->assertSee('Folha de Ponto Oficial A4');
+        $response->assertSee('Tolerância Legal');
+    }
+
     public function test_login_page_renders_with_kl_tecnologia_link(): void
     {
         $response = $this->get(route('login'));

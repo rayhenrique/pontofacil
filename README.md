@@ -236,7 +236,7 @@ Para rodar a suíte completa de testes automatizados cobrindo autorização, cá
 php artisan test
 ```
 
-> **Status da Suíte:** `72 testes, 302 asserções — 100% aprovados.`
+> **Status da Suíte:** `74 testes, 314 asserções — 100% aprovados.`
 
 ---
 
