@@ -1,12 +1,12 @@
-# Prompt de Implementação - PontoFácil Landing Page
+# Prompt de Implementação — PontoFácil Landing Page
 
 **Contexto e Papel:**
 Atue como um Desenvolvedor Frontend Senior, Motion Designer e especialista em Laravel, Blade, Tailwind CSS e GSAP (Vibe Coding).
-Seu objetivo é implementar a Landing Page Cinematic do "PontoFácil" (uma solução de controle de jornada via QR Code e GPS sob a Portaria 671). Não crie páginas genéricas; siga rigorosamente as diretrizes visuais e arquiteturais abaixo.
+Seu objetivo é implementar a Landing Page Cinematic do "PontoFácil 2.0" (uma solução corporativa de controle de jornada via QR Code e GPS sob a Portaria 671/2021 MTP — REP-P & PTRP). Não crie páginas genéricas; siga rigorosamente as diretrizes visuais e arquiteturais abaixo.
 
 ## 1. Stack e Arquitetura Exigida
-* **Framework:** Laravel.
-* **Estilização:** Tailwind CSS (uso extensivo de classes utilitárias, tipografia `font-inter` ou `font-sans`, cores de brand `indigo-600` e `slate-900`).
+* **Framework:** Laravel 13.
+* **Estilização:** Tailwind CSS v4 (uso extensivo de classes utilitárias, tipografia `font-sans` / Inter, cores de brand `indigo-600` e `slate-900`).
 * **Interatividade de UI:** Alpine.js (`x-data` para as tabs e mobile menu).
 * **Animações de Scroll e Motion:** GSAP (Core + ScrollTrigger).
 * **Estrutura Blade:** Crie os arquivos divididos em componentes anônimos para manter o código limpo:
@@ -29,7 +29,7 @@ Seu objetivo é implementar a Landing Page Cinematic do "PontoFácil" (uma solu�
 
 ### A. O Relógio em Tempo Real (Hero Section)
 * No componente Hero, crie um "mockup" de interface semelhante a um card do sistema.
-* **JS puro/Alpine:** Adicione um pequeno script que atualiza o horário do card a cada segundo (formato `HH:MM:SS`) e um indicador bolinha verde pulsando (animação CSS `@keyframes pulse` ou Tailwind `animate-pulse`), transmitindo precisão "cirúrgica".
+* **JS puro/Alpine:** Adicione um pequeno script que atualiza o horário do card a cada segundo (formato `HH:MM:SS`) e um indicador bolinha verde pulsando (Tailwind `animate-pulse`), transmitindo precisão "cirúrgica" no fuso oficial `America/Maceio`.
 
 ### B. Tabs da Demonstração Interativa (Interactive Preview)
 * Use Alpine.js: `<div x-data="{ tab: 'colaborador' }">...</div>`.
@@ -42,11 +42,10 @@ Envolva as animações em `gsap.matchMedia()` para desativar efeitos pesados em 
 Registre o `ScrollTrigger`.
 1. **Hero:** Ao carregar a página, faça o título, subtítulo e os CTAs subirem (`y: 30`, `opacity: 0`) com `stagger: 0.1`. O mockup do relógio deve entrar flutuando suavemente (`scale: 0.95`, `opacity: 0`).
 2. **Features/Cards:** Adicione a classe `.gsap-feature-card` nos 3 cards principais. Use ScrollTrigger para animá-los com `stagger: 0.2` assim que o container `start: "top 80%"` entrar na tela.
-3. **Timeline:** Os itens da linha do tempo devem aparecer sequencialmente usando ScrollTrigger e animação de opacidade/deslocamento X (`x: -20` para a direita).
+3. **Timeline:** Os itens da linha do tempo devem aparecer sequencialmente usando ScrollTrigger e animação de opacidade/deslocamento X (`x: -20` para a direita), exibindo todas as versões até a ativa `v1.7.0`.
 
-## 5. Diretrizes Finais de Conversão
-* Todos os botões principais devem redirecionar para a URL primária (`/login` ou a rota nomeada de login do Laravel).
-* O header deve conter a badge de texto "Adequado à Portaria 671 / MTP".
-* Garanta que o layout flua bem em mobile (empilhar grids usando `md:grid-cols-2` ou `lg:grid-cols-3`).
-
-Por favor, gere todo o código HTML (Blade), CSS (Tailwind) e JS (GSAP/Alpine) necessários dentro dessa arquitetura modular.
+## 5. Diretrizes Finais de Conversão & Identidade
+* Todos os botões principais devem redirecionar para a URL primária (`/login`).
+* O header deve conter a badge de texto "Adequado à Portaria 671 / MTP (REP-P & PTRP)".
+* O rodapé deve conter crédito oficial com hiperlink: **Desenvolvido por [KL Tecnologia](https://kltecnologia.com)**.
+* Garanta que o layout flua perfeitamente em mobile (empilhar grids usando `md:grid-cols-2` ou `lg:grid-cols-3`).

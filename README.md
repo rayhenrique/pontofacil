@@ -1,15 +1,26 @@
-# PontoFácil - Sistema de Controle de Ponto Eletrônico (REP-A)
+# PontoFácil 2.0 — Plataforma Web de Controle de Ponto Eletrônico (REP-P / PTRP)
 
-O **PontoFácil** é uma plataforma corporativa web moderna, segura e antifraude para controle eletrônico de ponto alternativo, integralmente aderente às diretrizes da **Portaria 671 do Ministério do Trabalho e Emprego (REP-A)**.
+O **PontoFácil 2.0** é uma plataforma corporativa web de alta integridade, rastreabilidade e segurança para registro e tratamento eletrônico de ponto, em plena conformidade com as diretrizes da **Portaria MTP nº 671/2021** (leiautes oficiais MTE 2026), **CLT** e **LGPD**.
 
-O sistema elimina fraudes na marcação de ponto por meio de uma **validação dupla rigorosa**: leitura de **QR Code físico corporativo** no local de trabalho combinada à **geolocalização (GPS)** do dispositivo móvel do colaborador, com carimbo de tempo inviolável cravado pelo servidor no **fuso horário oficial de Maceió (GMT-3)**.
+Operando nativamente no modelo **REP-P (Registrador Eletrônico de Ponto via Programa)** com módulo **PTRP (Programa de Tratamento de Registro de Ponto)** integrado, o sistema também oferece suporte à modalidade **REP-A (Registrador Alternativo)** quando respaldado por Acordo ou Convenção Coletiva de Trabalho (ACT/CCT).
+
+O sistema elimina fraudes na marcação de ponto por meio de uma **validação dupla rigorosa**: leitura de **QR Code físico corporativo** (com suporte a fallback híbrido matriz/setor) combinada à **geolocalização (GPS)** do dispositivo móvel do colaborador, com carimbo de tempo inviolável cravado pelo servidor no **fuso horário oficial de Maceió (GMT-3)**.
 
 ---
 
-## 🚀 Principais Módulos e Funcionalidades
+## 🏛️ Arquitetura de Instância Dedicada (Single-Tenant)
+
+O PontoFácil adota uma rigorosa filosofia de **Instância Dedicada**:
+- **Zero Multi-Tenancy:** Cada empresa cliente possui sua instalação exclusiva em servidor/VPS próprio, com banco de dados dedicado, domínio ou subdomínio exclusivo, arquivos isolados e configuração `.env` independente.
+- **Privacidade e LGPD:** Elimina qualquer risco de vazamento cruzado de dados entre empresas, conferindo soberania total ao cliente sobre sua base trabalhista.
+- **Hierarquia de Estabelecimentos:** Uma instalação representa a `Company` (Empresa Única), podendo agregar múltiplos `Establishments` (Matriz e Filiais com CNPJ/CNO distintos e contadores independentes de NSR).
+
+---
+
+## 🚀 Principais Módulos e Funcionalidades (v1.7.0)
 
 ### 1. Batida de Ponto Inteligente com Regra Híbrida (Smart Punch)
-- **Leitura Ótica Rápida:** Scanner integrado no navegador (`html5-qrcode` empacotado localmente no bundle Vite), sem dependência de conexões externas.
+- **Leitura Ótica Rápida:** Scanner integrado no navegador (`html5-qrcode` empacotado localmente no bundle Vite), sem dependência de conexões ou CDNs externas.
 - **Validação Geográfica Antifraude:** Captura automática das coordenadas GPS (`navigator.geolocation`) e cálculo instantâneo da distância em relação ao local permitido pela **Fórmula de Haversine**.
 - **Estrutura Híbrida Inteligente (Fallback por Setor):**
   - Cada setor/filial pode opcionalmente definir seu **próprio QR Code**, **Latitude**, **Longitude** e **Raio permitido**.
@@ -18,37 +29,58 @@ O sistema elimina fraudes na marcação de ponto por meio de uma **validação d
 - **Carimbo de Tempo Server-Side:** O relógio do dispositivo do cliente é desconsiderado; o horário gravado é unicamente o do servidor oficial, prevenindo qualquer tentativa de adulteração de hora.
 - **Relógio Digital em Tempo Real:** Interface visual moderna com relógio digital atualizado por segundo, sincronizado com o horário de Maceió (GMT-3).
 
-### 2. Espelho de Ponto & Totalização de Horas (Timesheet)
+### 2. Cadastro Funcional Completo do Servidor
+- **Ficha Cadastral Trabalhista:** Cadastro e edição de colaboradores vinculados à conta de usuário com informações contratuais essenciais:
+  - **Cargo / Função:** Seleção ágil com sugestões das funções mais comuns ou digitação personalizada.
+  - **Vínculo Empregatício:** Efetivo / Concursado, Contrato Temporário, Comissionado, Estagiário, CLT Integral, etc.
+  - **Carga Horária Semanal:** 40h semanais, 30h semanais, 20h semanais, 12x36 ou 44h semanais.
+  - **Zona de Lotação:** Urbana ou Rural.
+  - **Setor / Departamento:** Vínculo direto ao setor de trabalho.
+  - **Documentação:** CPF validado, telefone de contato e matrícula interna.
+- **Interface Modal Responsiva:** Criação e edição rápida via modal popup com validação server-side em tempo real.
+
+### 3. Folha de Ponto A4 Oficial (Modelo Outubro)
+- **Espelho Fiel ao Modelo Administrativo do RH:** Relatório padronizado idêntico ao modelo oficial de folha de ponto mensal (`/folha-ponto`).
+- **Preenchimento Automático do Cabeçalho:** Ao selecionar o colaborador, o sistema carrega instantaneamente: Nome do Servidor, Cargo, Vínculo, Carga Horária, Zona, Lotação/Setor e Mês de Referência.
+- **Grade Mensal de 31 Dias:** Tabela com todas as datas do mês contendo pares de batidas (Entrada/Saída da Manhã e Entrada/Saída da Tarde) e coluna de Ocorrências / Observações (Faltas, Atestados, Folgas, Feriados).
+- **Campos Oficiais de Assinatura:** Linhas de assinatura formal para o Servidor e para a Chefia Imediata com indicação do local e data.
+- **Estilização para Impressão Perfeita (`@media print`):** Oculta barras de navegação, botões de ação e ajusta fontes, bordas e margens para encaixe perfeito em 1 página A4 sem quebras de layout.
+
+### 4. Espelho de Ponto & Totalização de Horas (Timesheet)
 - **Cálculo Diário de Horas Trabalhadas:** Totalização automática da jornada considerando múltiplos pares de batidas (entrada, saída para almoço, retorno e saída final).
 - **Indicador de Jornada em Andamento:** Identificação visual em tempo real quando o colaborador realizou uma entrada ímpar no dia.
 - **Cards de Resumo Mensal:** Métricas consolidadas de **Horas Trabalhadas no Mês**, **Dias Trabalhados** e **Média Diária**.
 - **Filtros e Visualização Segmentada:** Filtros por mês e ano. Gestores visualizam colaboradores da sua equipe e Administradores possuem acesso irrestrito.
 
-### 3. Sistema Global de Popups Modais (Feedback & Confirmações)
+### 5. Landing Page Cinematográfica & Apresentação Institucional (`/landing`)
+- **Design Suíço Moderno (Swiss-Modern SaaS):** Interface cinematográfica estilizada com Tailwind CSS v4, tipografia limpa, glassmorphism suave e contrastes sóbrios.
+- **Animações de Scroll GSAP & ScrollTrigger:** Transições fluidas em stagger, cards de revelação progressiva e mockup interativo de relógio ao vivo no Hero.
+- **Tabs Interativas (Alpine.js):** Demonstração da "Visão Colaborador" (com animação de laser scanner simulando leitura de QR Code) e "Visão Gestor / RH".
+- **Timeline Visual de Versões:** Apresentação da evolução contínua da plataforma, destacando a versão ativa (`v1.7.0`).
+- **Identidade Institucional:** Rodapé com créditos oficiais e link direto para a [KL Tecnologia](https://kltecnologia.com).
+
+### 6. Sistema Global de Popups Modais (Feedback & Confirmações)
 - **Notificações Visuais:** Todas as mensagens de alerta, sucesso, informação e erro abrem em popups modais elegantes com ícones animados e estilo mobile-first.
-- **Diálogos de Confirmação:** Substituição de caixas nativas do navegador (`window.confirm()`) por modais elegantes de dupla checagem com destaque visual para ações de exclusão.
+- **Diálogos de Confirmação:** Substituição de caixas nativas do navegador (`window.confirm()`) por modais de dupla checagem com destaque visual para ações de exclusão.
 
-### 4. Perfis de Acesso & Gestão de Equipes (Roles)
-- **Administrador (RH):** Acesso completo a todos os módulos, relatórios gerenciais consolidados, auditoria, configurações globais e emissão de QR Code.
-- **Gestor de Setor:** Acesso ao módulo *"Gestão de Equipe"*, permitindo cadastrar, editar e acompanhar os colaboradores exclusivamente vinculados aos setores sob sua responsabilidade (`manager_id`).
-- **Colaborador:** Acesso direto à tela de batida de ponto e consulta ao histórico pessoal mensal.
+### 7. Perfis de Acesso & Gestão de Equipes (RBAC)
+- **Administrador / RH (`admin`):** Acesso irrestrito a todos os módulos, relatórios gerenciais consolidados, auditoria, configurações globais, gestão funcional e emissão de QR Code.
+- **Gestor de Setor (`manager`):** Módulo *"Gestão de Equipe"*, permitindo cadastrar, editar e acompanhar os colaboradores exclusivamente vinculados aos setores sob sua responsabilidade (`manager_id`).
+- **Colaborador (`employee`):** Acesso direto à tela de batida de ponto e consulta ao histórico pessoal mensal.
+- **Auditor Fiscal do Trabalho (`auditor` - planejado PontoFácil 2.0):** Consulta dedicada para auditoria fiscal e download de arquivos fiscais.
 
-### 5. Configurações da Empresa & Gerador de QR Code
+### 8. Configurações da Empresa & Gerador de QR Code
 - Painel exclusivo para o Administrador visualizar o QR Code criptográfico oficial da empresa.
 - **Ferramenta de Impressão:** Geração de folha padrão de impressão para fixação do QR Code na entrada do estabelecimento ou em cada setor.
 - **Rotação de Chave Criptográfica:** Capacidade de regenerar o hash do QR Code com 1 clique caso o código físico seja comprometido.
 - **Calibração de GPS:** Definição da latitude, longitude e raio permitido (em metros) com botão de **"Capturar Minha Posição Atual"** via GPS.
 
-### 6. Ajustes Manuais & Trilha de Auditoria Imutável
+### 9. Ajustes Manuais & Trilha de Auditoria Imutável
 - Interface para o RH lançar batidas esquecidas com justificativa textual obrigatória.
 - Todas as alterações manuais são registradas permanentemente na tabela de auditoria (`time_adjustments`), registrando quem fez a alteração, quando foi feita, horários envolvidos e a motivação legal.
 
-### 7. Relatórios Gerenciais
-- Filtragem flexível de registros por intervalo de datas, setor e colaborador.
-- Totalizadores de registros e distinção clara entre batidas automáticas (QR Code + GPS) e manuais (RH).
-
-### 8. Central de Ajuda, Linha do Tempo de Versões & Login Moderno
-- **Linha do Tempo Visual (Changelog Timeline):** Exibição interativa e categorizada do histórico de versões em formato de timeline conectada, destacando a versão ativa (`v1.5.0`).
+### 10. Central de Ajuda, Linha do Tempo de Versões & Login Moderno
+- **Linha do Tempo Visual (Changelog Timeline):** Exibição interativa e categorizada do histórico de versões em formato de timeline conectada, destacando a versão ativa (`v1.7.0`).
 - **Manual do Usuário Interativo:** Guia em cards temáticos para colaboradores, gestores e RH.
 - **Tela de Login Institucional:** Visual modernizado com link oficial da [KL Tecnologia](https://kltecnologia.com), alternador de visualização de senha e credenciais seguras.
 - **Utilitário de Teste:** Comando `php artisan ponto:test-data` (com suporte a `--clean`) para geração de dados fictícios completos para validação em desenvolvimento.
@@ -58,8 +90,9 @@ O sistema elimina fraudes na marcação de ponto por meio de uma **validação d
 ## 🛠️ Stack Tecnológica
 
 - **Backend:** [PHP 8.3+](https://www.php.net) / [Laravel 13](https://laravel.com)
-- **Componentização:** [Livewire 4](https://livewire.laravel.com) (Arquitetura *View-Based Components*)
+- **Componentização Reativa:** [Livewire 4](https://livewire.laravel.com) (Arquitetura *View-Based Components*)
 - **Frontend & Reatividade:** [Alpine.js](https://alpinejs.dev) & [Tailwind CSS v4](https://tailwindcss.com)
+- **Animações de UI & Scroll:** [GSAP 3.12](https://gsap.com) com ScrollTrigger
 - **Leitura & Geração de QR Code:** `html5-qrcode` e `qrcode` (compilados localmente no bundle Vite)
 - **Banco de Dados:** MySQL 8+ (InnoDB, `utf8mb4_unicode_ci`)
 - **Fuso Horário Oficial:** `America/Maceio` (GMT-3)
@@ -67,36 +100,46 @@ O sistema elimina fraudes na marcação de ponto por meio de uma **validação d
 
 ---
 
-## 📦 Estrutura de Diretórios Relevantes
+## 📦 Estrutura de Diretórios do Projeto
 
 ```
 pontofacil/
+├── .agents/
+│   └── skills/
+│       └── pontofacil-compliance/             # Diretrizes de compliance Portaria 671 MTP / REP-P / PTRP
+│           ├── SKILL.md                       # Especificação do skill de conformidade single-tenant
+│           └── references/                    # Decomposição em 9 módulos técnicos (PRD, REP-P, AFD, AEJ, etc.)
 ├── app/
-│   ├── Console/Commands/SeedPontoTestData.php  # Comando utilitário de teste
-│   ├── Enums/UserRole.php                     # Roles: Admin, Manager, Employee
-│   ├── Models/                                # User, Employee, Sector, TimeEntry, TimeAdjustment, SystemSetting
-│   └── Policies/UserPolicy.php                # Políticas de autorização
+│   ├── Console/Commands/SeedPontoTestData.php # Gerador de dados fictícios de demonstração
+│   ├── Enums/UserRole.php                    # Roles tipadas: Admin, Manager, Employee
+│   ├── Models/                               # User, Employee, Sector, TimeEntry, TimeAdjustment, SystemSetting
+│   └── Policies/UserPolicy.php               # Políticas granulares de autorização
 ├── config/
-│   └── app.php                                # Configuração de locale pt_BR e timezone America/Maceio
-├── database/migrations/                       # Migrações (incluindo estrutura híbrida de setores)
+│   └── app.php                               # Configurações de timezone America/Maceio e locale pt_BR
+├── database/migrations/                      # Migrações relacionais (incluindo cadastro funcional e setores híbridos)
 ├── lang/
-│   └── pt_BR/                                 # Tradução completa (validation, auth, passwords, pagination)
-├── ref/                                       # Documentação técnica de arquitetura (PRD, SCHEMA, TASKS)
+│   └── pt_BR/                                # Tradução e mensagens amigáveis em português
+├── ref/                                      # Documentação arquitetural de referência técnica
 ├── resources/
-│   ├── js/app.js                              # Integração do scanner e gerador de QR Code
+│   ├── js/app.js                             # Bundle Vite com scanner QR Code e utilitários
 │   └── views/
-│       ├── components/                        # Componentes Livewire View-Based
-│       │   ├── admin/                         # Módulos: employees, sectors, users, audit, reports, settings
-│       │   ├── auth/login.blade.php           # Tela de login institucional
-│       │   ├── help.blade.php                 # Central de ajuda e timeline de versões
-│       │   ├── modal-feedback.blade.php       # Sistema global de popups e confirmações
-│       │   ├── time-punch.blade.php           # Registro de ponto (QR + GPS híbrido)
-│       │   ├── timesheet.blade.php            # Espelho de ponto com cálculo de horas
-│       │   └── version-notifier.blade.php     # Modal notificador de nova versão
-│       └── layouts/app.blade.php              # Layout base responsivo (Sidebar + Drawer + Tab Bar + Modais)
-├── routes/web.php                             # Rotas declarativas do sistema
-├── tests/Feature/                             # Suíte de testes automatizados PHPUnit (22 testes, 75 asserções)
-└── versoes.md                                 # Histórico detalhado de versões do sistema
+│       ├── components/                       # Componentes Livewire View-Based
+│       │   ├── admin/                        # Módulos: employees (cadastro funcional), sectors, users, audit, reports, settings
+│       │   ├── auth/login.blade.php          # Tela de login institucional com link KL Tecnologia
+│       │   ├── folha-ponto.blade.php         # Folha de Ponto A4 Oficial (Modelo Outubro)
+│       │   ├── help.blade.php                # Central de ajuda e timeline de versões
+│       │   ├── landing/                      # Componentes modulares da Landing Page Cinematográfica
+│       │   ├── modal-feedback.blade.php      # Sistema global de modais e confirmações
+│       │   ├── time-punch.blade.php          # Registro de ponto inteligente (QR + GPS híbrido)
+│       │   ├── timesheet.blade.php           # Espelho de ponto com cálculo de horas
+│       │   └── version-notifier.blade.php    # Modal notificador de nova versão (v1.7.0)
+│       ├── layouts/
+│       │   ├── app.blade.php                 # Layout base da aplicação interna (Sidebar + Drawer + Tab Bar + Modais)
+│       │   └── landing.blade.php             # Layout base da Landing Page (GSAP, fontes e Tailwind v4)
+│       └── landing.blade.php                 # View principal da Landing Page (/landing)
+├── routes/web.php                            # Rotas web declarativas
+├── tests/Feature/                            # Suíte de testes automatizados PHPUnit (31 testes, 128 asserções)
+└── versoes.md                                # Histórico detalhado de releases (v1.0.0 a v1.7.0)
 ```
 
 ---
@@ -104,7 +147,7 @@ pontofacil/
 ## ⚙️ Instalação e Execução Local
 
 ### Pré-requisitos
-- PHP 8.2 ou superior com extensões `pdo_mysql`, `mbstring`, `openssl`.
+- PHP 8.2 ou superior com extensões `pdo_mysql`, `mbstring`, `openssl`, `bcmath`.
 - Composer 2.x
 - Node.js 18+ e NPM
 
@@ -156,23 +199,25 @@ pontofacil/
    npm run build
    php artisan serve
    ```
-   Acesse no navegador: `http://localhost:8000`
+   - Página Inicial / Landing Page: `http://localhost:8000/landing` ou `http://localhost:8000`
+   - Acesso ao Sistema: `http://localhost:8000/login`
+   - Folha de Ponto A4 Oficial: `http://localhost:8000/folha-ponto`
 
 ---
 
 ## 🧪 Testes Automatizados
 
-Para rodar a suíte completa de testes automatizados cobrindo autorização, cálculo de jornada, isolamento de setores, estrutura híbrida e camadas modais:
+Para rodar a suíte completa de testes automatizados cobrindo autorização, cálculo de jornada, isolamento de setores, cadastro funcional, folha de ponto e camadas modais:
 
 ```bash
 php artisan test
 ```
 
-> **Status da Suíte:** `22 testes, 75 asserções — 100% aprovados.`
+> **Status da Suíte:** `31 testes, 128 asserções — 100% aprovados.`
 
 ---
 
-## 🚀 Guia de Deploy em Produção
+## 🚀 Guia de Deploy em Produção (Instância Dedicada)
 
 Para instruções completas de deploy em servidores VPS com **CloudPanel** e **Nginx** utilizando certificados SSL (**HTTPS** obrigatório para câmera e geolocalização), consulte o arquivo:
 - [Guia de Deploy Passo a Passo (deploy.md)](file:///c:/Users/rayhe/Downloads/pontofacil/deploy.md)
