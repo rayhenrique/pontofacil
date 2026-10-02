@@ -8,7 +8,7 @@ use Illuminate\Support\Str;
 new class extends Component
 {
     public $showModal = false;
-    public $currentVersion = 'v1.6.0';
+    public $currentVersion = 'v1.7.0';
     public $releaseNotes = '';
 
     public function mount()

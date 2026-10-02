@@ -74,4 +74,38 @@ class FolhaPontoTest extends TestCase
             ->assertSet('fillMode', 'blank')
             ->assertSee(': ');
     }
+
+    public function test_folha_ponto_loads_metadata_from_employee_registration(): void
+    {
+        $user = User::create([
+            'name' => 'Roberto Fisioterapeuta',
+            'email' => 'roberto@test.com',
+            'password' => 'secret123',
+            'role' => UserRole::Employee,
+        ]);
+
+        $sector = Sector::create(['name' => 'UBS Povoado Gulandim']);
+        Employee::create([
+            'user_id' => $user->id,
+            'sector_id' => $sector->id,
+            'cpf' => '999.888.777-66',
+            'job_title' => 'Fisioterapeuta',
+            'contract_type' => 'Contratado',
+            'workload' => '30h',
+            'zone' => 'Rural',
+        ]);
+
+        Livewire::actingAs($user)
+            ->test('folha-ponto')
+            ->assertSet('jobTitle', 'Fisioterapeuta')
+            ->assertSet('contractType', 'Contratado')
+            ->assertSet('workload', '30h')
+            ->assertSet('zone', 'Rural')
+            ->assertSet('location', 'UBS Povoado Gulandim')
+            ->assertSee('Fisioterapeuta')
+            ->assertSee('Contratado')
+            ->assertSee('30h')
+            ->assertSee('Rural')
+            ->assertSee('UBS Povoado Gulandim');
+    }
 }

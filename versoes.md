@@ -1,6 +1,18 @@
 # Histórico de Versões (Changelog)
 
-## v1.6.0 (Atual)
+## v1.7.0 (Atual)
+- **Cadastro Funcional do Colaborador & Integração da Folha de Ponto:**
+  - Adição dos campos funcionais à tabela `employees`: Cargo (`job_title`), Vínculo (`contract_type`), Carga Horária Semanal (`workload`) e Zona (`zone`).
+  - Atualização completa do Gerenciador de Funcionários (`employees.blade.php`) com suporte à visualização, criação e edição de colaboradores com listas inteligentes de sugestão.
+  - Carregamento automático em tempo real de todos os dados funcionais na Folha de Ponto Oficial A4 (`folha-ponto.blade.php`) diretamente do perfil cadastrado do servidor.
+- **Diretrizes e Arquitetura PontoFácil 2.0 (Instância Dedicada / Single-Tenant):**
+  - Documentação normativa e de compliance integral em `.agents/skills/pontofacil-compliance/` segundo a Portaria 671/2021 MTP (leiautes MTE 2026), CLT e LGPD.
+  - Fixação da regra arquitetural de Instância Dedicada: 1 Empresa cliente = 1 Domínio + 1 Banco de Dados + 1 VPS, expurgando qualquer conceito de multi-tenancy.
+  - Especificação do ledger imutável `punch_events` (sem `tenant_id`), sequenciador atômico de NSR por estabelecimento (`nsr_next`), Central de Comprovantes com PAdES e separação estrita REP-P vs PTRP.
+- **Suíte de Testes Expandida:**
+  - Testes automatizados cobrindo a integridade dos dados cadastrais do servidor e sua injeção na folha de ponto (`31 testes e 128 asserções aprovados`).
+
+## v1.6.0
 - **Landing Page Cinematográfica & Página Inicial Oficial:**
   - Implementação da Landing Page moderna do PontoFácil com tipografia Swiss-Modern, tema de cores em tons de índigo e slate, animações cinematográficas de scroll via GSAP (Core + ScrollTrigger com `matchMedia` responsivo) e interatividade com Alpine.js.
   - Mockup de relógio em tempo real com precisão cirúrgica por segundo no fuso oficial de Brasília/Maceió (GMT-3) e simulação de batida instantânea.

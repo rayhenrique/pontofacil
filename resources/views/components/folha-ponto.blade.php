@@ -93,11 +93,18 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário • Modelo 
     {
         $targetUser = User::with('employee.sector')->find($this->userId);
         if ($targetUser && $targetUser->employee) {
-            $this->location = optional($targetUser->employee->sector)->name ?? 'Secretaria Municipal de Saúde';
-            $this->jobTitle = $targetUser->role === UserRole::Admin ? 'Administrador do Sistema' : ($targetUser->role === UserRole::Manager ? 'Coordenador / Gestor' : 'Servidor Público');
+            $emp = $targetUser->employee;
+            $this->location = optional($emp->sector)->name ?? 'Secretaria Municipal de Saúde';
+            $this->jobTitle = $emp->job_title ?: ($targetUser->role === UserRole::Admin ? 'Administrador do Sistema' : ($targetUser->role === UserRole::Manager ? 'Coordenador / Gestor' : 'Servidor Público'));
+            $this->contractType = $emp->contract_type ?: 'Efetivo';
+            $this->workload = $emp->workload ?: '40h';
+            $this->zone = $emp->zone ?: 'Urbana';
         } else {
             $this->location = 'Secretaria Municipal de Saúde';
-            $this->jobTitle = 'Servidor Público';
+            $this->jobTitle = ($targetUser && $targetUser->role === UserRole::Admin) ? 'Administrador do Sistema' : (($targetUser && $targetUser->role === UserRole::Manager) ? 'Coordenador / Gestor' : 'Servidor Público');
+            $this->contractType = 'Efetivo';
+            $this->workload = '40h';
+            $this->zone = 'Urbana';
         }
     }
 

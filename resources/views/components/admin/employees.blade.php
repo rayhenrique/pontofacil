@@ -10,20 +10,30 @@ use App\Enums\UserRole;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends Component
 {
+    public $employeeId = null;
     public $name = '';
     public $cpf = '';
     public $email = '';
     public $phone = '';
     public $sector_id = '';
+    public $job_title = 'Servidor Público';
+    public $contract_type = 'Efetivo';
+    public $workload = '40h';
+    public $zone = 'Urbana';
     
     public $showModal = false;
 
     public function openCreateModal()
     {
-        $this->reset(['name', 'cpf', 'email', 'phone', 'sector_id']);
+        $this->reset(['employeeId', 'name', 'cpf', 'email', 'phone', 'sector_id']);
+        $this->job_title = 'Servidor Público';
+        $this->contract_type = 'Efetivo';
+        $this->workload = '40h';
+        $this->zone = 'Urbana';
         
         $user = Auth::user();
         if ($user->role === UserRole::Manager) {
@@ -36,14 +46,60 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
         $this->showModal = true;
     }
 
+    public function openEditModal($id)
+    {
+        $employee = Employee::with(['user', 'sector'])->findOrFail($id);
+        $user = Auth::user();
+
+        if ($user->role === UserRole::Manager) {
+            $isResponsible = Sector::where('id', $employee->sector_id)
+                ->where('manager_id', $user->id)
+                ->exists();
+
+            if (!$isResponsible) {
+                abort(403, 'Você não tem permissão para editar funcionários fora dos setores sob sua gestão.');
+            }
+        }
+
+        $this->employeeId = $employee->id;
+        $this->name = $employee->user->name ?? '';
+        $this->email = $employee->user->email ?? '';
+        $this->cpf = $employee->cpf ?? '';
+        $this->phone = $employee->phone ?? '';
+        $this->sector_id = (string) $employee->sector_id;
+        $this->job_title = $employee->job_title ?? 'Servidor Público';
+        $this->contract_type = $employee->contract_type ?? 'Efetivo';
+        $this->workload = $employee->workload ?? '40h';
+        $this->zone = $employee->zone ?? 'Urbana';
+
+        $this->showModal = true;
+    }
+
     public function save()
     {
+        $employee = $this->employeeId ? Employee::with('user')->findOrFail($this->employeeId) : null;
+        $userId = $employee?->user_id;
+
         $this->validate([
             'name' => 'required|string|max:255',
-            'cpf' => 'required|string|max:20|unique:employees,cpf',
-            'email' => 'required|email|max:255|unique:users,email',
+            'cpf' => [
+                'required',
+                'string',
+                'max:20',
+                Rule::unique('employees', 'cpf')->ignore($this->employeeId),
+            ],
+            'email' => [
+                'required',
+                'email',
+                'max:255',
+                Rule::unique('users', 'email')->ignore($userId),
+            ],
             'phone' => 'nullable|string|max:20',
             'sector_id' => 'required|exists:sectors,id',
+            'job_title' => 'required|string|max:150',
+            'contract_type' => 'required|string|max:100',
+            'workload' => 'required|string|max:50',
+            'zone' => 'required|string|max:50',
         ]);
 
         $user = Auth::user();
@@ -53,35 +109,59 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                 ->exists();
 
             if (!$isResponsible) {
-                $this->addError('sector_id', 'Você só tem autorização para cadastrar funcionários em setores onde você é o responsável.');
+                $this->addError('sector_id', 'Você só tem autorização para cadastrar/editar funcionários em setores onde você é o responsável.');
                 return;
             }
         }
 
-        DB::transaction(function () {
-            $user = User::create([
-                'name' => $this->name,
-                'email' => $this->email,
-                'password' => Hash::make('12345678'),
-                'role' => UserRole::Employee,
-            ]);
+        DB::transaction(function () use ($employee) {
+            if ($employee) {
+                if ($employee->user) {
+                    $employee->user->update([
+                        'name' => $this->name,
+                        'email' => $this->email,
+                    ]);
+                }
 
-            Employee::create([
-                'user_id' => $user->id,
-                'sector_id' => $this->sector_id,
-                'cpf' => $this->cpf,
-                'phone' => $this->phone,
-            ]);
+                $employee->update([
+                    'sector_id' => $this->sector_id,
+                    'cpf' => $this->cpf,
+                    'phone' => $this->phone,
+                    'job_title' => $this->job_title,
+                    'contract_type' => $this->contract_type,
+                    'workload' => $this->workload,
+                    'zone' => $this->zone,
+                ]);
+            } else {
+                $newUser = User::create([
+                    'name' => $this->name,
+                    'email' => $this->email,
+                    'password' => Hash::make('12345678'),
+                    'role' => UserRole::Employee,
+                ]);
+
+                Employee::create([
+                    'user_id' => $newUser->id,
+                    'sector_id' => $this->sector_id,
+                    'cpf' => $this->cpf,
+                    'phone' => $this->phone,
+                    'job_title' => $this->job_title,
+                    'contract_type' => $this->contract_type,
+                    'workload' => $this->workload,
+                    'zone' => $this->zone,
+                ]);
+            }
         });
 
-        $this->reset(['name', 'cpf', 'email', 'phone', 'sector_id']);
+        $isEdit = (bool) $this->employeeId;
+        $this->reset(['employeeId', 'name', 'cpf', 'email', 'phone', 'sector_id', 'job_title', 'contract_type', 'workload', 'zone']);
         $this->showModal = false;
         
-        session()->flash('message', 'Funcionário e usuário criados com sucesso.');
+        session()->flash('message', $isEdit ? 'Funcionário atualizado com sucesso.' : 'Funcionário e usuário criados com sucesso.');
         $this->dispatch('app-modal-alert', [
             'type' => 'success',
-            'title' => 'Funcionário Cadastrado!',
-            'message' => 'O colaborador e o acesso de usuário foram criados com sucesso.'
+            'title' => $isEdit ? 'Dados Atualizados!' : 'Funcionário Cadastrado!',
+            'message' => $isEdit ? 'Os dados funcionais do colaborador foram atualizados com sucesso.' : 'O colaborador e o acesso de usuário foram criados com sucesso.'
         ]);
     }
 
@@ -177,10 +257,10 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Nome & E-mail</th>
-                        <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Setor</th>
-                        <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">CPF</th>
-                        <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Telefone</th>
+                        <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Servidor & E-mail</th>
+                        <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cargo & Vínculo</th>
+                        <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Setor & Zona</th>
+                        <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Carga / CPF</th>
                         <th class="px-4 sm:px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Ações</th>
                     </tr>
                 </thead>
@@ -191,6 +271,12 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                                 <div class="text-sm font-bold text-gray-900">{{ $employee->user->name ?? 'N/A' }}</div>
                                 <div class="text-xs text-gray-500">{{ $employee->user->email ?? 'N/A' }}</div>
                             </td>
+                            <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm font-semibold text-gray-800">{{ $employee->job_title ?? 'Servidor Público' }}</div>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700">
+                                    {{ $employee->contract_type ?? 'Efetivo' }}
+                                </span>
+                            </td>
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 @if($employee->sector)
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
@@ -199,10 +285,14 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                                 @else
                                     <span class="text-gray-400 italic">Sem setor</span>
                                 @endif
+                                <div class="text-xs text-gray-400 mt-0.5">Zona {{ $employee->zone ?? 'Urbana' }}</div>
                             </td>
-                            <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">{{ $employee->cpf }}</td>
-                            <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ $employee->phone ?: '-' }}</td>
-                            <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
+                                <div class="text-xs font-semibold text-indigo-600">{{ $employee->workload ?? '40h' }}</div>
+                                <div class="text-xs text-gray-500 font-mono">{{ $employee->cpf }}</div>
+                            </td>
+                            <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                <button type="button" wire:click="openEditModal({{ $employee->id }})" class="text-indigo-600 hover:text-indigo-900 font-semibold cursor-pointer">Editar</button>
                                 <button type="button" @click="window.showModalConfirm({
                                     title: 'Excluir Funcionário',
                                     message: 'Tem certeza que deseja excluir o colaborador {{ addslashes($employee->user->name ?? 'Colaborador') }}? Esta ação apagará o funcionário e o acesso de usuário dele permanentemente.',
@@ -210,7 +300,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                                     cancelText: 'Cancelar',
                                     isDanger: true,
                                     onConfirm: () => $wire.delete({{ $employee->id }})
-                                })" class="text-red-600 hover:text-red-900 font-medium">Excluir</button>
+                                })" class="text-red-600 hover:text-red-900 font-medium cursor-pointer">Excluir</button>
                             </td>
                         </tr>
                     @empty
@@ -228,21 +318,27 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
         </div>
     </div>
 
-    <!-- Modal Adicionar Funcionário (Mobile Friendly) -->
+    <!-- Modal Adicionar/Editar Funcionário (Mobile Friendly) -->
     @if($showModal)
     <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true" wire:transition>
         <!-- Backdrop overlay -->
         <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-xs transition-opacity" aria-hidden="true" wire:click="$set('showModal', false)"></div>
 
         <div class="flex min-h-screen items-center justify-center p-4 text-center sm:p-0">
-            <div class="relative z-10 w-full max-w-xl transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-2xl transition-all sm:my-8">
+            <div class="relative z-10 w-full max-w-2xl transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-2xl transition-all sm:my-8">
                 <div>
                     <h3 class="text-lg leading-6 font-bold text-gray-900 border-b pb-2" id="modal-title">
-                        Cadastrar Novo Funcionário
+                        {{ $employeeId ? 'Editar Dados do Funcionário' : 'Cadastrar Novo Funcionário' }}
                     </h3>
-                    <p class="mt-2 text-xs text-gray-500">
-                        O usuário será criado automaticamente. Senha inicial padrão: <strong class="text-indigo-600 font-mono">12345678</strong>
-                    </p>
+                    @if(!$employeeId)
+                        <p class="mt-2 text-xs text-gray-500">
+                            O usuário será criado automaticamente. Senha inicial padrão: <strong class="text-indigo-600 font-mono">12345678</strong>
+                        </p>
+                    @else
+                        <p class="mt-2 text-xs text-gray-500">
+                            Atualize os dados cadastrais, cargo, vínculo e carga horária para refletir na folha de ponto e espelhos.
+                        </p>
+                    @endif
 
                     @if($isManager && $managedSectorsCount === 0)
                         <div class="mt-3 rounded-xl bg-rose-50 border border-rose-200 p-3 text-rose-800 text-xs">
@@ -273,9 +369,10 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                                     <input type="text" wire:model="phone" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                     @error('phone') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
                                 </div>
+                                
                                 <div class="sm:col-span-2">
                                     <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                                        Setor {{ $isManager ? '(Setores sob sua responsabilidade)' : '' }}
+                                        Setor de Lotação {{ $isManager ? '(Setores sob sua responsabilidade)' : '' }}
                                     </label>
                                     <select wire:model="sector_id" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" required {{ $isManager && $managedSectorsCount === 0 ? 'disabled' : '' }}>
                                         <option value="">Selecione um setor</option>
@@ -285,6 +382,61 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                                     </select>
                                     @error('sector_id') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
                                 </div>
+
+                                <!-- CAMPOS FUNCIONAIS QUE ALIMENTAM A FOLHA DE PONTO -->
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Cargo / Função</label>
+                                    <input type="text" list="cargos-list" wire:model="job_title" placeholder="Ex: Enfermeiro(a)" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" required>
+                                    <datalist id="cargos-list">
+                                        <option value="Enfermeiro(a)">
+                                        <option value="Médico(a)">
+                                        <option value="Técnico(a) de Enfermagem">
+                                        <option value="Agente Comunitário de Saúde (ACS)">
+                                        <option value="Agente de Combate às Endemias (ACE)">
+                                        <option value="Auxiliar de Saúde Bucal">
+                                        <option value="Dentista / Odontólogo(a)">
+                                        <option value="Auxiliar Administrativo">
+                                        <option value="Recepcionista">
+                                        <option value="Motorista">
+                                        <option value="Coordenador(a)">
+                                        <option value="Servidor Público">
+                                    </datalist>
+                                    @error('job_title') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Vínculo</label>
+                                    <select wire:model="contract_type" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" required>
+                                        <option value="Efetivo">Efetivo (Concursado)</option>
+                                        <option value="Contratado">Contratado (Processo Seletivo / PSS)</option>
+                                        <option value="Comissionado">Comissionado</option>
+                                        <option value="Temporário">Temporário</option>
+                                        <option value="Estagiário">Estagiário</option>
+                                        <option value="CLT">CLT</option>
+                                    </select>
+                                    @error('contract_type') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Carga Horária Semanal</label>
+                                    <select wire:model="workload" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" required>
+                                        <option value="40h">40h semanais</option>
+                                        <option value="30h">30h semanais</option>
+                                        <option value="24h">24h (Plantão)</option>
+                                        <option value="20h">20h semanais</option>
+                                        <option value="12x36">12x36 (Escala)</option>
+                                    </select>
+                                    @error('workload') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Zona</label>
+                                    <select wire:model="zone" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" required>
+                                        <option value="Urbana">Urbana</option>
+                                        <option value="Rural">Rural</option>
+                                    </select>
+                                    @error('zone') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+                                </div>
                             </div>
                             
                             <div class="mt-5 sm:mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-3 border-t pt-4">
@@ -292,7 +444,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                                     Cancelar
                                 </button>
                                 <button type="submit" @if($isManager && $managedSectorsCount === 0) disabled @endif class="w-full sm:w-auto inline-flex justify-center rounded-xl px-5 py-2.5 bg-indigo-600 text-sm font-semibold text-white hover:bg-indigo-700 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
-                                    <span wire:loading.remove wire:target="save">Salvar Funcionário</span>
+                                    <span wire:loading.remove wire:target="save">{{ $employeeId ? 'Salvar Alterações' : 'Salvar Funcionário' }}</span>
                                     <span wire:loading wire:target="save">Salvando...</span>
                                 </button>
                             </div>
