@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ReceiptController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -17,6 +18,11 @@ Route::middleware('guest')->group(function () {
     Route::livewire('/login', 'auth.login')->name('login');
 });
 
+// Public Verification & Receipt Routes
+Route::livewire('/verificar-comprovante', 'receipt-verification')->name('receipts.verify');
+Route::get('/comprovante/{code}/pdf', [ReceiptController::class, 'downloadPdf'])->name('receipts.pdf');
+Route::get('/comprovante/{code}/imprimir', [ReceiptController::class, 'printHtml'])->name('receipts.print');
+
 // Authenticated Routes
 Route::middleware('auth')->group(function () {
     // Bater Ponto (Tela Inicial do Sistema Autenticado)
@@ -33,6 +39,7 @@ Route::middleware('auth')->group(function () {
 
     Route::livewire('/timesheet', 'timesheet')->name('timesheet');
     Route::livewire('/folha-ponto', 'folha-ponto')->name('folha-ponto');
+    Route::livewire('/comprovantes', 'receipts-center')->name('receipts.center');
     Route::livewire('/ajuda', 'help')->name('help');
 
     // Management Routes (Admin & Gestor)
@@ -48,5 +55,6 @@ Route::middleware('auth')->group(function () {
         Route::livewire('/audit', 'admin.audit')->name('audit');
         Route::livewire('/reports', 'admin.reports')->name('reports');
         Route::livewire('/settings', 'admin.settings')->name('settings');
+        Route::get('/exportar-afd', [ReceiptController::class, 'exportAfd'])->name('export-afd');
     });
 });

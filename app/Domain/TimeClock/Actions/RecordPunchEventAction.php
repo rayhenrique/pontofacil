@@ -3,6 +3,7 @@
 namespace App\Domain\TimeClock\Actions;
 
 use App\Domain\Company\Services\CurrentCompany;
+use App\Domain\Compliance\Receipt\GeneratePunchReceiptAction;
 use App\Domain\TimeClock\Services\NsrGeneratorService;
 use App\Models\Employee;
 use App\Models\Establishment;
@@ -75,7 +76,7 @@ class RecordPunchEventAction
 
         $payloadHash = hash('sha256', $payloadRaw);
 
-        return PunchEvent::create([
+        $event = PunchEvent::create([
             'id' => (string) Str::ulid(),
             'establishment_id' => $establishment->id,
             'employee_id' => $employee?->id,
@@ -97,5 +98,14 @@ class RecordPunchEventAction
             'previous_event_hash' => $previousHash,
             'created_at' => $nowUtc,
         ]);
+
+        try {
+            $receipt = app(GeneratePunchReceiptAction::class)->execute($event);
+            $event->setRelation('receipt', $receipt);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return $event;
     }
 }

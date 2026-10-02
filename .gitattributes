@@ -5,6 +5,8 @@
 *.html diff=html
 *.md diff=markdown
 *.php diff=php
+tests/Fixtures/AFD/*.txt text eol=crlf
+*.afd text eol=crlf
 
 /.github export-ignore
 CHANGELOG.md export-ignore

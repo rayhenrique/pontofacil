@@ -115,11 +115,28 @@
 
 ## 🔮 Próximas Fases: Conformidade PontoFácil 2.0 (Instância Dedicada)
 
-- [ ] **Fase 19: Comprovante de Registro do Trabalhador & Exportação AFD**
-  - [ ] Geração do Comprovante de Ponto do Trabalhador em PDF assinado com PAdES (acessível permanentemente na Central de Comprovantes).
-  - [ ] Exportação do Arquivo Fonte de Dados (AFD) posicional conforme leiaute oficial MTE atualizado em 31/07/2026.
-  - [ ] Assinatura digital padrão CAdES (.p7s detached).
-  - [ ] Golden tests com fixtures de validação do leiaute fiscal.
+- [x] **Fase 19A: Comprovantes, AFD & Validação — MVP**
+  - [x] Criar tabela/model `punch_receipts` com relacionamento 1:1 com `punch_events`.
+  - [x] Implementar Central de Comprovantes do Trabalhador com acesso permanente ao histórico.
+  - [x] Gerar comprovante em PDF contendo os dados disponíveis exigidos para REP-P: empresa, estabelecimento/local, trabalhador, CPF, data/hora, timezone, NSR, SHA-256 e código de verificação.
+  - [x] Enquanto não houver certificado ICP-Brasil e registro INPI configurados, identificar o documento como comprovante de desenvolvimento/não assinado, sem declarar validade regulatória REP-P.
+  - [x] Criar `SigningServiceInterface` desacoplada da geração do comprovante, preparando futura assinatura PAdES sem acoplar certificado ao domínio.
+  - [x] Criar página de verificação do comprovante pelo `verification_code`, validando o hash contra o `PunchEvent`.
+  - [x] Implementar gerador versionado do Arquivo Fonte de Dados (AFD) conforme o leiaute oficial MTE publicado em 31/07/2026.
+  - [x] Permitir gerar AFD por estabelecimento e intervalo temporal.
+  - [x] Garantir que o AFD seja construído exclusivamente a partir dos registros brutos do REP (`punch_events`), nunca de `treatment_events` ou dados tratados.
+  - [x] Criar validador interno do AFD com verificação de tipos de registro, tamanhos, posições, NSR, datas, horários e demais regras do leiaute.
+  - [x] Criar Golden Tests/fixtures conhecidos para o AFD, cobrindo arquivo válido, múltiplos funcionários, múltiplas marcações, estabelecimento distinto e casos inválidos.
+  - [x] Garantir testes automatizados para autorização da Central de Comprovantes, integridade de hash e geração determinística do AFD.
+
+- [ ] **Fase 19B: Assinaturas Oficiais REP-P — Dependências Externas**
+  - [ ] Configurar número definitivo do registro do software PontoFácil no INPI.
+  - [ ] Configurar certificado digital ICP-Brasil válido em armazenamento seguro.
+  - [ ] Implementar `IcpBrasilSigningService`.
+  - [ ] Assinar eletronicamente os comprovantes PDF no padrão PAdES.
+  - [ ] Assinar AFD no padrão CAdES com arquivo `.p7s` detached.
+  - [ ] Validar cadeia do certificado, validade, algoritmo e integridade das assinaturas.
+  - [ ] Somente após esses requisitos, habilitar documentos como saída oficial REP-P.
 
 - [ ] **Fase 20: Motor de Tratamento PTRP, Tolerância Legal & Banco de Horas**
   - [ ] Tabela `treatment_events` para registro imutável de ajustes, abonos e justificativas (sem alterar a batida bruta original).

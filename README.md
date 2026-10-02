@@ -17,9 +17,18 @@ O PontoFácil adota uma rigorosa filosofia de **Instância Dedicada**:
 
 ---
 
-## 🚀 Principais Módulos e Funcionalidades (v1.8.0)
+## 🚀 Principais Módulos e Funcionalidades (v1.9.0)
 
-### 1. Batida de Ponto Inteligente com Regra Híbrida (Smart Punch)
+### 1. Central de Comprovantes do Trabalhador & Validação Pública (Fase 19A)
+- **Central de Comprovantes (`/receipts`):** Interface permanente de autoatendimento para o trabalhador consultar, visualizar e baixar comprovantes de todas as suas marcações de ponto históricas.
+- **Emissão de Comprovante em PDF Padronizado:** Emissão sem dependência de bibliotecas externas pesadas, incluindo: Dados da Empresa, Estabelecimento, Nome do Trabalhador, CPF, Data e Horário no fuso oficial, NSR oficial, chave SHA-256 e código de verificação amigável (`PF-XXXX-XXXX-XXXX`).
+- **Página Pública de Verificação (`/receipts/verify`):** Consulta pública onde qualquer auditor ou trabalhador pode digitar o código ou apontar para a URL de verificação para checar a autenticidade e o hash contra o ledger inviolável.
+- **Gerador Oficial do AFD (Portaria 671/2021 — Leiaute MTE 31/07/2026):**
+  - Construído exclusivamente a partir dos registros brutos do REP (`punch_events`), nunca de dados tratados.
+  - Registro Tipo 1 (Cabeçalho 236 posições), Tipo 3 (Marcação REP-P 101 posições) e Tipo 9 (Trailer 63 posições com totalizadores e CRC-32).
+  - Validador posicional interno (`AfdValidator`) e Golden Tests byte-a-byte (`AfdGoldenTest`).
+
+### 2. Batida de Ponto Inteligente com Regra Híbrida (Smart Punch)
 - **Leitura Ótica Rápida:** Scanner integrado no navegador (`html5-qrcode` empacotado localmente no bundle Vite), sem dependência de conexões ou CDNs externas.
 - **Validação Geográfica Antifraude:** Captura automática das coordenadas GPS (`navigator.geolocation`) e cálculo instantâneo da distância em relação ao local permitido pela **Fórmula de Haversine**.
 - **Estrutura Híbrida Inteligente (Fallback por Setor):**
@@ -138,8 +147,8 @@ pontofacil/
 │       │   └── landing.blade.php             # Layout base da Landing Page (GSAP, fontes e Tailwind v4)
 │       └── landing.blade.php                 # View principal da Landing Page (/landing)
 ├── routes/web.php                            # Rotas web declarativas
-├── tests/Feature/                            # Suíte de testes automatizados PHPUnit (31 testes, 128 asserções)
-└── versoes.md                                # Histórico detalhado de releases (v1.0.0 a v1.7.0)
+├── tests/Feature/                            # Suíte de testes automatizados PHPUnit (50 testes, 216 asserções)
+└── versoes.md                                # Histórico detalhado de releases (v1.0.0 a v1.9.0)
 ```
 
 ---
@@ -213,7 +222,7 @@ Para rodar a suíte completa de testes automatizados cobrindo autorização, cá
 php artisan test
 ```
 
-> **Status da Suíte:** `38 testes, 155 asserções — 100% aprovados.`
+> **Status da Suíte:** `50 testes, 216 asserções — 100% aprovados.`
 
 ---
 

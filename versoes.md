@@ -1,6 +1,22 @@
 # Histórico de Versões (Changelog)
 
-## v1.8.0 (Atual)
+## v1.9.0 (Atual)
+- **Central de Comprovantes do Trabalhador, Gerador AFD (MTE 2026) & Validação Pública:**
+  - **Tabela e Modelo `punch_receipts`:** Vínculo 1:1 rigoroso com `punch_events` via chave estrangeira com proteção de integridade (`restrictOnDelete`), armazenando código de verificação amigável (`PF-XXXX-XXXX-XXXX`), hash SHA-256 e metadados de assinatura.
+  - **Central de Comprovantes do Trabalhador:** Painel interativo permanente (`/receipts`) para consulta e visualização de comprovantes de ponto por mês/ano, com busca por código de verificação, detalhes da marcação e download instantâneo.
+  - **Motor de Geração de Comprovante em PDF (Sem bibliotecas externas):** Emissão de documento PDF 1.4 binário padronizado contendo dados da empresa empregadora, estabelecimento, trabalhador, CPF, data e horário local, fuso horário, NSR oficial, chave SHA-256 do ponto e link direto para verificação pública.
+  - **Identificação Transparente de Desenvolvimento:** Comprovantes marcados expressamente com aviso de ambiente não assinado enquanto pendente certificado ICP-Brasil e registro definitivo no INPI.
+  - **Arquitetura de Assinatura Desacoplada (`SigningServiceInterface`):** Interface de domínio limpa permitindo futura assinatura eletrônica PAdES/CAdES com certificado ICP-Brasil sem acoplar bibliotecas criptográficas externas ao core.
+  - **Validador Público de Comprovantes (`/receipts/verify`):** Consulta pública por código de verificação que reconstrói e compara em tempo real o hash criptográfico contra o ledger inalterável de ponto, provando autenticidade a qualquer fiscal ou colaborador.
+  - **Gerador Oficial de AFD (Portaria 671/2021 — Leiaute MTE 31/07/2026):**
+    - Construído exclusivamente sobre os dados brutos inalterados do REP (`punch_events`), em conformidade absoluta com a proibição de uso de dados tratados (`treatment_events`).
+    - Registro Tipo 1 (Cabeçalho: 236 posições), Tipo 3 (Marcação REP-P: 101 posições) e Tipo 9 (Trailer: 63 posições com totalizadores e CRC-32).
+    - Suporte a filtros por estabelecimento e período temporal com download instantâneo no formato `.txt` formatado com quebras CRLF.
+  - **Validador Interno do AFD (`AfdValidator`):** Verificador posicional que checa tipos de registro, tamanhos exatos de linha, monotonicidade cronológica de NSR, formato de datas/horas e consistência de totalizadores.
+  - **Golden Tests Automatizados (`AfdGoldenTest`):** Testes com fixture de referência byte-a-byte prevenindo qualquer quebra de conformidade em atualizações futuras.
+  - **Suíte de Testes Expandida:** `50 testes e 216 asserções 100% aprovados`.
+
+## v1.8.0
 - **Fundação Regulatória REP-P & Estabelecimentos com NSR Atômico (Portaria 671/2021 MTP):**
   - **Empresa Única da Instalação (`companies`):** Entidade de domínio central para a arquitetura de Instância Dedicada (Single-Tenant), armazenando dados cadastrais oficiais e identificação de registro no INPI.
   - **Estabelecimentos com NSR Monotônico Independente (`establishments`):** Matriz e filiais com CNPJ/CNO, endereço, timezone e contador monotônico atômico `nsr_next` protegido com lock pessimista (`lockForUpdate`), sem colisões sob concorrência e sem depender de `MAX(nsr)+1`.

@@ -21,7 +21,7 @@ return new class extends Migration
             $table->integer('accuracy')->nullable();
             $table->boolean('is_manual')->default(false);
             $table->timestamps();
-            
+
             $table->index(['user_id', 'timestamp']);
         });
     }

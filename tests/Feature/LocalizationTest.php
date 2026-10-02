@@ -2,10 +2,10 @@
 
 namespace Tests\Feature;
 
-use Tests\TestCase;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Validator;
-use Carbon\Carbon;
+use Tests\TestCase;
 
 class LocalizationTest extends TestCase
 {
