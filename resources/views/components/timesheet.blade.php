@@ -108,32 +108,80 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
         }
     }
 
-    public function with()
+    /**
+     * @return array<string, mixed>
+     */
+    public function with(): array
     {
         $user = Auth::user();
         $isAdmin = $user->role === UserRole::Admin;
         $isManager = $user->role === UserRole::Manager;
-        
-        $selectableUsers = collect([]);
+
+        $selectableUsers = $this->resolveSelectableUsers($user, $isAdmin, $isManager);
+        $canSelectUser = $isAdmin || ($isManager && $selectableUsers->count() > 1);
+        $userList = $this->formatUserList($selectableUsers);
+
+        $entries = TimeEntry::with('user')
+            ->where('user_id', $this->userId)
+            ->whereYear('timestamp', $this->year)
+            ->whereMonth('timestamp', $this->month)
+            ->orderBy('timestamp', 'asc')
+            ->get();
+
+        $calc = $this->resolveMonthCalculations($entries);
+
+        $employee = Employee::where('user_id', $this->userId)->first();
+        $periodDate = Carbon::createFromDate($this->year, $this->month, 1)->endOfMonth();
+        $policy = \App\Models\TimeBankPolicy::forDate($periodDate);
+
+        $timeBankSummary = null;
+        if ($policy && $policy->enabled && $employee) {
+            $timeBankSummary = app(\App\Domain\PTRP\Services\TimeBankStatementService::class)
+                ->getMonthlySummary($employee, (int) $this->year, (int) $this->month);
+        }
+
+        return [
+            'groupedEntries' => $calc['groupedEntries'],
+            'daysCalculated' => $calc['daysCalculated'],
+            'totalMonthFormatted' => $calc['monthFormatted'],
+            'workedDaysCount' => $calc['workedDaysCount'],
+            'totalPunches' => $entries->count(),
+            'avgFormatted' => $calc['avgFormatted'],
+            'canSelectUser' => $canSelectUser,
+            'users' => $selectableUsers,
+            'userList' => $userList,
+            'timeBankSummary' => $timeBankSummary,
+            'policy' => $policy,
+            'employee' => $employee,
+        ];
+    }
+
+    protected function resolveSelectableUsers(User $user, bool $isAdmin, bool $isManager): \Illuminate\Support\Collection
+    {
         if ($isAdmin) {
-            $selectableUsers = User::with('employee')->orderBy('name')->get();
-        } elseif ($isManager) {
+            return User::with('employee')->orderBy('name')->get();
+        }
+
+        if ($isManager) {
             $managedSectorIds = Sector::where('manager_id', $user->id)->pluck('id');
             $employeeUserIds = Employee::whereIn('sector_id', $managedSectorIds)->pluck('user_id');
             $allowedUserIds = $employeeUserIds->push($user->id)->unique();
 
-            if (!in_array((int) $this->userId, $allowedUserIds->map(fn($id) => (int)$id)->toArray())) {
+            if (! in_array((int) $this->userId, $allowedUserIds->map(fn ($id) => (int) $id)->toArray())) {
                 $this->userId = $user->id;
             }
 
-            $selectableUsers = User::with('employee')->whereIn('id', $allowedUserIds)->orderBy('name')->get();
-        } else {
-            $this->userId = $user->id;
+            return User::with('employee')->whereIn('id', $allowedUserIds)->orderBy('name')->get();
         }
 
-        $canSelectUser = $isAdmin || ($isManager && $selectableUsers->count() > 1);
+        $this->userId = $user->id;
 
-        $userList = $selectableUsers->map(function ($u) {
+        return collect([]);
+    }
+
+    protected function formatUserList(\Illuminate\Support\Collection $selectableUsers): \Illuminate\Support\Collection
+    {
+        return $selectableUsers->map(function ($u) {
             return [
                 'id' => $u->id,
                 'name' => $u->name,
@@ -142,17 +190,11 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                 'job_title' => $u->employee?->job_title ?? ($u->role ? $u->role->label() : 'Colaborador'),
             ];
         })->values();
+    }
 
-        $query = TimeEntry::with('user')
-            ->where('user_id', $this->userId)
-            ->whereYear('timestamp', $this->year)
-            ->whereMonth('timestamp', $this->month)
-            ->orderBy('timestamp', 'asc');
-
-        $entries = $query->get();
-
-        // Agrupar por dia
-        $groupedEntries = $entries->groupBy(function($entry) {
+    protected function resolveMonthCalculations(\Illuminate\Support\Collection $entries): array
+    {
+        $groupedEntries = $entries->groupBy(function ($entry) {
             return Carbon::parse($entry->timestamp)->format('Y-m-d');
         });
 
@@ -173,29 +215,12 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
         $avgMinutesPerDay = $workedDaysCount > 0 ? (int) round($totalMonthMinutes / $workedDaysCount) : 0;
         $avgFormatted = sprintf('%02dh %02dm', intdiv($avgMinutesPerDay, 60), $avgMinutesPerDay % 60);
 
-        $employee = Employee::where('user_id', $this->userId)->first();
-        $periodDate = Carbon::createFromDate($this->year, $this->month, 1)->endOfMonth();
-        $policy = \App\Models\TimeBankPolicy::forDate($periodDate);
-
-        $timeBankSummary = null;
-        if ($policy && $policy->enabled && $employee) {
-            $timeBankSummary = app(\App\Domain\PTRP\Services\TimeBankStatementService::class)
-                ->getMonthlySummary($employee, (int) $this->year, (int) $this->month);
-        }
-
         return [
             'groupedEntries' => $groupedEntries,
             'daysCalculated' => $daysCalculated,
-            'totalMonthFormatted' => $monthFormatted,
+            'monthFormatted' => $monthFormatted,
             'workedDaysCount' => $workedDaysCount,
-            'totalPunches' => $entries->count(),
             'avgFormatted' => $avgFormatted,
-            'canSelectUser' => $canSelectUser,
-            'users' => $selectableUsers,
-            'userList' => $userList,
-            'timeBankSummary' => $timeBankSummary,
-            'policy' => $policy,
-            'employee' => $employee,
         ];
     }
 
