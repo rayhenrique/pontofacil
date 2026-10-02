@@ -26,7 +26,7 @@ return new class extends Migration
 
         Schema::create('time_bank_accounts', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('employee_id')->unique()->constrained('employees')->cascadeOnDelete();
+            $table->foreignId('employee_id')->unique()->constrained('employees')->restrictOnDelete();
             $table->unsignedBigInteger('employment_id')->nullable()->index();
             $table->boolean('active')->default(true);
             $table->timestamps();
@@ -34,7 +34,7 @@ return new class extends Migration
 
         Schema::create('time_bank_transactions', function (Blueprint $table) {
             $table->ulid('id')->primary();
-            $table->foreignId('time_bank_account_id')->constrained('time_bank_accounts')->cascadeOnDelete();
+            $table->foreignId('time_bank_account_id')->constrained('time_bank_accounts')->restrictOnDelete();
             $table->string('type', 32)->comment('overtime_credit, compensation_debit, manual_credit, manual_debit, monthly_reset, opening_balance, expiration');
             $table->integer('minutes')->comment('Saldo contábil em minutos (positivo ou negativo)');
             $table->date('reference_date')->comment('Data da jornada ou do evento de referência');
@@ -56,7 +56,7 @@ return new class extends Migration
             $table->foreignId('policy_id')->nullable()->constrained('time_bank_policies')->nullOnDelete();
             $table->json('policy_snapshot')->nullable();
             $table->string('status', 20)->default('closed')->comment('closed, reopened');
-            $table->foreignId('closed_by')->constrained('users')->cascadeOnDelete();
+            $table->foreignId('closed_by')->constrained('users')->restrictOnDelete();
             $table->dateTime('closed_at');
             $table->text('notes')->nullable();
             $table->timestamps();

@@ -154,46 +154,46 @@
   - [x] **20.16 Auditoria Forense:** Registro estruturado de logs (`time_bank.enabled`, `time_bank.policy_changed`, `time_bank.monthly_reset`, `treatment.requested`, `treatment.approved`, `period.closed`).
   - [x] **20.17 Suíte de Testes Automatizados:** Cobertura de acúmulo, zeramento com histórico, saldo negativo, fechamento formal, tolerância legal e fluxo de aprovação/rejeição de tratamentos.
 
-- [ ] **Fase 21A: Fechamento de Competência, Snapshot Imutável & AEJ — MVP**
-  - [ ] **21.0 Auditoria e Correções Prévias Obrigatórias:**
-    - [ ] Corrigir `CloseMonthlyPeriodAction` para que em `MONTHLY_RESET` calcule o saldo utilizando `$account->balanceUntil($periodEndDate)` e NÃO `currentBalance()`, impedindo que movimentações posteriores contaminem o fechamento retroativo.
-    - [ ] Criar teste cobrindo fechamento retroativo (ex: Janeiro +08h, Fevereiro +03h; fechar Janeiro em Fevereiro deve aplicar reset considerando estritamente as +08h).
-    - [ ] Revisar integridade referencial: substituir `cascadeOnDelete()` por `restrictOnDelete()` ou `nullOnDelete()` nas tabelas históricas auditáveis (`time_bank_accounts`, `time_bank_transactions`, `closed_periods`, `treatment_events`), garantindo que a inativação ou exclusão de usuários/funcionários jamais destrua o histórico congelado.
-  - [ ] **21.1 Evolução de `closed_periods` (Tabela Existente):**
-    - [ ] Adicionar campos de integridade e métricas: `snapshot_version`, `snapshot_hash`, `employees_count`, `punches_count`, `treatments_count`, `generated_at`.
-    - [ ] Adicionar suporte a reabertura controlada com versionamento: `reopened_by`, `reopened_at`, `reopen_reason` (nunca apagar um fechamento anterior).
-  - [ ] **21.2 Snapshot por Trabalhador (`closed_period_employee_snapshots`):**
-    - [ ] Criar tabela com chave primária em ULID, `closed_period_id`, `employee_id`, `employee_snapshot` (JSON: dados cadastrais, cargo, vínculo, setor, estabelecimento), `schedule_snapshot` (JSON: escala, horários, tolerância), `journey_snapshot` (JSON: apuração analítica de horas, minutos, atrasos, faltas), `treatment_snapshot` (JSON: inclusões, desconsiderações, abonos), `time_bank_snapshot` (JSON: saldo anterior, créditos, débitos, reset, saldo final) e `snapshot_hash` (SHA-256).
-  - [ ] **21.3 Congelamento Real da Competência (`CloseMonthlyPeriodAction`):**
-    - [ ] Validar competência, verificar tratamentos pendentes, apurar todos os funcionários ativos, capturar escala e política vigentes, aplicar fechamento do banco até o fim do período, gerar snapshots individuais, calcular hash individual e calcular hash agregado determinístico da competência (`closed_period.snapshot_hash`).
-  - [ ] **21.4 Bloqueio por Tratamentos Pendentes:**
-    - [ ] Impedir o fechamento caso existam solicitações de tratamento com status `pending`, emitindo alerta informativo e link para o RH revisar as pendências em `/admin/treatment-requests`.
-  - [ ] **21.5 Bloqueio de Alterações após Fechamento:**
-    - [ ] Bloquear ajustes manuais, tratamentos, desconsiderações ou alterações de banco de horas retroativas com referência a uma competência congelada.
-  - [ ] **21.6 Reabertura Formal de Competência (`ReopenMonthlyPeriodAction`):**
-    - [ ] Fluxo exclusivo Admin/RH exigindo justificativa obrigatória, registrando `reopened_by`, `reopened_at`, `reopen_reason`, preservando o snapshot anterior e versionando o fechamento subsequente.
-  - [ ] **21.7 Gerador AEJ (Portaria 671/2021 — Leiaute MTE 31/07/2026):**
-    - [ ] Criar namespace `app/Domain/Compliance/AEJ/` com `AejGeneratorInterface`, `AejGenerator_2026_07_31`, `AejExportResult` e `AejValidator`.
-  - [ ] **21.8 Fonte de Dados do AEJ (PTRP):**
-    - [ ] Construir o AEJ a partir do snapshot congelado da competência (`ClosedPeriod` + `ClosedPeriodEmployeeSnapshots`), garantindo que alterações futuras no banco não modifiquem relatórios fiscais do passado.
-  - [ ] **21.9 Regra de Emissão do AEJ:**
-    - [ ] AEJ oficial emitido apenas para competências fechadas. Em competências abertas, permitir apenas prévia identificada como `"PRÉVIA — COMPETÊNCIA NÃO FECHADA"`.
-  - [ ] **21.10 Identificação de Documento de Desenvolvimento / Não Assinado:**
-    - [ ] Enquanto pendente certificado ICP-Brasil, identificar o AEJ gerado como `"AEJ GERADO — NÃO ASSINADO DIGITALMENTE (MODO DE DESENVOLVIMENTO)"`.
-  - [ ] **21.11 Interface de Assinatura Desacoplada (`SigningServiceInterface`):**
-    - [ ] Reutilizar/estender abstração de assinatura preparando `signDetached(content)` com fallback `UnsignedSigningService` para futura injeção de `IcpBrasilSigningService`.
-  - [ ] **21.12 Validador Interno do AEJ (`AejValidator`):**
-    - [ ] Validar tipos de registro, ordem, quantidade, tamanho, datas, horas, CPF, totalizadores, encoding e quebras de linha CRLF.
-  - [ ] **21.13 Golden Tests Automatizados do AEJ (`tests/Fixtures/AEJ/`):**
-    - [ ] Fixtures conhecidas byte-a-byte cobrindo escalas, intervalos, horas extras, faltas, abonos, desconsiderações, banco de horas e totalizadores.
-  - [ ] **21.14 Central de Fiscalização para o Empregador (`Admin → Fiscalização`):**
-    - [ ] Interface `/admin/fiscalizacao` para seleção de competência e estabelecimento, geração e download do Pacote de Fiscalização (ZIP contendo AFD, AEJ, Espelho de Ponto, Comprovantes, Extrato do Banco e Hashes), sem necessidade de login do Auditor Fiscal do Trabalho.
-  - [ ] **21.15 Perfil de Auditor Genérico (Opcional):**
-    - [ ] Perfil read-only para download e conferência de hashes, sem poderes operacionais e sem falsa alegação de vínculo com o MTE.
-  - [ ] **21.16 Suíte de Testes da Fase 21A:**
-    - [ ] Cobertura de snapshots imutáveis, hash determinístico, bloqueio pós-fechamento, bloqueio por solicitações pendentes, banco retroativo (`balanceUntil`), reabertura versionada e geração determinística do AEJ.
-  - [ ] **21.17 Auditoria Estruturada:**
-    - [ ] Eventos forenses: `period.closed`, `period.reopened`, `period.snapshot_generated`, `aej.generated`, `aej.validated`, `fiscal_package.generated`.
+- [x] **Fase 21A: Fechamento de Competência, Snapshot Imutável & AEJ — MVP**
+  - [x] **21.0 Auditoria e Correções Prévias Obrigatórias:**
+    - [x] Corrigir `CloseMonthlyPeriodAction` para que em `MONTHLY_RESET` calcule o saldo utilizando `$account->balanceUntil($periodEndDate)` e NÃO `currentBalance()`, impedindo que movimentações posteriores contaminem o fechamento retroativo.
+    - [x] Criar teste cobrindo fechamento retroativo (ex: Janeiro +08h, Fevereiro +03h; fechar Janeiro em Fevereiro deve aplicar reset considerando estritamente as +08h).
+    - [x] Revisar integridade referencial: substituir `cascadeOnDelete()` por `restrictOnDelete()` ou `nullOnDelete()` nas tabelas históricas auditáveis (`time_bank_accounts`, `time_bank_transactions`, `closed_periods`, `treatment_events`), garantindo que a inativação ou exclusão de usuários/funcionários jamais destrua o histórico congelado.
+  - [x] **21.1 Evolução de `closed_periods` (Tabela Existente):**
+    - [x] Adicionar campos de integridade e métricas: `snapshot_version`, `snapshot_hash`, `employees_count`, `punches_count`, `treatments_count`, `generated_at`.
+    - [x] Adicionar suporte a reabertura controlada com versionamento: `reopened_by`, `reopened_at`, `reopen_reason` (nunca apagar um fechamento anterior).
+  - [x] **21.2 Snapshot por Trabalhador (`closed_period_employee_snapshots`):**
+    - [x] Criar tabela com chave primária em ULID, `closed_period_id`, `employee_id`, `employee_snapshot` (JSON: dados cadastrais, cargo, vínculo, setor, estabelecimento), `schedule_snapshot` (JSON: escala, horários, tolerância), `journey_snapshot` (JSON: apuração analítica de horas, minutos, atrasos, faltas), `treatment_snapshot` (JSON: inclusões, desconsiderações, abonos), `time_bank_snapshot` (JSON: saldo anterior, créditos, débitos, reset, saldo final) e `snapshot_hash` (SHA-256).
+  - [x] **21.3 Congelamento Real da Competência (`CloseMonthlyPeriodAction`):**
+    - [x] Validar competência, verificar tratamentos pendentes, apurar todos os funcionários ativos, capturar escala e política vigentes, aplicar fechamento do banco até o fim do período, gerar snapshots individuais, calcular hash individual e calcular hash agregado determinístico da competência (`closed_period.snapshot_hash`).
+  - [x] **21.4 Bloqueio por Tratamentos Pendentes:**
+    - [x] Impedir o fechamento caso existam solicitações de tratamento com status `pending`, emitindo alerta informativo e link para o RH revisar as pendências em `/admin/treatment-requests`.
+  - [x] **21.5 Bloqueio de Alterações após Fechamento:**
+    - [x] Bloquear ajustes manuais, tratamentos, desconsiderações ou alterações de banco de horas retroativas com referência a uma competência congelada.
+  - [x] **21.6 Reabertura Formal de Competência (`ReopenMonthlyPeriodAction`):**
+    - [x] Fluxo exclusivo Admin/RH exigindo justificativa obrigatória, registrando `reopened_by`, `reopened_at`, `reopen_reason`, preservando o snapshot anterior e versionando o fechamento subsequente.
+  - [x] **21.7 Gerador AEJ (Portaria 671/2021 — Leiaute MTE 31/07/2026):**
+    - [x] Criar namespace `app/Domain/Compliance/AEJ/` com `AejGeneratorInterface`, `AejGenerator_2026_07_31`, `AejExportResult` e `AejValidator`.
+  - [x] **21.8 Fonte de Dados do AEJ (PTRP):**
+    - [x] Construir o AEJ a partir do snapshot congelado da competência (`ClosedPeriod` + `ClosedPeriodEmployeeSnapshots`), garantindo que alterações futuras no banco não modifiquem relatórios fiscais do passado.
+  - [x] **21.9 Regra de Emissão do AEJ:**
+    - [x] AEJ oficial emitido apenas para competências fechadas. Em competências abertas, permitir apenas prévia identificada como `"PRÉVIA — COMPETÊNCIA NÃO FECHADA"`.
+  - [x] **21.10 Identificação de Documento de Desenvolvimento / Não Assinado:**
+    - [x] Enquanto pendente certificado ICP-Brasil, identificar o AEJ gerado como `"AEJ GERADO — NÃO ASSINADO DIGITALMENTE (MODO DE DESENVOLVIMENTO)"`.
+  - [x] **21.11 Interface de Assinatura Desacoplada (`SigningServiceInterface`):**
+    - [x] Reutilizar/estender abstração de assinatura preparando `signDetached(content)` com fallback `UnsignedSigningService` para futura injeção de `IcpBrasilSigningService`.
+  - [x] **21.12 Validador Interno do AEJ (`AejValidator`):**
+    - [x] Validar tipos de registro, ordem, quantidade, tamanho, datas, horas, CPF, totalizadores, encoding e quebras de linha CRLF.
+  - [x] **21.13 Golden Tests Automatizados do AEJ (`tests/Fixtures/AEJ/`):**
+    - [x] Fixtures conhecidas byte-a-byte cobrindo escalas, intervalos, horas extras, faltas, abonos, desconsiderações, banco de horas e totalizadores.
+  - [x] **21.14 Central de Fiscalização para o Empregador (`Admin → Fiscalização`):**
+    - [x] Interface `/admin/fiscalizacao` para seleção de competência e estabelecimento, geração e download do Pacote de Fiscalização (ZIP contendo AFD, AEJ, Espelho de Ponto, Comprovantes, Extrato do Banco e Hashes), sem necessidade de login do Auditor Fiscal do Trabalho.
+  - [x] **21.15 Perfil de Auditor Genérico (Opcional):**
+    - [x] Perfil read-only para download e conferência de hashes, sem poderes operacionais e sem falsa alegação de vínculo com o MTE.
+  - [x] **21.16 Suíte de Testes da Fase 21A:**
+    - [x] Cobertura de snapshots imutáveis, hash determinístico, bloqueio pós-fechamento, bloqueio por solicitações pendentes, banco retroativo (`balanceUntil`), reabertura versionada e geração determinística do AEJ.
+  - [x] **21.17 Auditoria Estruturada:**
+    - [x] Eventos forenses: `period.closed`, `period.reopened`, `period.snapshot_generated`, `aej.generated`, `aej.validated`, `fiscal_package.generated`.
 
 - [ ] **Fase 21B: Compliance Externo & Assinatura Digital Oficial — Dependências Externas**
   - [ ] Configurar certificado digital válido ICP-Brasil em storage seguro.

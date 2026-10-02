@@ -4,6 +4,7 @@ namespace App\Domain\PTRP\Actions;
 
 use App\Domain\PTRP\Enums\TreatmentEventStatus;
 use App\Domain\PTRP\Enums\TreatmentEventType;
+use App\Models\ClosedPeriod;
 use App\Models\Employee;
 use App\Models\TreatmentEvent;
 use App\Models\User;
@@ -24,6 +25,14 @@ class RequestTreatmentEventAction
     ): TreatmentEvent {
         if (empty(trim($reasonText))) {
             throw new \InvalidArgumentException('A justificativa da solicitação de tratamento é obrigatória.');
+        }
+
+        if (ClosedPeriod::isClosed($effectiveAt->year, $effectiveAt->month)) {
+            throw new \DomainException(sprintf(
+                'A competência %02d/%04d encontra-se fechada e congelada. Solicitações de tratamento retroativas não são permitidas.',
+                $effectiveAt->month,
+                $effectiveAt->year
+            ));
         }
 
         $event = TreatmentEvent::create([

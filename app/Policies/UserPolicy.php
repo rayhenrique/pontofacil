@@ -16,4 +16,9 @@ class UserPolicy
     {
         return $user->role === UserRole::Admin || $user->role === UserRole::Manager;
     }
+
+    public function viewFiscalizacao(User $user): bool
+    {
+        return $user->role === UserRole::Admin || $user->role === UserRole::Auditor;
+    }
 }

@@ -3,6 +3,7 @@
 namespace App\Domain\PTRP\Actions;
 
 use App\Domain\PTRP\Enums\TimeBankTransactionType;
+use App\Models\ClosedPeriod;
 use App\Models\Employee;
 use App\Models\TimeBankTransaction;
 use App\Models\User;
@@ -29,6 +30,14 @@ class AdjustTimeBankAction
 
         if (empty(trim($reason))) {
             throw new \InvalidArgumentException('A justificativa do ajuste manual é estritamente obrigatória.');
+        }
+
+        if (ClosedPeriod::isClosed($date->year, $date->month)) {
+            throw new \DomainException(sprintf(
+                'Não é permitido realizar ajustes manuais de banco de horas em competência fechada (%02d/%04d). Reabra a competência para efetuar alterações.',
+                $date->month,
+                $date->year
+            ));
         }
 
         $signedMinutes = $type === TimeBankTransactionType::ManualDebit ? -abs($minutes) : abs($minutes);

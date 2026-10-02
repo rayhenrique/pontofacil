@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\FiscalizacaoController;
 use App\Http\Controllers\ReceiptController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -58,5 +59,13 @@ Route::middleware('auth')->group(function () {
         Route::livewire('/treatment-requests', 'admin.treatment-requests')->name('treatment-requests');
         Route::livewire('/settings', 'admin.settings')->name('settings');
         Route::get('/exportar-afd', [ReceiptController::class, 'exportAfd'])->name('export-afd');
+    });
+
+    // Fiscalização MTE (Admin & Auditor)
+    Route::middleware('can:viewFiscalizacao,App\Models\User')->prefix('admin')->name('admin.')->group(function () {
+        Route::livewire('/fiscalizacao', 'admin.fiscalizacao')->name('fiscalizacao');
+        Route::get('/fiscalizacao/pacote/{establishmentId}/{year}/{month}', [FiscalizacaoController::class, 'downloadPackage'])->name('fiscalizacao.package');
+        Route::get('/fiscalizacao/afd/{establishmentId}/{year}/{month}', [FiscalizacaoController::class, 'downloadAfd'])->name('fiscalizacao.afd');
+        Route::get('/fiscalizacao/aej/{establishmentId}/{year}/{month}', [FiscalizacaoController::class, 'downloadAej'])->name('fiscalizacao.aej');
     });
 });

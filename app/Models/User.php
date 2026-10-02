@@ -58,6 +58,16 @@ class User extends Authenticatable
         return $this->role === UserRole::Manager;
     }
 
+    public function isAuditor(): bool
+    {
+        return $this->role === UserRole::Auditor;
+    }
+
+    public function canViewFiscalizacao(): bool
+    {
+        return $this->isAdmin() || $this->isAuditor();
+    }
+
     public function isEmployee(): bool
     {
         return $this->role === UserRole::Employee;

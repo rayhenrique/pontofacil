@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('treatment_events', function (Blueprint $table) {
             $table->ulid('id')->primary();
-            $table->foreignId('employee_id')->constrained('employees')->cascadeOnDelete();
+            $table->foreignId('employee_id')->constrained('employees')->restrictOnDelete();
             $table->unsignedBigInteger('employment_id')->nullable()->index();
             $table->string('reference_punch_id', 26)->nullable()->index();
             $table->foreign('reference_punch_id')->references('id')->on('punch_events')->nullOnDelete();
@@ -29,7 +29,7 @@ return new class extends Migration
             $table->text('reason_text')->comment('Justificativa obrigatória');
             $table->string('attachment_path')->nullable();
 
-            $table->foreignId('requested_by')->constrained('users')->cascadeOnDelete();
+            $table->foreignId('requested_by')->constrained('users')->restrictOnDelete();
             $table->foreignId('approved_by')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('rejected_by')->nullable()->constrained('users')->nullOnDelete();
             $table->dateTime('decided_at')->nullable();

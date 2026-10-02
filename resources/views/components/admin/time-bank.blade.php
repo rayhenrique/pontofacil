@@ -34,6 +34,10 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
     public $showClosePeriodModal = false;
     public $closeNotes = '';
 
+    // Modal Reabertura de Competência
+    public $showReopenPeriodModal = false;
+    public $reopenReason = '';
+
     public function mount()
     {
         $this->year = now()->year;
@@ -136,6 +140,39 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
         }
     }
 
+    public function openReopenModal()
+    {
+        $this->reopenReason = '';
+        $this->showReopenPeriodModal = true;
+    }
+
+    public function confirmReopenPeriod()
+    {
+        try {
+            app(\App\Domain\PTRP\Actions\ReopenMonthlyPeriodAction::class)->execute(
+                year: (int) $this->year,
+                month: (int) $this->month,
+                reopenedBy: Auth::user(),
+                reason: $this->reopenReason,
+            );
+
+            $this->showReopenPeriodModal = false;
+            $this->dispatch('app-modal-alert', [
+                'type' => 'success',
+                'title' => 'Competência Reaberta!',
+                'message' => sprintf('A competência %02d/%04d foi reaberta para ajustes.', $this->month, $this->year),
+                'buttonText' => 'OK'
+            ]);
+        } catch (\Throwable $e) {
+            $this->dispatch('app-modal-alert', [
+                'type' => 'error',
+                'title' => 'Falha na Reabertura',
+                'message' => $e->getMessage(),
+                'buttonText' => 'Fechar'
+            ]);
+        }
+    }
+
     public function with()
     {
         $employees = Employee::with('user')->orderBy('id')->get();
@@ -205,10 +242,20 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
                     Fechar Competência
                 </button>
             @else
-                <span class="inline-flex items-center px-3 py-1.5 bg-slate-100 border border-slate-300 text-slate-700 rounded-xl text-xs font-bold gap-1.5">
+                <span class="inline-flex items-center px-3 py-1.5 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-xl text-xs font-bold gap-1.5">
                     <svg class="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                    Competência Fechada / Congelada
+                    Fechada (v{{ $closedPeriod->snapshot_version ?? 1 }})
                 </span>
+                @if(Auth::user()->isAdmin())
+                    <button wire:click="openReopenModal" class="inline-flex items-center px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 rounded-xl text-xs font-bold transition gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>
+                        Reabrir
+                    </button>
+                @endif
+                <a href="{{ route('admin.fiscalizacao') }}" class="inline-flex items-center px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-xl text-xs font-bold transition gap-1.5">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" /></svg>
+                    Fiscalização
+                </a>
             @endif
 
             <button wire:click="openAdjustModal" class="inline-flex items-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-sm gap-1.5">
@@ -465,6 +512,34 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
                 <div class="flex justify-end gap-2 pt-3 border-t">
                     <button type="button" wire:click="$set('showClosePeriodModal', false)" class="px-4 py-2 border rounded-xl font-bold text-gray-600 hover:bg-gray-50">Cancelar</button>
                     <button type="button" wire:click="confirmClosePeriod" class="px-5 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-sm">Confirmar Fechamento</button>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    <!-- Modal Reabrir Competência -->
+    @if($showReopenPeriodModal)
+        <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+                <div class="flex items-center gap-3 text-amber-700 border-b pb-3">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>
+                    <h3 class="text-lg font-bold text-gray-900">Reabrir Competência {{ sprintf('%02d/%04d', $month, $year) }}</h3>
+                </div>
+
+                <div class="space-y-3 text-xs text-gray-600 leading-relaxed">
+                    <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900">
+                        <strong>Aviso Importante:</strong> Ao reabrir a competência, os snapshots históricos anteriores serão mantidos permanentemente no banco para integridade e auditoria. Após realizar os ajustes necessários, você poderá fechar novamente gerando uma nova versão do snapshot.
+                    </div>
+
+                    <div>
+                        <label class="block font-bold text-gray-700 uppercase mb-1">Justificativa Formal Obrigatória *</label>
+                        <textarea wire:model="reopenReason" rows="3" class="w-full px-3 py-2 border rounded-xl" placeholder="Informe o motivo formal da reabertura (mínimo 10 caracteres)..."></textarea>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" wire:click="$set('showReopenPeriodModal', false)" class="px-4 py-2 border rounded-xl font-bold text-gray-600 hover:bg-gray-50">Cancelar</button>
+                    <button type="button" wire:click="confirmReopenPeriod" class="px-5 py-2 bg-amber-600 text-white rounded-xl font-bold hover:bg-amber-700 shadow-sm">Confirmar Reabertura</button>
                 </div>
             </div>
         </div>

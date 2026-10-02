@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -52,10 +53,12 @@ class TimeBankAccount extends Model
         return (int) $this->transactions()->sum('minutes');
     }
 
-    public function balanceUntil(CarbonInterface $date): int
+    public function balanceUntil(CarbonInterface|string $date): int
     {
+        $dateStr = $date instanceof CarbonInterface ? $date->format('Y-m-d') : Carbon::parse($date)->format('Y-m-d');
+
         return (int) $this->transactions()
-            ->where('reference_date', '<=', $date->format('Y-m-d'))
+            ->where('reference_date', '<=', $dateStr)
             ->sum('minutes');
     }
 
