@@ -179,11 +179,22 @@ new #[Layout('layouts.app')] #[Title('Calendário Laboral — Feriados & Pontos 
         $this->showSuggestionsModal = true;
     }
 
+    public function toggleSelectAllSuggestions()
+    {
+        if (count($this->selectedSuggestions) === count($this->suggestions)) {
+            $this->selectedSuggestions = [];
+        } else {
+            $this->selectedSuggestions = array_map('strval', array_keys($this->suggestions));
+        }
+    }
+
     public function importSelectedSuggestions()
     {
+        $importedCount = 0;
         foreach ($this->selectedSuggestions as $index) {
-            if (isset($this->suggestions[$index])) {
-                $suggestion = $this->suggestions[$index];
+            $idx = (int) $index;
+            if (isset($this->suggestions[$idx])) {
+                $suggestion = $this->suggestions[$idx];
 
                 CalendarEvent::updateOrCreate(
                     [
@@ -200,14 +211,16 @@ new #[Layout('layouts.app')] #[Title('Calendário Laboral — Feriados & Pontos 
                         'created_by' => Auth::id(),
                     ]
                 );
+                $importedCount++;
             }
         }
 
         $this->showSuggestionsModal = false;
+        $this->selectedSuggestions = [];
         $this->dispatch('app-modal-alert', [
             'type' => 'success',
             'title' => 'Pontos Facultativos Importados',
-            'message' => sprintf('%d pontos facultativos importados. Revise o comportamento (work_behavior) de cada um na lista.', count($this->selectedSuggestions)),
+            'message' => sprintf('%d ponto(s) facultativo(s) importado(s). Revise o comportamento (work_behavior) de cada um na lista.', $importedCount),
             'buttonText' => 'OK'
         ]);
     }
@@ -694,10 +707,18 @@ new #[Layout('layouts.app')] #[Title('Calendário Laboral — Feriados & Pontos 
                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                 </div>
+                <div class="px-6 py-2.5 bg-gray-50/70 border-b border-gray-100 flex items-center justify-between">
+                    <span class="text-xs font-bold text-gray-600 uppercase tracking-wider">
+                        {{ count($selectedSuggestions) }} de {{ count($suggestions) }} selecionado(s)
+                    </span>
+                    <button wire:click="toggleSelectAllSuggestions" type="button" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition cursor-pointer">
+                        {{ count($selectedSuggestions) === count($suggestions) && count($suggestions) > 0 ? 'Desmarcar todos' : 'Selecionar todos' }}
+                    </button>
+                </div>
                 <div class="p-6 space-y-2.5">
                     @foreach($suggestions as $index => $suggestion)
-                        <label class="flex items-start gap-3 p-3.5 rounded-xl border border-gray-200 hover:bg-amber-50/40 hover:border-amber-200 transition cursor-pointer">
-                            <input wire:model="selectedSuggestions" type="checkbox" value="{{ $index }}" class="mt-1 text-amber-600 border-gray-300 rounded focus:ring-amber-500">
+                        <label wire:key="sug-{{ $index }}" class="flex items-start gap-3 p-3.5 rounded-xl border border-gray-200 hover:bg-amber-50/40 hover:border-amber-200 transition cursor-pointer">
+                            <input wire:model.live="selectedSuggestions" type="checkbox" value="{{ $index }}" class="mt-1 text-amber-600 border-gray-300 rounded focus:ring-amber-500">
                             <div class="min-w-0">
                                 <span class="text-sm font-bold text-gray-900">{{ $suggestion['name'] }}</span>
                                 <span class="block text-xs font-semibold text-gray-500">{{ \Carbon\Carbon::parse($suggestion['date'])->format('d/m/Y') }}</span>
@@ -708,7 +729,10 @@ new #[Layout('layouts.app')] #[Title('Calendário Laboral — Feriados & Pontos 
                 </div>
                 <div class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
                     <button wire:click="$set('showSuggestionsModal', false)" type="button" class="px-4 py-2 bg-white hover:bg-gray-100 border border-gray-300 text-gray-700 rounded-xl text-xs font-bold transition cursor-pointer">Cancelar</button>
-                    <button wire:click="importSelectedSuggestions" type="button" class="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer" {{ empty($selectedSuggestions) ? 'disabled' : '' }}>
+                    <button wire:click="importSelectedSuggestions" 
+                            type="button" 
+                            class="px-5 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer" 
+                            {{ empty($selectedSuggestions) ? 'disabled' : '' }}>
                         Importar Selecionados ({{ count($selectedSuggestions) }})
                     </button>
                 </div>

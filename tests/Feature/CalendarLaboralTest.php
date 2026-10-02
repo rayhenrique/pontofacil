@@ -22,6 +22,7 @@ use App\Models\User;
 use App\Models\WorkSchedule;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class CalendarLaboralTest extends TestCase
@@ -540,5 +541,32 @@ class CalendarLaboralTest extends TestCase
 
         $this->assertEquals($initialAej->content, $subsequentAej->content, 'AEJ pós-fechamento não pode ser alterado por modificações futuras no calendário');
         $this->assertEquals($initialAej->snapshotHash, $subsequentAej->snapshotHash);
+    }
+
+    public function test_calendar_component_can_open_suggestions_and_import_selected(): void
+    {
+        $admin = User::create([
+            'name' => 'Admin Test',
+            'email' => 'admin_sug@test.com',
+            'password' => 'secret123',
+            'role' => UserRole::Admin,
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test('admin.calendar')
+            ->call('openSuggestionsModal')
+            ->assertSet('showSuggestionsModal', true)
+            ->assertCount('suggestions', 7)
+            ->call('toggleSelectAllSuggestions')
+            ->assertCount('selectedSuggestions', 7)
+            ->call('toggleSelectAllSuggestions')
+            ->assertCount('selectedSuggestions', 0)
+            ->set('selectedSuggestions', ['0', '1', '3'])
+            ->call('importSelectedSuggestions')
+            ->assertSet('showSuggestionsModal', false)
+            ->assertSet('selectedSuggestions', [])
+            ->assertDispatched('app-modal-alert');
+
+        $this->assertEquals(3, CalendarEvent::where('type', CalendarEventType::OptionalDay)->count());
     }
 }
