@@ -389,7 +389,20 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário • Modelo 
             <!-- Brasão / Logo -->
             <div class="w-16 h-16 shrink-0 flex items-center justify-center overflow-hidden">
                 @if(!empty($companyLogoUrl))
-                    <img src="{{ $companyLogoUrl }}" alt="Logotipo da Empresa" class="max-h-16 max-w-16 object-contain" />
+                    <img src="{{ $companyLogoUrl }}" 
+                         alt="Logotipo da Empresa" 
+                         class="max-h-16 max-w-16 object-contain" 
+                         onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');" />
+                    <div class="hidden">
+                        <svg viewBox="0 0 100 100" class="w-14 h-14" xmlns="http://www.w3.org/2000/svg">
+                            <!-- Faixas tricolores estilizadas do município -->
+                            <rect x="15" y="10" width="18" height="65" rx="3" fill="#0284c7" />
+                            <rect x="38" y="10" width="18" height="65" rx="3" fill="#eab308" />
+                            <rect x="61" y="10" width="18" height="65" rx="3" fill="#dc2626" />
+                            <path d="M10 82h80v8H10z" fill="#0f172a" />
+                            <text x="50" y="98" font-size="7" font-weight="900" text-anchor="middle" fill="#0f172a">TEOTÔNIO VILELA</text>
+                        </svg>
+                    </div>
                 @else
                     <svg viewBox="0 0 100 100" class="w-14 h-14" xmlns="http://www.w3.org/2000/svg">
                         <!-- Faixas tricolores estilizadas do município -->

@@ -146,6 +146,9 @@ php artisan migrate --force
 # Publicar assets do Livewire (essencial no Nginx do CloudPanel)
 php artisan livewire:publish --assets
 
+# Garantir symlink público do storage para arquivos e logotipo
+php artisan storage:link
+
 # Compilar CSS e JS
 npm install
 npm run build

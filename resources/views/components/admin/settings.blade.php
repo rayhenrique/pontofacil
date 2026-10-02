@@ -302,9 +302,21 @@ new #[Layout('layouts.app')] #[Title('Configurações')] class extends Component
                                 Novo Selecionado
                             </div>
                         @elseif($current_logo_url)
-                            <img src="{{ $current_logo_url }}" alt="Logotipo Atual" class="max-h-full max-w-full object-contain" />
-                            <div class="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-emerald-600 text-[10px] font-bold text-white shadow-xs">
-                                Ativo na Folha
+                            <div class="relative w-full h-full flex items-center justify-center">
+                                <img src="{{ $current_logo_url }}" 
+                                     alt="Logotipo Atual" 
+                                     class="max-h-full max-w-full object-contain"
+                                     onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');" />
+                                <div class="hidden flex flex-col items-center justify-center text-slate-400 space-y-1">
+                                    <svg class="w-10 h-10 stroke-1 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                                    </svg>
+                                    <span class="text-xs font-medium text-slate-400">Imagem inacessível</span>
+                                    <span class="text-[10px] text-amber-600 font-medium">(Faça um novo upload abaixo)</span>
+                                </div>
+                                <div class="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-emerald-600 text-[10px] font-bold text-white shadow-xs">
+                                    Ativo na Folha
+                                </div>
                             </div>
                         @else
                             <div class="flex flex-col items-center justify-center text-slate-400 space-y-1">

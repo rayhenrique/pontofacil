@@ -35,6 +35,10 @@ php artisan migrate --force
 echo "🌐 Publicando assets do Livewire..."
 php artisan livewire:publish --assets || true
 
+# Cria o link simbólico do storage público para acesso a uploads e logotipo
+echo "🔗 Garantindo symlink do storage (php artisan storage:link)..."
+php artisan storage:link 2>/dev/null || true
+
 # Compila Assets (Tailwind/Vite)
 echo "🎨 Compilando assets NPM..."
 npm install

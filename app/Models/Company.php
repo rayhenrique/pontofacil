@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 class Company extends Model
 {
@@ -26,7 +27,7 @@ class Company extends Model
     ];
 
     /**
-     * Retorna a URL pública do logotipo ou null se não configurado.
+     * Retorna a URL pública do logotipo ou null se não configurado ou arquivo inexistente.
      */
     public function getLogoUrlAttribute(): ?string
     {
@@ -38,7 +39,15 @@ class Company extends Model
             return $this->logo_path;
         }
 
-        return asset('storage/'.ltrim($this->logo_path, '/'));
+        $cleanPath = ltrim($this->logo_path, '/');
+
+        // Se o arquivo não existir fisicamente no storage público nem no public_path,
+        // retorna null para evitar que o navegador renderize um ícone de imagem quebrada
+        if (! Storage::disk('public')->exists($cleanPath) && ! file_exists(public_path('storage/'.$cleanPath))) {
+            return null;
+        }
+
+        return asset('storage/'.$cleanPath);
     }
 
     /**

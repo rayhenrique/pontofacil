@@ -133,4 +133,23 @@ class CompanySettingsAndLogoTest extends TestCase
         $this->assertNull($company->logo_path);
         Storage::disk('public')->assertMissing('company/to_delete.png');
     }
+
+    public function test_logo_url_returns_null_when_file_does_not_exist_on_disk(): void
+    {
+        $company = CurrentCompany::get();
+        $company->update(['logo_path' => 'company/ghost_file.png']);
+
+        // O arquivo NÃO existe no disco public fake
+        $this->assertNull($company->logo_url, 'Deve retornar null se o arquivo físico não existir no storage');
+    }
+
+    public function test_company_logo_endpoint_serves_logo(): void
+    {
+        $company = CurrentCompany::get();
+        $company->update(['logo_path' => 'company/test_asset.png']);
+        Storage::disk('public')->put('company/test_asset.png', 'test_image_bytes');
+
+        $response = $this->get(route('company.logo'));
+        $response->assertOk();
+    }
 }

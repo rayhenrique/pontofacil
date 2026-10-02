@@ -1,9 +1,11 @@
 <?php
 
+use App\Domain\Company\Services\CurrentCompany;
 use App\Http\Controllers\FiscalizacaoController;
 use App\Http\Controllers\ReceiptController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 
 // Página Inicial (Landing Page)
 Route::get('/', function () {
@@ -70,3 +72,12 @@ Route::middleware('auth')->group(function () {
         Route::get('/fiscalizacao/aej/{establishmentId}/{year}/{month}', [FiscalizacaoController::class, 'downloadAej'])->name('fiscalizacao.aej');
     });
 });
+
+// Endpoint dedicado para streaming seguro do logotipo da empresa
+Route::get('/company-logo', function () {
+    $company = CurrentCompany::get();
+    if ($company?->logo_path && Storage::disk('public')->exists($company->logo_path)) {
+        return Storage::disk('public')->response($company->logo_path);
+    }
+    abort(404);
+})->name('company.logo');
