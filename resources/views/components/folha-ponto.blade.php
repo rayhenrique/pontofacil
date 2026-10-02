@@ -274,7 +274,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário • Modelo 
 };
 ?>
 
-<div class="py-2 sm:py-6 px-1 sm:px-4 lg:px-8">
+<div class="print-wrapper py-2 sm:py-6 px-1 sm:px-4 lg:px-8">
 
     <!-- BARRA SUPERIOR DE CONTROLES E FILTROS (ESCONDIDA NA IMPRESSÃO) -->
     <div class="no-print max-w-5xl mx-auto mb-6 bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6 space-y-4">
@@ -608,6 +608,13 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário • Modelo 
             font-size: 10pt !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+        }
+
+        /* Reset all layout wrappers on print */
+        div[class*="md:pl-"], div[class*="pl-"], main, .print-wrapper {
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
         }
 
         .print-container {

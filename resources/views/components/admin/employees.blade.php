@@ -64,8 +64,21 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
         $this->employeeId = $employee->id;
         $this->name = $employee->user->name ?? '';
         $this->email = $employee->user->email ?? '';
-        $this->cpf = $employee->cpf ?? '';
-        $this->phone = $employee->phone ?? '';
+        
+        $rawCpf = preg_replace('/\D/', '', $employee->cpf ?? '');
+        $this->cpf = strlen($rawCpf) === 11 
+            ? preg_replace('/(\d{3})(\d{3})(\d{3})(\d{2})/', '$1.$2.$3-$4', $rawCpf) 
+            : ($employee->cpf ?? '');
+
+        $rawPhone = preg_replace('/\D/', '', $employee->phone ?? '');
+        if (strlen($rawPhone) === 11) {
+            $this->phone = preg_replace('/(\d{2})(\d{1})(\d{4})(\d{4})/', '($1) $2 $3-$4', $rawPhone);
+        } elseif (strlen($rawPhone) === 10) {
+            $this->phone = preg_replace('/(\d{2})(\d{4})(\d{4})/', '($1) $2-$3', $rawPhone);
+        } else {
+            $this->phone = $employee->phone ?? '';
+        }
+
         $this->sector_id = (string) $employee->sector_id;
         $this->job_title = $employee->job_title ?? 'Servidor Público';
         $this->contract_type = $employee->contract_type ?? 'Efetivo';
@@ -80,6 +93,8 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
         $employee = $this->employeeId ? Employee::with('user')->findOrFail($this->employeeId) : null;
         $userId = $employee?->user_id;
 
+        $this->email = strtolower(trim($this->email));
+
         $this->validate([
             'name' => 'required|string|max:255',
             'cpf' => [
@@ -90,17 +105,39 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
             ],
             'email' => [
                 'required',
+                'string',
                 'email',
                 'max:255',
+                'regex:/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/',
                 Rule::unique('users', 'email')->ignore($userId),
             ],
-            'phone' => 'nullable|string|max:20',
+            'phone' => 'nullable|string|max:25',
             'sector_id' => 'required|exists:sectors,id',
             'job_title' => 'required|string|max:150',
             'contract_type' => 'required|string|max:100',
             'workload' => 'required|string|max:50',
             'zone' => 'required|string|max:50',
+        ], [
+            'email.email' => 'O campo e-mail deve ser um endereço válido (exemplo: example@email.com).',
+            'email.regex' => 'O campo e-mail deve ser um endereço válido (exemplo: example@email.com).',
+            'cpf.required' => 'O CPF do funcionário é obrigatório.',
+            'cpf.unique' => 'Este CPF já está cadastrado para outro funcionário.',
+            'email.unique' => 'Este e-mail já está em uso por outro usuário no sistema.',
         ]);
+
+        $cleanCpf = preg_replace('/\D/', '', $this->cpf);
+        if (strlen($cleanCpf) !== 11) {
+            $this->addError('cpf', 'O CPF deve conter exatamente 11 dígitos no formato 000.000.000-00.');
+            return;
+        }
+
+        if (!empty($this->phone)) {
+            $cleanPhone = preg_replace('/\D/', '', $this->phone);
+            if (strlen($cleanPhone) < 10 || strlen($cleanPhone) > 11) {
+                $this->addError('phone', 'O telefone deve estar no formato (82) 9 9999-9999 ou (82) 9999-9999.');
+                return;
+            }
+        }
 
         $user = Auth::user();
         if ($user->role === UserRole::Manager) {
@@ -289,7 +326,13 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                             </td>
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
                                 <div class="text-xs font-semibold text-indigo-600">{{ $employee->workload ?? '40h' }}</div>
-                                <div class="text-xs text-gray-500 font-mono">{{ $employee->cpf }}</div>
+                                @php
+                                    $rawCpfTable = preg_replace('/\D/', '', $employee->cpf ?? '');
+                                    $displayCpf = strlen($rawCpfTable) === 11 
+                                        ? preg_replace('/(\d{3})(\d{3})(\d{3})(\d{2})/', '$1.$2.$3-$4', $rawCpfTable) 
+                                        : $employee->cpf;
+                                @endphp
+                                <div class="text-xs text-gray-500 font-mono">{{ $displayCpf }}</div>
                             </td>
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                                 <button type="button" wire:click="openEditModal({{ $employee->id }})" class="text-indigo-600 hover:text-indigo-900 font-semibold cursor-pointer">Editar</button>
@@ -325,7 +368,26 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
         <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-xs transition-opacity" aria-hidden="true" wire:click="$set('showModal', false)"></div>
 
         <div class="flex min-h-screen items-center justify-center p-4 text-center sm:p-0">
-            <div class="relative z-10 w-full max-w-2xl transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-2xl transition-all sm:my-8">
+            <div class="relative z-10 w-full max-w-2xl transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-2xl transition-all sm:my-8"
+                 x-data="{
+                     formatCpf(el) {
+                         let v = el.value.replace(/\D/g, '').slice(0, 11);
+                         if (v.length > 9) v = v.replace(/^(\d{3})(\d{3})(\d{3})(\d{1,2})$/, '$1.$2.$3-$4');
+                         else if (v.length > 6) v = v.replace(/^(\d{3})(\d{3})(\d{1,3})$/, '$1.$2.$3');
+                         else if (v.length > 3) v = v.replace(/^(\d{3})(\d{1,3})$/, '$1.$2');
+                         el.value = v;
+                         $wire.set('cpf', v, false);
+                     },
+                     formatPhone(el) {
+                         let v = el.value.replace(/\D/g, '').slice(0, 11);
+                         if (v.length > 10) v = v.replace(/^(\d{2})(\d{1})(\d{4})(\d{4})$/, '($1) $2 $3-$4');
+                         else if (v.length > 6) v = v.replace(/^(\d{2})(\d{4})(\d{1,4})$/, '($1) $2-$3');
+                         else if (v.length > 2) v = v.replace(/^(\d{2})(\d{1,4})$/, '($1) $2');
+                         else if (v.length > 0) v = v.replace(/^(\d{1,2})$/, '($1');
+                         el.value = v;
+                         $wire.set('phone', v, false);
+                     }
+                 }">
                 <div>
                     <h3 class="text-lg leading-6 font-bold text-gray-900 border-b pb-2" id="modal-title">
                         {{ $employeeId ? 'Editar Dados do Funcionário' : 'Cadastrar Novo Funcionário' }}
@@ -356,17 +418,17 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                                 </div>
                                 <div class="sm:col-span-2">
                                     <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">E-mail (Login)</label>
-                                    <input type="email" wire:model="email" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" required>
+                                    <input type="email" wire:model="email" @input="$event.target.value = $event.target.value.toLowerCase().trim()" placeholder="example@email.com" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" required>
                                     @error('email') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
                                 </div>
                                 <div>
                                     <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">CPF</label>
-                                    <input type="text" wire:model="cpf" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" required placeholder="Apenas números">
+                                    <input type="text" wire:model="cpf" @input="formatCpf($event.target)" maxlength="14" placeholder="000.000.000-00" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white font-mono" required>
                                     @error('cpf') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
                                 </div>
                                 <div>
                                     <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Telefone</label>
-                                    <input type="text" wire:model="phone" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="text" wire:model="phone" @input="formatPhone($event.target)" maxlength="17" placeholder="(82) 9 9999-9999" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white font-mono">
                                     @error('phone') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
                                 </div>
                                 

@@ -200,6 +200,74 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
         </div>
     </div>
 
+    <!-- Modal de Reativação de Permissões (Câmera & GPS) -->
+    <div x-show="permissionModal" 
+         x-cloak 
+         class="fixed inset-0 z-50 overflow-y-auto" 
+         role="dialog" 
+         aria-modal="true">
+        <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-xs transition-opacity" @click="permissionModal = false"></div>
+
+        <div class="flex min-h-screen items-center justify-center p-4 text-center sm:p-0">
+            <div class="relative z-10 w-full max-w-lg transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-2xl transition-all sm:my-8 border border-gray-100">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-xs"
+                         :class="permissionType === 'camera' ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600'">
+                        <template x-if="permissionType === 'camera'">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+                            </svg>
+                        </template>
+                        <template x-if="permissionType === 'gps'">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                            </svg>
+                        </template>
+                    </div>
+
+                    <div class="flex-1">
+                        <h3 class="text-base font-bold text-gray-900" x-text="permissionType === 'camera' ? 'Permissão de Câmera Bloqueada' : 'Permissão de Localização (GPS) Bloqueada'"></h3>
+                        <p class="text-xs text-gray-500 mt-1" x-text="permissionErrorMsg"></p>
+                    </div>
+                </div>
+
+                <!-- Guia Passo a Passo -->
+                <div class="mt-5 p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3 text-xs text-slate-700">
+                    <p class="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                        <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" /></svg>
+                        Como reativar a permissão no seu navegador:
+                    </p>
+                    
+                    <ol class="list-decimal pl-4 space-y-2 text-slate-600">
+                        <li>
+                            <strong>Ícone de Cadeado / Ajustes:</strong> No topo da tela, clique no ícone de <strong>cadeado</strong> ou <strong>ajustes de site</strong> que fica no início da barra de endereço (ao lado de <em>pontofacil...</em>).
+                        </li>
+                        <li>
+                            <strong>Permitir Acesso:</strong> Localize as opções <span class="text-indigo-700 font-semibold" x-text="permissionType === 'camera' ? 'Câmera' : 'Localização / GPS'"></span> e mude para <strong>"Permitir"</strong> (ou toque em <em>"Redefinir permissões"</em>).
+                        </li>
+                        <li>
+                            <strong>No iPhone / iPad (Safari):</strong> Toque no botão <strong>aA</strong> na barra de endereço &rarr; <em>Ajustes do Site</em> &rarr; <em>Câmera / Localização</em> &rarr; <strong>Permitir</strong>.
+                        </li>
+                        <li>
+                            <strong>Tentar Novamente:</strong> Após alterar, clique no botão azul abaixo para que o navegador peça novamente ou inicie o scanner.
+                        </li>
+                    </ol>
+                </div>
+
+                <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-end">
+                    <button type="button" @click="permissionModal = false" class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition">
+                        Fechar
+                    </button>
+                    <button type="button" @click="retryPermission()" class="inline-flex items-center justify-center px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition">
+                        <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+                        Tentar Novamente
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         document.addEventListener('alpine:init', () => {
             Alpine.data('timePunchComponent', () => ({
@@ -208,6 +276,10 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                 isProcessing: false,
                 currentTime: '',
                 currentDate: '',
+                permissionModal: false,
+                permissionType: 'camera',
+                permissionErrorMsg: '',
+                lastDecodedText: null,
 
                 init() {
                     this.updateClock();
@@ -242,7 +314,9 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                         this.isScanning = true;
                     }).catch((err) => {
                         console.error("Scanner start error:", err);
-                        alert("Não foi possível acessar a câmera. Certifique-se de usar HTTPS e autorizar a permissão da câmera no navegador.");
+                        this.permissionType = 'camera';
+                        this.permissionErrorMsg = 'Acesso à câmera foi recusado ou não está disponível. Siga as instruções abaixo para liberar o uso da câmera.';
+                        this.permissionModal = true;
                     });
                 },
 
@@ -259,6 +333,7 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                 onScanSuccess(decodedText) {
                     this.stopScanner();
                     this.isProcessing = true;
+                    this.lastDecodedText = decodedText;
                     
                     if (navigator.geolocation) {
                         navigator.geolocation.getCurrentPosition(
@@ -266,17 +341,33 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                                 @this.call('registerPunch', decodedText, position.coords.latitude, position.coords.longitude)
                                     .then(() => {
                                         this.isProcessing = false;
+                                        this.lastDecodedText = null;
                                     });
                             },
                             (error) => {
-                                alert("Erro ao capturar localização (GPS): " + error.message + ". A localização é obrigatória para o registro.");
                                 this.isProcessing = false;
+                                this.permissionType = 'gps';
+                                this.permissionErrorMsg = error.code === 1 
+                                    ? 'A permissão de localização (GPS) foi recusada no navegador. A Portaria 671 MTP exige a geolocalização para autenticar o registro de ponto.'
+                                    : 'Erro ao capturar localização GPS (' + error.message + '). Verifique se o GPS do aparelho está ativado.';
+                                this.permissionModal = true;
                             },
                             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                         );
                     } else {
                         alert("Geolocalização não é suportada por este dispositivo.");
                         this.isProcessing = false;
+                    }
+                },
+
+                retryPermission() {
+                    this.permissionModal = false;
+                    if (this.permissionType === 'camera') {
+                        this.startScanner();
+                    } else if (this.lastDecodedText) {
+                        this.onScanSuccess(this.lastDecodedText);
+                    } else {
+                        this.startScanner();
                     }
                 }
             }));

@@ -191,6 +191,7 @@ new #[Layout('layouts.app')] #[Title('Configurações')] class extends Component
 
         $this->message = 'Novo QR Code gerado com sucesso! Os colaboradores deverão ler este novo código para registrar o ponto.';
         $this->status = 'success';
+        $this->dispatch('qr-code-regenerated', hash: $this->qr_code_hash);
         $this->dispatch('app-modal-alert', [
             'type' => 'success',
             'title' => 'Novo QR Code Gerado!',
@@ -264,21 +265,67 @@ new #[Layout('layouts.app')] #[Title('Configurações')] class extends Component
 };
 ?>
 
-<div class="max-w-5xl mx-auto py-2 sm:py-6 px-1 sm:px-6 lg:px-8 space-y-6" x-data="settingsComponent(@js($qr_code_hash))">
+<div class="settings-container max-w-5xl mx-auto py-2 sm:py-6 px-1 sm:px-6 lg:px-8 space-y-6" x-data="settingsComponent(@js($qr_code_hash))">
+    <style>
+        @media print {
+            .no-print,
+            nav,
+            header,
+            aside {
+                display: none !important;
+            }
+
+            body {
+                background: #ffffff !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            .settings-container {
+                padding: 0 !important;
+                margin: 0 !important;
+                max-width: 100% !important;
+            }
+
+            .card-qrcode-wrapper {
+                border: none !important;
+                box-shadow: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                background: transparent !important;
+                display: flex !important;
+                justify-content: center !important;
+                align-items: center !important;
+                min-height: 80vh !important;
+            }
+
+            #print-area {
+                border: 2px dashed #1e293b !important;
+                border-radius: 20px !important;
+                padding: 36px 32px !important;
+                max-width: 440px !important;
+                margin: 20px auto !important;
+                box-shadow: none !important;
+                background: #ffffff !important;
+                page-break-inside: avoid !important;
+            }
+        }
+    </style>
+
     <!-- Header Principal -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6">
+    <div class="no-print bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6">
         <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Configurações</h2>
         <p class="text-xs sm:text-sm text-gray-500 mt-0.5">Gestão cadastral da empresa, logotipo oficial, QR Code corporativo, geolocalização e banco de horas</p>
     </div>
 
     @if($message)
-        <div class="rounded-xl p-4 {{ $status === 'success' ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' : 'bg-red-50 text-red-900 border border-red-200' }}">
+        <div class="no-print rounded-xl p-4 {{ $status === 'success' ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' : 'bg-red-50 text-red-900 border border-red-200' }}">
             <p class="text-sm font-semibold">{{ $message }}</p>
         </div>
     @endif
 
     <!-- Card 1: Dados da Empresa & Logotipo Oficial -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6">
+    <div class="no-print bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6">
         <div class="border-b border-gray-100 pb-4 mb-6">
             <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <svg class="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
@@ -443,8 +490,8 @@ new #[Layout('layouts.app')] #[Title('Configurações')] class extends Component
     </div>
 
     <!-- Card 2: QR Code Section -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6">
-        <div class="border-b border-gray-100 pb-4 mb-6">
+    <div class="card-qrcode-wrapper bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6">
+        <div class="no-print border-b border-gray-100 pb-4 mb-6">
             <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <svg class="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75v-.75ZM16.5 6.75h.75v.75h-.75v-.75ZM13.5 13.5h.75v.75h-.75v-.75ZM13.5 19.5h.75v.75h-.75v-.75ZM19.5 13.5h.75v.75h-.75v-.75ZM19.5 19.5h.75v.75h-.75v-.75ZM16.5 16.5h.75v.75h-.75v-.75Z" /></svg>
                 QR Code Oficial da Empresa
@@ -453,23 +500,40 @@ new #[Layout('layouts.app')] #[Title('Configurações')] class extends Component
         </div>
 
         <div class="flex flex-col md:flex-row items-center gap-8 justify-around">
-            <!-- Canvas QR Code Display -->
-            <div id="print-area" class="flex flex-col items-center p-6 bg-gray-50 border border-gray-200 rounded-2xl shadow-xs text-center">
-                <div class="mb-3">
-                    <span class="text-sm font-bold text-gray-900 tracking-tight">{{ $company_trade_name ?: 'PontoFácil' }}</span>
-                    <p class="text-xs text-gray-500">Ponto Eletrônico (REP-P / REP-A)</p>
+            <!-- Cartaz Oficial do QR Code (Área de Impressão) -->
+            <div id="print-area" class="flex flex-col items-center p-6 sm:p-8 bg-slate-50/70 border border-slate-200 rounded-2xl shadow-xs text-center w-full max-w-sm">
+                <!-- Cabeçalho do Cartaz -->
+                <div class="mb-4">
+                    @if($current_logo_url)
+                        <img src="{{ $current_logo_url }}" alt="Logo" class="h-12 max-w-[180px] object-contain mx-auto mb-2" />
+                    @endif
+                    <h4 class="text-base sm:text-lg font-black text-slate-900 tracking-tight uppercase">{{ $company_trade_name ?: ($company_legal_name ?: 'PontoFácil') }}</h4>
+                    @if($company_cnpj)
+                        <p class="text-[11px] text-slate-500 font-mono mt-0.5">CNPJ: {{ $company_cnpj }}</p>
+                    @endif
+                    <div class="inline-block mt-1.5 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold uppercase tracking-wider">
+                        Ponto Eletrônico (REP-P / REP-A)
+                    </div>
                 </div>
                 
-                <canvas id="qrcode-canvas" class="rounded-xl shadow-xs bg-white p-3 border border-gray-200"></canvas>
+                <!-- Canvas QR Code com wire:ignore para preservar estado contra Livewire morph -->
+                <div wire:ignore class="inline-block p-3.5 bg-white border border-slate-200 rounded-2xl shadow-xs">
+                    <canvas id="qrcode-canvas" class="mx-auto block"></canvas>
+                </div>
                 
-                <div class="mt-4 max-w-[260px]">
-                    <p class="text-xs text-gray-400 font-mono break-all">{{ $qr_code_hash }}</p>
-                    <p class="text-xs text-indigo-700 font-semibold mt-2">Aponte a câmera para registrar</p>
+                <!-- Informações e Identificador -->
+                <div class="mt-4 max-w-[280px]">
+                    <p class="text-[11px] text-slate-400 font-mono break-all leading-tight select-all">{{ $qr_code_hash }}</p>
+                    <p class="text-xs font-bold text-indigo-700 mt-2.5 flex items-center justify-center gap-1.5">
+                        <svg class="w-4 h-4 no-print text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" /></svg>
+                        Aponte a câmera para registrar
+                    </p>
+                    <p class="text-[10px] text-slate-400 mt-1">Conforme Portaria MTP nº 671/2021</p>
                 </div>
             </div>
 
-            <!-- Controls -->
-            <div class="flex-1 space-y-4 w-full">
+            <!-- Controls (Ocultos na Impressão) -->
+            <div class="no-print flex-1 space-y-4 w-full">
                 <div class="rounded-xl bg-amber-50 border border-amber-200 p-4 text-xs text-amber-800 space-y-1">
                     <p class="font-bold flex items-center gap-1.5">
                         <svg class="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" /></svg>
@@ -501,7 +565,7 @@ new #[Layout('layouts.app')] #[Title('Configurações')] class extends Component
     </div>
 
     <!-- Card 3: GPS & Geolocation Settings -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6">
+    <div class="no-print bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6">
         <div class="border-b border-gray-100 pb-4 mb-6">
             <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <svg class="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
@@ -546,7 +610,7 @@ new #[Layout('layouts.app')] #[Title('Configurações')] class extends Component
     </div>
 
     <!-- Card 4: Banco de Horas Section -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6">
+    <div class="no-print bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6">
         <div class="border-b border-gray-100 pb-4 mb-6">
             <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <svg class="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
@@ -629,8 +693,23 @@ new #[Layout('layouts.app')] #[Title('Configurações')] class extends Component
                 currentHash: qrHash,
 
                 init() {
-                    this.renderQrCode();
-                    this.$watch('currentHash', () => this.renderQrCode());
+                    this.$nextTick(() => this.renderQrCode());
+                    this.$watch('currentHash', () => {
+                        this.$nextTick(() => this.renderQrCode());
+                    });
+
+                    window.addEventListener('qr-code-regenerated', (event) => {
+                        if (event.detail && event.detail.hash) {
+                            this.currentHash = event.detail.hash;
+                        }
+                        this.$nextTick(() => this.renderQrCode());
+                    });
+
+                    if (window.Livewire) {
+                        Livewire.hook('morph.updated', () => {
+                            this.$nextTick(() => this.renderQrCode());
+                        });
+                    }
                 },
 
                 renderQrCode() {
@@ -638,10 +717,10 @@ new #[Layout('layouts.app')] #[Title('Configurações')] class extends Component
                     if (!canvas || !window.QRCode) return;
 
                     window.QRCode.toCanvas(canvas, this.currentHash, {
-                        width: 220,
+                        width: 230,
                         margin: 1,
                         color: {
-                            dark: '#1e1b4b',
+                            dark: '#0f172a',
                             light: '#ffffff'
                         }
                     }, (error) => {

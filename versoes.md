@@ -1,6 +1,18 @@
 # Histórico de Versões (Changelog)
 
-## v2.1.0 (Atual)
+## v2.2.0 (Atual)
+- **Melhorias de Usabilidade, Impressão Limpa e Conformidade Operacional:**
+  - **Busca em Tempo Real no Espelho de Ponto (`/timesheet`):** Campo de seleção de colaborador convertido em busca reativa instantânea por Nome ou CPF, com dropdown estilizado e filtro dinâmico.
+  - **Impressão Exclusiva da Folha de Ponto (`/folha-ponto`):** Configuração de regras `@media print` para suprimir navegação, sidebar, filtros e menus, imprimindo estritamente a Folha de Ponto Oficial A4 pronta para assinatura física.
+  - **Manual do Sistema Segmentado por Perfil (`/ajuda`):** Manual interativo categorizado por perfis de acesso (Colaborador, Gestor, Administrador RH e Auditor / Fiscal do Trabalho), com passo a passo das rotinas diárias e operacionais.
+  - **Validação Pública em Destaque na Landing Page (`/`):** Links e badges adicionados na barra superior, menu mobile e rodapé direcionando para a rota pública `/verificar-comprovante`, permitindo a fiscais e auditores validarem a integridade do ponto sem login.
+  - **Validação Cadastral & Máscaras em Funcionários (`/admin/employees`):** Máscaras reativas para CPF (`000.000.000-00`) e Telefone (`(82) 9 9999-9999`), validação de e-mail corporativo (`example@email.com`) e formatação visual padronizada do CPF na tabela.
+  - **Recuperação de Permissão de Câmera e GPS (`/ponto`):** Modal amigável com orientações detalhadas de desbloqueio no navegador (Chrome, Safari iOS, Edge) caso o usuário recuse o acesso por engano, acompanhado de botão de reativação imediata ("Tentar Novamente").
+  - **Correção da Persistência do QR Code nas Configurações (`/admin/settings`):** Isolamento do canvas com `wire:ignore` e escuta dos eventos de ciclo de vida do Livewire (`morph.updated` e `qr-code-regenerated`), garantindo que o QR Code permaneça visível mesmo ao alternar a chave do Banco de Horas.
+  - **Sidebar Retrátil Otimizado para Tablets:** Toggle de recolhimento e expansão do sidebar com persistência de estado no `localStorage` (`pf_sidebar_collapsed`), facilitando a navegação em tablets e telas compactas.
+  - **Cartaz Oficial de Impressão do QR Code (`/admin/settings`):** Impressão isolada exclusiva do cartaz institucional com dados da empresa, CNPJ, logotipo, instruções e QR Code de alta resolução para fixação na entrada do estabelecimento.
+
+## v2.1.0
 - **Calendário Laboral, Feriados e Pontos Facultativos (Fase 20.18):**
   - **Diferenciação Jurídica Rigorosa (Lei 9.093/1995 & Portarias Administrativas):** Feriados legais e pontos facultativos modelados com comportamentos distintos (`work_behavior`). Pontos facultativos não eliminam jornadas automaticamente nem são tratados como feriados sem decisão expressa do Admin/RH.
   - **Tipologia e Escopo Territorial Hierárquico:** Eventos classificados em Feriados (`HOLIDAY`), Pontos Facultativos (`OPTIONAL_DAY`), Recessos/Suspensões (`INSTITUTIONAL_CLOSURE`) e Expedientes Especiais (`SPECIAL_WORKDAY`), com resolução hierárquica por escopo: Estabelecimento -> Municipal -> Estadual -> Nacional.

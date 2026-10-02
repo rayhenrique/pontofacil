@@ -29,11 +29,17 @@
             </div>
 
             <!-- Desktop Navigation Links -->
-            <nav class="hidden lg:flex items-center gap-8 text-sm font-medium text-slate-600">
+            <nav class="hidden lg:flex items-center gap-7 text-sm font-medium text-slate-600">
                 <a href="#recursos" class="hover:text-indigo-600 transition-colors">Recursos</a>
                 <a href="#comparativo" class="hover:text-indigo-600 transition-colors">Comparativo</a>
                 <a href="#demonstracao" class="hover:text-indigo-600 transition-colors">Demonstração</a>
                 <a href="#evolucao" class="hover:text-indigo-600 transition-colors">Evolução</a>
+                <a href="{{ route('receipts.verify') }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200/80 text-xs font-bold transition-all shadow-2xs">
+                    <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+                    </svg>
+                    <span>Validação Pública</span>
+                </a>
             </nav>
 
             <!-- Action Button & Mobile Toggle -->
@@ -92,7 +98,13 @@
             <a @click="mobileMenuOpen = false" href="#evolucao" class="px-3 py-2.5 rounded-lg text-base font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
                 Evolução
             </a>
-            <div class="pt-3">
+            <a @click="mobileMenuOpen = false" href="{{ route('receipts.verify') }}" class="px-3 py-2.5 rounded-xl text-sm font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/80 hover:bg-emerald-100/70 transition-colors flex items-center gap-2">
+                <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+                </svg>
+                <span>Validação Pública (Sem Login)</span>
+            </a>
+            <div class="pt-2">
                 <a href="{{ Auth::check() ? route('home') : route('login') }}" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-center shadow-md">
                     <span>{{ Auth::check() ? 'Ir para o Sistema' : 'Entrar no Sistema' }}</span>
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">

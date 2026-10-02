@@ -118,13 +118,21 @@
 
             <!-- Coluna Legislação & Conformidade -->
             <div class="space-y-3">
-                <div class="text-white font-bold text-xs uppercase tracking-wider">Conformidade</div>
+                <div class="text-white font-bold text-xs uppercase tracking-wider">Conformidade & Fiscalização</div>
                 <ul class="space-y-2 text-slate-400">
                     <li><span class="text-slate-300">Portaria 671 / MTP</span></li>
                     <li><span class="text-slate-300">Padrão REP-A Oficial</span></li>
                     <li><span class="text-slate-300">Carimbo de Tempo NTP.br</span></li>
                     <li><span class="text-slate-300">Hash Inviolável SHA-256</span></li>
                     <li><span class="text-slate-300">Cerca Virtual com GPS</span></li>
+                    <li class="pt-1.5">
+                        <a href="{{ route('receipts.verify') }}" class="text-emerald-400 hover:text-emerald-300 font-semibold transition inline-flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+                            </svg>
+                            <span>Validação Pública de Ponto</span>
+                        </a>
+                    </li>
                 </ul>
             </div>
 

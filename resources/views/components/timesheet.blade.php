@@ -102,7 +102,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
         
         $selectableUsers = collect([]);
         if ($isAdmin) {
-            $selectableUsers = User::orderBy('name')->get();
+            $selectableUsers = User::with('employee')->orderBy('name')->get();
         } elseif ($isManager) {
             $managedSectorIds = Sector::where('manager_id', $user->id)->pluck('id');
             $employeeUserIds = Employee::whereIn('sector_id', $managedSectorIds)->pluck('user_id');
@@ -112,12 +112,22 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                 $this->userId = $user->id;
             }
 
-            $selectableUsers = User::whereIn('id', $allowedUserIds)->orderBy('name')->get();
+            $selectableUsers = User::with('employee')->whereIn('id', $allowedUserIds)->orderBy('name')->get();
         } else {
             $this->userId = $user->id;
         }
 
         $canSelectUser = $isAdmin || ($isManager && $selectableUsers->count() > 1);
+
+        $userList = $selectableUsers->map(function ($u) {
+            return [
+                'id' => $u->id,
+                'name' => $u->name,
+                'cpf' => $u->employee?->cpf ?? '',
+                'clean_cpf' => preg_replace('/\D/', '', (string) ($u->employee?->cpf ?? '')),
+                'job_title' => $u->employee?->job_title ?? ($u->role ? $u->role->label() : 'Colaborador'),
+            ];
+        })->values();
 
         $query = TimeEntry::with('user')
             ->where('user_id', $this->userId)
@@ -168,6 +178,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
             'avgFormatted' => $avgFormatted,
             'canSelectUser' => $canSelectUser,
             'users' => $selectableUsers,
+            'userList' => $userList,
             'timeBankSummary' => $timeBankSummary,
             'policy' => $policy,
             'employee' => $employee,
@@ -240,13 +251,91 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
         <!-- Filters (Responsive Mobile Stack) -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6 pb-6 border-b border-gray-200">
             @if($canSelectUser)
-            <div class="sm:col-span-2 lg:col-span-1">
-                <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Colaborador</label>
-                <select wire:model.live="userId" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white">
-                    @foreach($users as $u)
-                        <option value="{{ $u->id }}">{{ $u->name }}</option>
-                    @endforeach
-                </select>
+            <div class="sm:col-span-2 lg:col-span-1 relative" 
+                 x-data="{
+                    open: false,
+                    search: @js($users->firstWhere('id', (int) $this->userId)?->name ?? ''),
+                    selectedId: @entangle('userId').live,
+                    users: @js($userList),
+                    get filteredUsers() {
+                        const term = (this.search || '').toLowerCase().trim();
+                        if (!term) return this.users;
+                        const cleanTerm = term.replace(/\D/g, '');
+                        return this.users.filter(u => {
+                            const matchName = (u.name || '').toLowerCase().includes(term);
+                            const matchCpf = (u.cpf || '').toLowerCase().includes(term) || (cleanTerm && (u.clean_cpf || '').includes(cleanTerm));
+                            return matchName || matchCpf;
+                        });
+                    },
+                    selectUser(u) {
+                        this.selectedId = u.id;
+                        this.search = u.name;
+                        this.open = false;
+                    },
+                    resetSearch() {
+                        const curr = this.users.find(u => u.id === Number(this.selectedId));
+                        this.search = curr ? curr.name : '';
+                    }
+                 }"
+                 @click.outside="open = false; resetSearch()"
+                 @keydown.escape.window="open = false">
+                <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+                    Colaborador <span class="text-indigo-600 font-normal">(buscar por Nome ou CPF)</span>
+                </label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                        </svg>
+                    </div>
+                    <input type="text"
+                           x-ref="searchInput"
+                           x-model="search"
+                           @focus="open = true; $event.target.select()"
+                           @input="open = true"
+                           placeholder="Digite o nome ou CPF..."
+                           class="block w-full pl-9 pr-9 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" />
+                    <button type="button"
+                            x-show="search.length > 0"
+                            @click="search = ''; open = true; $refs.searchInput.focus()"
+                            class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Autocomplete Dropdown List -->
+                <div x-show="open"
+                     x-cloak
+                     x-transition:enter="transition ease-out duration-100"
+                     x-transition:enter-start="opacity-0 scale-95"
+                     x-transition:enter-end="opacity-100 scale-100"
+                     x-transition:leave="transition ease-in duration-75"
+                     x-transition:leave-start="opacity-100 scale-100"
+                     x-transition:leave-end="opacity-0 scale-95"
+                     class="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto bg-white rounded-xl shadow-xl border border-gray-200 py-1 text-sm divide-y divide-gray-100">
+                    <template x-if="filteredUsers.length === 0">
+                        <div class="px-4 py-3 text-xs text-gray-500 text-center">
+                            Nenhum colaborador localizado com "<span class="font-medium" x-text="search"></span>".
+                        </div>
+                    </template>
+                    <template x-for="u in filteredUsers" :key="u.id">
+                        <button type="button"
+                                @click="selectUser(u)"
+                                :class="selectedId === u.id ? 'bg-indigo-50/80 text-indigo-900 font-semibold' : 'text-gray-700 hover:bg-gray-50'"
+                                class="w-full text-left px-3.5 py-2.5 flex items-center justify-between gap-2 transition cursor-pointer">
+                            <div class="truncate">
+                                <p class="text-sm font-medium text-gray-900 truncate" x-text="u.name"></p>
+                                <p class="text-xs text-gray-500 truncate" x-text="u.job_title"></p>
+                            </div>
+                            <div class="text-right shrink-0">
+                                <span class="text-xs font-mono px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200"
+                                      x-text="u.cpf ? u.cpf : 'Sem CPF'"></span>
+                            </div>
+                        </button>
+                    </template>
+                </div>
             </div>
             @endif
             

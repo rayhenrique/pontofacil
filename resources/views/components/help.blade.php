@@ -283,195 +283,345 @@ new #[Layout('layouts.app')] #[Title('Ajuda e Novidades')] class extends Compone
     @endif
 
     <!-- ============================================== -->
-    <!-- ABA 2: MANUAL DO USUÁRIO COMPLETO E ATUALIZADO  -->
+    <!-- ABA 2: MANUAL DO USUÁRIO ORGANIZADO POR PERFIL  -->
     <!-- ============================================== -->
     @if($activeTab === 'manual')
-        <div class="space-y-6" wire:transition>
-            <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-gray-200/80 space-y-6">
-                <div>
-                    <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Guia Prático e Manual de Operação do PontoFácil</h2>
-                    <p class="text-xs sm:text-sm text-gray-500 mt-0.5">Orientações completas de uso do sistema para colaboradores, gestores de equipe e administração de RH (REP-P / PTRP)</p>
+        <div class="space-y-6" wire:transition x-data="{ selectedProfile: 'colaborador' }">
+            <!-- Header do Manual -->
+            <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-gray-200/80 space-y-4">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Manual de Instruções do PontoFácil</h2>
+                        <p class="text-xs sm:text-sm text-gray-500 mt-0.5">Selecione seu perfil de acesso abaixo para ver o passo a passo completo de operação do sistema.</p>
+                    </div>
+
+                    <!-- Seletor Rápido de Perfis -->
+                    <div class="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200/80">
+                        <button type="button" 
+                                @click="selectedProfile = 'colaborador'"
+                                :class="selectedProfile === 'colaborador' ? 'bg-white text-indigo-700 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900'"
+                                class="px-3 py-1.5 rounded-xl text-xs transition">
+                            Colaborador
+                        </button>
+                        <button type="button" 
+                                @click="selectedProfile = 'gestor'"
+                                :class="selectedProfile === 'gestor' ? 'bg-white text-indigo-700 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900'"
+                                class="px-3 py-1.5 rounded-xl text-xs transition">
+                            Gestor
+                        </button>
+                        <button type="button" 
+                                @click="selectedProfile = 'admin'"
+                                :class="selectedProfile === 'admin' ? 'bg-white text-indigo-700 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900'"
+                                class="px-3 py-1.5 rounded-xl text-xs transition">
+                            Administrador RH
+                        </button>
+                        <button type="button" 
+                                @click="selectedProfile = 'auditor'"
+                                :class="selectedProfile === 'auditor' ? 'bg-white text-indigo-700 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900'"
+                                class="px-3 py-1.5 rounded-xl text-xs transition">
+                            Auditor / Fiscal
+                        </button>
+                        <button type="button" 
+                                @click="selectedProfile = 'permissoes'"
+                                :class="selectedProfile === 'permissoes' ? 'bg-white text-rose-700 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900'"
+                                class="px-3 py-1.5 rounded-xl text-xs transition flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                            Câmera & GPS
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PERFIL 1: COLABORADOR -->
+            <div x-show="selectedProfile === 'colaborador'" class="space-y-6">
+                <div class="bg-indigo-50/60 border border-indigo-200/80 rounded-2xl p-5 flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black shrink-0 shadow-xs">
+                        1
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-indigo-950">Perfil do Colaborador (Autoatendimento)</h3>
+                        <p class="text-xs text-indigo-800">Rotina diária de registro de jornada, acompanhamento de banco de horas e emissão de comprovantes.</p>
+                    </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
-                    
-                    <!-- Card 1: Bater Ponto -->
-                    <div class="p-5 rounded-2xl border border-indigo-100 bg-indigo-50/30 space-y-3">
-                        <div class="flex items-center gap-3">
-                            <span class="w-8 h-8 rounded-xl bg-indigo-600 text-white font-bold text-sm inline-flex items-center justify-center shadow-xs">1</span>
-                            <h3 class="font-bold text-gray-900 text-base">Batida de Ponto com Validação Dupla</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <!-- Como Bater Ponto -->
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">A</span>
+                            <h4 class="font-bold text-gray-900 text-sm">Como Bater Ponto Corretamente</h4>
                         </div>
-                        <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">
-                            No smartphone ou computador, acesse a tela <strong>"Bater Ponto"</strong> (`/ponto`):
-                        </p>
-                        <ul class="text-xs sm:text-sm text-gray-600 space-y-1.5 list-disc list-inside">
-                            <li><strong>Leitura Ótica (QR Code):</strong> Aponte a câmera para o QR Code físico fixado na entrada da empresa ou do setor.</li>
-                            <li><strong>Geolocalização GPS:</strong> O sistema checa se a sua distância física está dentro do raio permitido (Fórmula de Haversine).</li>
-                            <li><strong>Carimbo Inviolável:</strong> O horário é cravado pelo servidor no fuso oficial de Maceió (GMT-3), gerando o NSR monotônico.</li>
+                        <ol class="text-xs text-gray-600 space-y-2 list-decimal pl-4 leading-relaxed">
+                            <li>Acesse o menu <strong>"Bater Ponto"</strong> (`/ponto`).</li>
+                            <li>Clique no botão azul <strong>"Escanear QR Code"</strong>.</li>
+                            <li>Autorize o acesso à <strong>Câmera</strong> e à sua <strong>Localização (GPS)</strong> quando solicitado pelo navegador.</li>
+                            <li>Aponte a câmera para o <strong>QR Code oficial da empresa</strong> afixado na entrada ou setor.</li>
+                            <li>O sistema valida a leitura óptica, checa o raio de segurança do GPS e grava o ponto instantaneamente com número de registro (NSR) e carimbo de tempo.</li>
+                        </ol>
+                    </div>
+
+                    <!-- Espelho de Ponto & Saldo de Banco -->
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs">B</span>
+                            <h4 class="font-bold text-gray-900 text-sm">Espelho de Ponto & Banco de Horas Diário</h4>
+                        </div>
+                        <ul class="text-xs text-gray-600 space-y-2 list-disc pl-4 leading-relaxed">
+                            <li>Acesse <strong>"Espelho de Ponto"</strong> (`/timesheet`).</li>
+                            <li>Veja os pares de batidas do dia (Entrada, Almoço, Retorno, Saída).</li>
+                            <li>Consulte o <strong>Card de Banco de Horas</strong> no topo: saldo anterior acumulado, créditos do mês, débitos e saldo líquido em tempo real.</li>
+                            <li>Filtre qualquer mês ou ano para verificar seu histórico de jornada.</li>
                         </ul>
                     </div>
 
-                    <!-- Card 2: Central de Comprovantes & Validação Pública -->
-                    <div class="p-5 rounded-2xl border border-emerald-100 bg-emerald-50/30 space-y-3">
-                        <div class="flex items-center gap-3">
-                            <span class="w-8 h-8 rounded-xl bg-emerald-600 text-white font-bold text-sm inline-flex items-center justify-center shadow-xs">2</span>
-                            <div class="flex items-center gap-2">
-                                <h3 class="font-bold text-gray-900 text-base">Central de Comprovantes & Validação</h3>
-                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-200 text-emerald-800">Fase 19A</span>
-                            </div>
+                    <!-- Solicitar Ajustes de Ponto -->
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">C</span>
+                            <h4 class="font-bold text-gray-900 text-sm">Esqueceu de Bater? Solicite um Ajuste</h4>
                         </div>
-                        <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">
-                            Acesso permanente para consulta de comprovantes trabalhistas:
-                        </p>
-                        <ul class="text-xs sm:text-sm text-gray-600 space-y-1.5 list-disc list-inside">
-                            <li><strong>Comprovante em PDF:</strong> Baixe o PDF de qualquer batida com NSR, chave SHA-256 e código de verificação (`PF-XXXX-XXXX-XXXX`).</li>
-                            <li><strong>Validação Pública:</strong> Em `/verificar-comprovante`, qualquer auditor ou fiscal confere a autenticidade do ponto sem precisar de login.</li>
-                            <li><strong>Exportação AFD (MTE 2026):** O RH pode gerar o Arquivo Fonte de Dados oficial baseado exclusivamente em dados brutos do REP.</li>
+                        <ul class="text-xs text-gray-600 space-y-2 list-disc pl-4 leading-relaxed">
+                            <li>No <strong>"Espelho de Ponto"</strong> (`/timesheet`), clique no botão <strong>"Solicitar Ajuste"</strong>.</li>
+                            <li>Escolha o tipo: <em>Batida Esquecida</em>, <em>Marcação Indevida</em> ou <em>Atestado Médico / Justificativa</em>.</li>
+                            <li>Informe data, horário, justificativa e anexe o comprovante (se houver).</li>
+                            <li>A solicitação será enviada para o seu gestor ou RH aprovar com histórico registrado.</li>
                         </ul>
                     </div>
 
-                    <!-- Card 3: Espelho de Ponto & Banco de Horas Diário -->
-                    <div class="p-5 rounded-2xl border border-blue-100 bg-blue-50/30 space-y-3">
-                        <div class="flex items-center gap-3">
-                            <span class="w-8 h-8 rounded-xl bg-blue-600 text-white font-bold text-sm inline-flex items-center justify-center shadow-xs">3</span>
-                            <h3 class="font-bold text-gray-900 text-base">Espelho de Ponto & Saldo de Banco</h3>
+                    <!-- Comprovantes & Folha de Ponto Oficial -->
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">D</span>
+                            <h4 class="font-bold text-gray-900 text-sm">Comprovantes Trabalhistas & Folha A4</h4>
                         </div>
-                        <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">
-                            No menu <strong>"Espelho de Ponto"</strong> (`/timesheet`):
-                        </p>
-                        <ul class="text-xs sm:text-sm text-gray-600 space-y-1.5 list-disc list-inside">
-                            <li>Acompanhe pares de batidas diárias (entrada, almoço, volta e saída) e jornada em andamento.</li>
-                            <li><strong>Card do Banco de Horas:</strong> Saldo anterior transportado, créditos do mês, débitos, ajustes e saldo atual.</li>
-                            <li><strong>Botão "Solicitar Ajuste":</strong> O colaborador abre solicitações de correção de batida esquecida, atestado ou justificativa.</li>
+                        <ul class="text-xs text-gray-600 space-y-2 list-disc pl-4 leading-relaxed">
+                            <li><strong>Central de Comprovantes (`/comprovantes`):</strong> Baixe o PDF assinado digitalmente de cada batida com hash SHA-256 e código de validação pública.</li>
+                            <li><strong>Folha de Ponto Oficial (`/folha-ponto`):</strong> Visualize sua folha mensal completa com horários, horas trabalhadas e saldo. Clique em <strong>"Imprimir Folha de Ponto"</strong> para gerar a folha limpa em formato A4 para assinatura.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PERFIL 2: GESTOR DE SETOR -->
+            <div x-show="selectedProfile === 'gestor'" class="space-y-6">
+                <div class="bg-blue-50/60 border border-blue-200/80 rounded-2xl p-5 flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black shrink-0 shadow-xs">
+                        2
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-blue-950">Perfil do Gestor (Liderança & Supervisão)</h3>
+                        <p class="text-xs text-blue-800">Supervisão da equipe dos setores sob sua responsabilidade e aprovação de tratamentos de ponto.</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs">A</span>
+                            <h4 class="font-bold text-gray-900 text-sm">Gestão de Funcionários do Setor</h4>
+                        </div>
+                        <ul class="text-xs text-gray-600 space-y-2 list-disc pl-4 leading-relaxed">
+                            <li>Em <strong>"Funcionários"</strong> (`/admin/employees`), o gestor visualiza e cadastra colaboradores exclusivamente nos setores onde é responsável.</li>
+                            <li>Edite dados funcionais, cargo, vínculo e carga horária (40h, 30h, 20h) para garantir apuração precisa.</li>
+                            <li>O formulário conta com máscaras automáticas de CPF, Telefone e validação de e-mail corporativo.</li>
                         </ul>
                     </div>
 
-                    <!-- Card 4: Folha de Ponto A4 Oficial -->
-                    <div class="p-5 rounded-2xl border border-amber-100 bg-amber-50/30 space-y-3">
-                        <div class="flex items-center gap-3">
-                            <span class="w-8 h-8 rounded-xl bg-amber-600 text-white font-bold text-sm inline-flex items-center justify-center shadow-xs">4</span>
-                            <h3 class="font-bold text-gray-900 text-base">Folha de Ponto Oficial A4 (Impressão)</h3>
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">B</span>
+                            <h4 class="font-bold text-gray-900 text-sm">Aprovação de Tratamento de Ponto (PTRP)</h4>
                         </div>
-                        <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">
-                            No menu <strong>"Folha de Ponto"</strong> (`/folha-ponto`):
-                        </p>
-                        <ul class="text-xs sm:text-sm text-gray-600 space-y-1.5 list-disc list-inside">
-                            <li>Espelho mensal padronizado idêntico ao formulário administrativo do RH com o <strong>Logotipo da Empresa</strong> no cabeçalho.</li>
-                            <li>Preenchimento automático do servidor (Cargo, Vínculo, Carga Horária, Zona de lotação e Setor).</li>
-                            <li>Divisão em horários matutino/vespertino, folgas em finais de semana e campos para assinatura física formal.</li>
-                            <li>Pronta para impressão em 1 página A4 com botão direto (`Ctrl+P`).</li>
+                        <ul class="text-xs text-gray-600 space-y-2 list-disc pl-4 leading-relaxed">
+                            <li>Acesse <strong>"Tratamento de Ponto"</strong> (`/admin/treatment-requests`).</li>
+                            <li>Analise os pedidos de inclusão de batida esquecida, atestados e justificativas da equipe.</li>
+                            <li>Ao aprovar ou rejeitar, informe a justificativa formal exigida pela Portaria 671 MTP.</li>
+                            <li><strong>Segregação de Funções:</strong> Gestores não podem autoaprovar seus próprios pedidos de ajuste.</li>
                         </ul>
                     </div>
 
-                    <!-- Card 5: PTRP — Tratamento de Ponto & Solicitações -->
-                    <div class="p-5 rounded-2xl border border-purple-100 bg-purple-50/30 space-y-3">
-                        <div class="flex items-center gap-3">
-                            <span class="w-8 h-8 rounded-xl bg-purple-600 text-white font-bold text-sm inline-flex items-center justify-center shadow-xs">5</span>
-                            <div class="flex items-center gap-2">
-                                <h3 class="font-bold text-gray-900 text-base">PTRP — Tratamento de Ponto</h3>
-                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-200 text-purple-800">Fase 20</span>
-                            </div>
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">C</span>
+                            <h4 class="font-bold text-gray-900 text-sm">Acompanhamento da Jornada da Equipe</h4>
                         </div>
-                        <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">
-                            No menu <strong>"Tratamento de Ponto"</strong> (`/admin/treatment-requests`):
-                        </p>
-                        <ul class="text-xs sm:text-sm text-gray-600 space-y-1.5 list-disc list-inside">
-                            <li><strong>Tipos de Tratamento:</strong> Inclusão de batida esquecida, desconsideração de marcação indevida e justificativas de faltas/atestados médicos.</li>
-                            <li><strong>Segregação de Funções:</strong> O colaborador não pode autoaprovar solicitações. A chefia ou RH analisa, aprova ou rejeita com motivo registrado.</li>
-                            <li><strong>Imutabilidade Legal:</strong> O fato bruto original em `punch_events` jamais é apagado ou adulterado.</li>
+                        <ul class="text-xs text-gray-600 space-y-2 list-disc pl-4 leading-relaxed">
+                            <li>No <strong>"Espelho de Ponto"</strong> (`/timesheet`), use a barra de busca em tempo real por <strong>Nome ou CPF</strong> para localizar qualquer colaborador do setor.</li>
+                            <li>Verifique atrasos, faltas, horas extras e saldos acumulados de banco de horas.</li>
                         </ul>
                     </div>
 
-                    <!-- Card 6: Motor de Apuração & Tolerância CLT -->
-                    <div class="p-5 rounded-2xl border border-rose-100 bg-rose-50/30 space-y-3">
-                        <div class="flex items-center gap-3">
-                            <span class="w-8 h-8 rounded-xl bg-rose-600 text-white font-bold text-sm inline-flex items-center justify-center shadow-xs">6</span>
-                            <h3 class="font-bold text-gray-900 text-base">Apuração & Tolerância Legal (Art. 58 CLT)</h3>
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-xs">D</span>
+                            <h4 class="font-bold text-gray-900 text-sm">Conferência e Impressão de Folhas da Equipe</h4>
                         </div>
-                        <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">
-                            Motor de cálculo matemático em conformidade trabalhista:
-                        </p>
-                        <ul class="text-xs sm:text-sm text-gray-600 space-y-1.5 list-disc list-inside">
-                            <li>Combina batidas originais + tratamentos aprovados + escalas de trabalho (`work_schedules`).</li>
-                            <li><strong>Tolerância CLT (Art. 58, § 1º):</strong> Variações de até 5 minutos por batida (com limite de 10 min diários) não geram horas extras nem descontos.</li>
-                            <li>A tolerância é aplicada exclusivamente na apuração analítica, mantendo a marcação bruta do relógio 100% inalterada.</li>
+                        <ul class="text-xs text-gray-600 space-y-2 list-disc pl-4 leading-relaxed">
+                            <li>No menu <strong>"Folha de Ponto"</strong> (`/folha-ponto`), filtre o colaborador do setor e a competência desejada.</li>
+                            <li>Clique em <strong>"Imprimir Folha de Ponto"</strong> para gerar o documento A4 pronto para assinatura física dos colaboradores.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PERFIL 3: ADMINISTRADOR DE RH -->
+            <div x-show="selectedProfile === 'admin'" class="space-y-6">
+                <div class="bg-slate-50 border border-slate-300 rounded-2xl p-5 flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black shrink-0 shadow-xs">
+                        3
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900">Perfil do Administrador de RH (Controle Total)</h3>
+                        <p class="text-xs text-slate-600">Parametrização institucional da empresa, governança legal da Portaria 671, banco de horas e fechamento.</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-7 h-7 rounded-lg bg-slate-100 text-slate-800 flex items-center justify-center font-bold text-xs">A</span>
+                            <h4 class="font-bold text-gray-900 text-sm">Dados da Empresa, Logotipo & QR Code</h4>
+                        </div>
+                        <ul class="text-xs text-gray-600 space-y-2 list-disc pl-4 leading-relaxed">
+                            <li>Em <strong>"Configurações"</strong> (`/admin/settings`): preencha Razão Social, Nome Fantasia, CNPJ, telefone, endereço e envie o <strong>Logotipo Oficial</strong> para sair no cabeçalho das Folhas de Ponto.</li>
+                            <li><strong>Cartaz de QR Code:</strong> Clique em <strong>"Imprimir QR Code"</strong> para imprimir exclusivamente o cartaz oficial da empresa para fixar na recepção/entrada.</li>
+                            <li>Caso o QR Code vaze, clique em <strong>"Gerar Novo Código"</strong> para rotacionar a chave de segurança instantaneamente.</li>
                         </ul>
                     </div>
 
-                    <!-- Card 7: Banco de Horas em Ledger & Fechamento Formal -->
-                    <div class="p-5 rounded-2xl border border-teal-100 bg-teal-50/30 space-y-3">
-                        <div class="flex items-center gap-3">
-                            <span class="w-8 h-8 rounded-xl bg-teal-600 text-white font-bold text-sm inline-flex items-center justify-center shadow-xs">7</span>
-                            <div class="flex items-center gap-2">
-                                <h3 class="font-bold text-gray-900 text-base">Banco de Horas em Ledger & Fechamento</h3>
-                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-200 text-teal-800">Fase 20</span>
-                            </div>
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">B</span>
+                            <h4 class="font-bold text-gray-900 text-sm">Cerca Virtual GPS Antifraude</h4>
                         </div>
-                        <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">
-                            No menu <strong>"Banco de Horas"</strong> (`/admin/time-bank`):
-                        </p>
-                        <ul class="text-xs sm:text-sm text-gray-600 space-y-1.5 list-disc list-inside">
-                            <li><strong>Ledger Auditável:</strong> Saldo apurado estritamente por `SUM(minutes)`, sem campos numéricos sobrescritos.</li>
-                            <li><strong>Políticas:</strong> Modo `CARRY_OVER` (saldo transportado para o próximo mês) ou `MONTHLY_RESET` (compensação contábil zerando no fechamento).</li>
-                            <li><strong>Fechamento Formal:</strong> O zeramento nunca ocorre por virada de calendário à meia-noite, somente quando o RH executa o Fechamento de Competência.</li>
-                            <li><strong>Ajustes Manuais:</strong> Créditos e débitos manuais exigem data, justificativa e responsável.</li>
+                        <ul class="text-xs text-gray-600 space-y-2 list-disc pl-4 leading-relaxed">
+                            <li>Em <strong>"Configurações"</strong> (`/admin/settings`), defina a Latitude e Longitude da sede física ou clique em <em>"Capturar Minha Posição Atual (GPS)"</em>.</li>
+                            <li>Estipule o <strong>Raio Permitido</strong> em metros (ex: 100m, 200m). Marcações fora do perímetro são rejeitadas em cumprimento às regras trabalhistas.</li>
                         </ul>
                     </div>
 
-                    <!-- Card 8: Configurações da Empresa, Logo e Perfis -->
-                    <div class="p-5 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-3">
-                        <div class="flex items-center gap-3">
-                            <span class="w-8 h-8 rounded-xl bg-slate-800 text-white font-bold text-sm inline-flex items-center justify-center shadow-xs">8</span>
-                            <h3 class="font-bold text-gray-900 text-base">Configurações da Empresa & Perfis</h3>
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-7 h-7 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-xs">C</span>
+                            <h4 class="font-bold text-gray-900 text-sm">Banco de Horas, Ledger & Fechamento</h4>
                         </div>
-                        <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">
-                            Gestão administrativa da instalação exclusiva (Single-Tenant):
-                        </p>
-                        <ul class="text-xs sm:text-sm text-gray-600 space-y-1.5 list-disc list-inside">
-                            <li><strong>Dados da Empresa & Logotipo:</strong> Em `/admin/settings`, cadastre Razão Social, CNPJ, Endereço e faça upload do logotipo institucional.</li>
-                            <li><strong>QR Code & GPS Antifraude:</strong> Imprima o QR Code oficial e defina as coordenadas GPS da sede com o raio permitido.</li>
-                            <li><strong>Perfis de Acesso:</strong> Colaborador (autoatendimento), Gestor (supervisão dos setores atribuídos) e Administrador (controle total de RH).</li>
+                        <ul class="text-xs text-gray-600 space-y-2 list-disc pl-4 leading-relaxed">
+                            <li>Ative o regime de banco de horas em <strong>"Configurações"</strong> e escolha entre:
+                                <br>• <strong>Acumular (CARRY_OVER):</strong> saldo positivo ou negativo passa integralmente para o próximo mês.
+                                <br>• <strong>Zerar ao fechar o mês (MONTHLY_RESET):</strong> cria lançamento compensatório no fechamento da competência.
+                            </li>
+                            <li>Acesse <strong>"Banco de Horas"</strong> (`/admin/time-bank`) para lançar créditos/débitos manuais auditados e executar o <strong>Fechamento Formal de Competência</strong>.</li>
                         </ul>
                     </div>
 
-                    <!-- Card 9: Central de Fiscalização Trabalhista & AEJ (MTE 2026) -->
-                    <div class="p-5 rounded-2xl border border-indigo-200 bg-indigo-50/40 space-y-3">
-                        <div class="flex items-center gap-3">
-                            <span class="w-8 h-8 rounded-xl bg-indigo-700 text-white font-bold text-sm inline-flex items-center justify-center shadow-xs">9</span>
-                            <div class="flex items-center gap-2">
-                                <h3 class="font-bold text-gray-900 text-base">Central de Fiscalização & AEJ</h3>
-                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-200 text-indigo-900">Fase 21</span>
-                            </div>
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-7 h-7 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center font-bold text-xs">D</span>
+                            <h4 class="font-bold text-gray-900 text-sm">Fiscalização MTE, Arquivos AEJ & AFD</h4>
                         </div>
-                        <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">
-                            No menu <strong>"Fiscalização (AEJ)"</strong> (`/admin/fiscalizacao`):
-                        </p>
-                        <ul class="text-xs sm:text-sm text-gray-600 space-y-1.5 list-disc list-inside">
-                            <li><strong>Snapshots Imutáveis:</strong> Cada competência fechada congela a escala, jornadas e tratamentos com hash canônico SHA-256.</li>
-                            <li><strong>Emissão do AEJ:</strong> Geração do Arquivo Eletrônico de Jornada oficial (Portaria 671/2021 MTP) para a Auditoria Fiscal do Trabalho.</li>
-                            <li><strong>Prévia vs. Oficial:</strong> Emita prévias operacionais para validação antes do fechamento formal de competência.</li>
+                        <ul class="text-xs text-gray-600 space-y-2 list-disc pl-4 leading-relaxed">
+                            <li>Acesse <strong>"Fiscalização MTE"</strong> (`/admin/fiscalizacao`).</li>
+                            <li>Gere prévias e emita o arquivo oficial <strong>AEJ (Arquivo Eletrônico de Jornada)</strong> em formato texto padronizado com hash canônico SHA-256 e assinatura digital PAdES/CAdES.</li>
+                            <li>Gere o arquivo <strong>AFD (Arquivo Fonte de Dados)</strong> para auditorias fiscais do Ministério do Trabalho.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PERFIL 4: AUDITOR / FISCAL -->
+            <div x-show="selectedProfile === 'auditor'" class="space-y-6">
+                <div class="bg-emerald-50/60 border border-emerald-200/80 rounded-2xl p-5 flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center font-black shrink-0 shadow-xs">
+                        4
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-emerald-950">Perfil Auditor / Fiscal do Trabalho</h3>
+                        <p class="text-xs text-emerald-800">Ferramentas de auditoria e validação pública de autenticidade sem necessidade de login.</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">A</span>
+                            <h4 class="font-bold text-gray-900 text-sm">Validação Pública de Comprovantes (Sem Login)</h4>
+                        </div>
+                        <ul class="text-xs text-gray-600 space-y-2 list-disc pl-4 leading-relaxed">
+                            <li>Qualquer auditor fiscal ou colaborador pode acessar a rota pública <strong>`/verificar-comprovante`</strong> (link direto no rodapé e menu da página inicial).</li>
+                            <li>Digite o código de verificação no formato `PF-XXXX-XXXX-XXXX` ou o hash SHA-256.</li>
+                            <li>O sistema atesta publicamente a autenticidade da batida, data, horário preciso (NTP.br), NSR sequencial e integridade dos dados sem violar a LGPD.</li>
                         </ul>
                     </div>
 
-                    <!-- Card 10: Calendário Laboral — Feriados & Pontos Facultativos -->
-                    <div class="p-5 rounded-2xl border border-sky-200 bg-sky-50/40 space-y-3">
-                        <div class="flex items-center gap-3">
-                            <span class="w-8 h-8 rounded-xl bg-sky-700 text-white font-bold text-sm inline-flex items-center justify-center shadow-xs">10</span>
-                            <div class="flex items-center gap-2">
-                                <h3 class="font-bold text-gray-900 text-base">Calendário Laboral & Dias Especiais</h3>
-                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-200 text-sky-900">Fase 20.18</span>
-                            </div>
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">B</span>
+                            <h4 class="font-bold text-gray-900 text-sm">Conformidade Legal & Integridade Criptográfica</h4>
                         </div>
-                        <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">
-                            No menu <strong>"Calendário"</strong> (`/admin/calendar`):
-                        </p>
-                        <ul class="text-xs sm:text-sm text-gray-600 space-y-1.5 list-disc list-inside">
-                            <li><strong>Feriados vs. Pontos Facultativos:</strong> Feriados legais (Lei 9.093/1995) e pontos facultativos com regras personalizáveis pelo RH.</li>
-                            <li><strong>Escopo Territorial:</strong> Diferenciação estrita entre eventos Nacionais, Estaduais, Municipais e por Estabelecimento.</li>
-                            <li><strong>Eventos Parciais & Horas em Feriado:</strong> Suporte a meio período (Quarta de Cinzas) e classificação isolada de `holiday_minutes` sem criar horas extras automáticas.</li>
+                        <ul class="text-xs text-gray-600 space-y-2 list-disc pl-4 leading-relaxed">
+                            <li><strong>NSR Monotônico Inviolável:</strong> Cada batida possui um Número Sequencial de Registro estritamente crescente e imutável.</li>
+                            <li><strong>Trilha de Auditoria:</strong> Toda e qualquer edição ou tratamento fica registrado na tabela `audit_logs` com IP, autor, data e dados anteriores.</li>
+                            <li><strong>Layouts MTE 2026:</strong> Compatibilidade integral com as regras e leiautes exigidos pela fiscalização trabalhista federal.</li>
                         </ul>
                     </div>
+                </div>
+            </div>
 
+            <!-- GUIA ESPECIAL: PERMISSÕES DE CÂMERA & GPS -->
+            <div x-show="selectedProfile === 'permissoes'" class="space-y-6">
+                <div class="bg-amber-50/70 border border-amber-200 rounded-2xl p-5 flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center font-black shrink-0 shadow-xs">
+                        !
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-amber-950">Como Resolver: Câmera ou GPS Bloqueados no Navegador</h3>
+                        <p class="text-xs text-amber-800">Se você ou um colaborador clicou em "Não permitir" ou "Bloquear" sem querer, siga este passo a passo para reativar.</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    <!-- Google Chrome (Android / PC) -->
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded-lg bg-red-100 text-red-600 flex items-center justify-center font-bold text-xs">G</div>
+                            <h4 class="font-bold text-gray-900 text-sm">Google Chrome (Android / PC)</h4>
+                        </div>
+                        <ol class="text-xs text-gray-600 space-y-2 list-decimal pl-4 leading-relaxed">
+                            <li>Na tela de <em>Bater Ponto</em>, olhe para a <strong>barra de endereço (URL)</strong> no topo.</li>
+                            <li>Clique no ícone de <strong>Cadeado</strong> ou <strong>Ajustes de Site</strong> (à esquerda de <em>pontofacil...</em>).</li>
+                            <li>Localize as opções <strong>Câmera</strong> e <strong>Localização</strong>.</li>
+                            <li>Mude ambas para <strong>"Permitir"</strong> (ou toque em <em>"Redefinir permissões"</em>).</li>
+                            <li>Recarregue a página ou clique em <strong>"Escanear QR Code"</strong>. O navegador pedirá confirmação novamente.</li>
+                        </ol>
+                    </div>
+
+                    <!-- Safari (iPhone / iPad iOS) -->
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">S</div>
+                            <h4 class="font-bold text-gray-900 text-sm">Safari (iPhone & iPad)</h4>
+                        </div>
+                        <ol class="text-xs text-gray-600 space-y-2 list-decimal pl-4 leading-relaxed">
+                            <li>Na barra de endereço inferior do Safari, toque no botão <strong>aA</strong> ou no ícone de configurações.</li>
+                            <li>Selecione a opção <strong>"Ajustes do Site"</strong>.</li>
+                            <li>Altere os campos <strong>Câmera</strong> e <strong>Localização</strong> para <strong>"Permitir"</strong>.</li>
+                            <li>Se persistir bloqueado, vá em <em>Ajustes do iPhone &rarr; Safari &rarr; Câmera &rarr; Permitir</em> e <em>Ajustes &rarr; Privacidade &rarr; Serviços de Localização &rarr; Safari &rarr; Permitir Durante o Uso</em>.</li>
+                        </ol>
+                    </div>
+
+                    <!-- Microsoft Edge & Outros -->
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded-lg bg-teal-100 text-teal-600 flex items-center justify-center font-bold text-xs">E</div>
+                            <h4 class="font-bold text-gray-900 text-sm">Microsoft Edge & Outros</h4>
+                        </div>
+                        <ol class="text-xs text-gray-600 space-y-2 list-decimal pl-4 leading-relaxed">
+                            <li>Clique no ícone de <strong>Cadeado</strong> ao lado da URL na barra superior.</li>
+                            <li>Selecione <strong>"Permissões para este site"</strong>.</li>
+                            <li>Em <strong>Câmera</strong> e <strong>Localização</strong>, mude de "Bloquear" para <strong>"Permitir"</strong>.</li>
+                            <li>Feche e reabra a aba para aplicar as novas permissões.</li>
+                        </ol>
+                    </div>
                 </div>
             </div>
         </div>
