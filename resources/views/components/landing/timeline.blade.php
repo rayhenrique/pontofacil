@@ -25,7 +25,7 @@
 
             <div class="space-y-12">
                 
-                <!-- Versão Atual: v1.7.0 -->
+                <!-- Versão Atual: v1.8.0 -->
                 <div class="gsap-timeline-item relative pl-12 sm:pl-20">
                     <!-- Nó / Marcador com Destaque Pulsante -->
                     <div class="absolute left-2.5 sm:left-6.5 top-1.5 -translate-x-1/2 flex items-center justify-center">
@@ -40,10 +40,57 @@
                         <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
                             <div class="flex items-center gap-3">
                                 <span class="px-3 py-1 rounded-full bg-indigo-600 text-white font-black text-xs tracking-wider">
-                                    v1.7.0
+                                    v1.8.0
                                 </span>
                                 <span class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">
                                     Versão Atual (Ativa)
+                                </span>
+                            </div>
+                            <span class="text-xs font-semibold text-slate-600">Fundação REP-P & NSR Atômico</span>
+                        </div>
+
+                        <h3 class="text-xl font-bold text-slate-900 mb-2">
+                            Fundação Regulatória REP-P & Ledger Imutável de Marcações
+                        </h3>
+
+                        <p class="text-sm text-slate-600 mb-4 leading-relaxed">
+                            Implementação do modelo de domínio Company e Estabelecimentos (Matriz/Filiais) com sequenciador atômico de NSR sem concorrência, ledger imutável em ULID com hash SHA-256 encadeado e integração direta ao ponto.
+                        </p>
+
+                        <div class="grid sm:grid-cols-2 gap-3 text-xs text-slate-700">
+                            <div class="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                <span class="text-emerald-500 font-bold">✓</span>
+                                <span>Sequenciador de NSR atômico por estabelecimento (lock pessimista)</span>
+                            </div>
+                            <div class="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                <span class="text-emerald-500 font-bold">✓</span>
+                                <span>Ledger imutável punch_events com hash SHA-256 encadeado</span>
+                            </div>
+                            <div class="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                <span class="text-emerald-500 font-bold">✓</span>
+                                <span>Entidade Company e Estabelecimentos para instância dedicada</span>
+                            </div>
+                            <div class="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                <span class="text-emerald-500 font-bold">✓</span>
+                                <span>Exibição em tempo real do NSR formatado na batida</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Versão: v1.7.0 -->
+                <div class="gsap-timeline-item relative pl-12 sm:pl-20">
+                    <!-- Nó / Marcador -->
+                    <div class="absolute left-2.5 sm:left-6.5 top-1.5 -translate-x-1/2 flex items-center justify-center">
+                        <div class="w-4 h-4 rounded-full bg-indigo-600 border-4 border-white shadow-sm"></div>
+                    </div>
+
+                    <!-- Card de Versão -->
+                    <div class="bg-white/80 backdrop-blur-sm border border-slate-200/80 rounded-3xl p-6 sm:p-8 shadow-xs hover:shadow-md transition-shadow">
+                        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                            <div class="flex items-center gap-3">
+                                <span class="px-3 py-1 rounded-full bg-slate-800 text-white font-black text-xs tracking-wider">
+                                    v1.7.0
                                 </span>
                             </div>
                             <span class="text-xs font-semibold text-slate-600">Cadastro Funcional & PontoFácil 2.0</span>

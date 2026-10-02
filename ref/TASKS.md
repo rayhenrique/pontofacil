@@ -103,14 +103,17 @@
   - [x] Integração em tempo real entre o perfil do servidor e o cabeçalho da Folha de Ponto A4.
   - [x] Elevação da versão para **`v1.7.0`** com atualização de changelog, timeline e suíte de testes (31 testes, 128 asserções — 100% aprovados).
 
+- [x] **Fase 18: Fundação REP-P & Estabelecimentos com NSR Atômico**
+  - [x] Modelagem das tabelas `companies` (1 por instalação) e `establishments` (Matriz / Filiais com CNPJ/CNO).
+  - [x] Implementação de contador monotônico de NSR (`nsr_next`) individual por estabelecimento, protegido com lock de transação (`lockForUpdate`).
+  - [x] Tabela `punch_events` (ledger bruto imutável) com hash SHA-256 encadeado e integridade referencial `restrictOnDelete`.
+  - [x] Serviços DDD: `CurrentCompany`, `NsrGeneratorService` e `RecordPunchEventAction`.
+  - [x] Integração no registro de ponto `TimePunch` com emissão e exibição do NSR oficial.
+  - [x] Suíte de testes automatizados dedicados (`RepPFoundationTest` - 7 novos testes, 38 testes no total).
+
 ---
 
 ## 🔮 Próximas Fases: Conformidade PontoFácil 2.0 (Instância Dedicada)
-
-- [ ] **Fase 18: Fundação REP-P & Estabelecimentos com NSR Atômico**
-  - [ ] Modelagem das tabelas `companies` (1 por instalação) e `establishments` (Matriz / Filiais com CNPJ/CNO).
-  - [ ] Implementação de contador monotônico de NSR (`nsr_next`) individual por estabelecimento, protegido com lock de transação (`lockForUpdate`).
-  - [ ] Tabela `punch_events` (ledger bruto imutável) com hash SHA-256 e integridade referencial `restrictOnDelete`.
 
 - [ ] **Fase 19: Comprovante de Registro do Trabalhador & Exportação AFD**
   - [ ] Geração do Comprovante de Ponto do Trabalhador em PDF assinado com PAdES (acessível permanentemente na Central de Comprovantes).

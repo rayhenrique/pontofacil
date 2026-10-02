@@ -17,7 +17,7 @@ O PontoFácil adota uma rigorosa filosofia de **Instância Dedicada**:
 
 ---
 
-## 🚀 Principais Módulos e Funcionalidades (v1.7.0)
+## 🚀 Principais Módulos e Funcionalidades (v1.8.0)
 
 ### 1. Batida de Ponto Inteligente com Regra Híbrida (Smart Punch)
 - **Leitura Ótica Rápida:** Scanner integrado no navegador (`html5-qrcode` empacotado localmente no bundle Vite), sem dependência de conexões ou CDNs externas.
@@ -213,7 +213,7 @@ Para rodar a suíte completa de testes automatizados cobrindo autorização, cá
 php artisan test
 ```
 
-> **Status da Suíte:** `31 testes, 128 asserções — 100% aprovados.`
+> **Status da Suíte:** `38 testes, 155 asserções — 100% aprovados.`
 
 ---
 

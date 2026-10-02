@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Sector extends Model
 {
     protected $fillable = [
+        'establishment_id',
         'name',
         'description',
         'manager_id',
@@ -35,6 +36,11 @@ class Sector extends Model
     public function manager(): BelongsTo
     {
         return $this->belongsTo(User::class, 'manager_id');
+    }
+
+    public function establishment(): BelongsTo
+    {
+        return $this->belongsTo(Establishment::class);
     }
 
     public function hasCustomLocation(): bool

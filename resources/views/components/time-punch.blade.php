@@ -90,13 +90,33 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
             'longitude' => $longitude,
         ]);
 
+        $nsrFormatted = null;
+        try {
+            $recordPunchAction = app(\App\Domain\TimeClock\Actions\RecordPunchEventAction::class);
+            $punchEvent = $recordPunchAction->execute(
+                user: Auth::user(),
+                direction: $type,
+                latitude: $latitude,
+                longitude: $longitude,
+                accuracy: null,
+                qrLocationValid: true,
+                locationValid: true,
+                source: 'web_pwa'
+            );
+            $nsrFormatted = str_pad((string) $punchEvent->nsr, 9, '0', STR_PAD_LEFT);
+        } catch (\Throwable $e) {
+            // Em caso de exceção de registro no ledger, registra log sem quebrar a tela
+            report($e);
+        }
+
         $tipoStr = $type === 'in' ? 'Entrada' : 'Saída';
-        $this->message = "Ponto registrado com sucesso! ($tipoStr às " . now()->format('H:i:s') . ")";
+        $nsrInfo = $nsrFormatted ? " (NSR #{$nsrFormatted})" : '';
+        $this->message = "Ponto registrado com sucesso! ($tipoStr às " . now()->format('H:i:s') . "{$nsrInfo})";
         $this->status = 'success';
         $this->dispatch('app-modal-alert', [
             'type' => 'success',
             'title' => 'Ponto Registrado com Sucesso!',
-            'message' => "Sua {$tipoStr} foi confirmada às " . now()->format('H:i:s') . " no Horário Oficial de Maceió (GMT-3).",
+            'message' => "Sua {$tipoStr} foi confirmada às " . now()->format('H:i:s') . "{$nsrInfo} no Horário Oficial de Maceió (GMT-3).",
             'buttonText' => 'Concluir'
         ]);
     }

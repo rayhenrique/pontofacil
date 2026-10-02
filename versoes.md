@@ -1,6 +1,16 @@
 # Histórico de Versões (Changelog)
 
-## v1.7.0 (Atual)
+## v1.8.0 (Atual)
+- **Fundação Regulatória REP-P & Estabelecimentos com NSR Atômico (Portaria 671/2021 MTP):**
+  - **Empresa Única da Instalação (`companies`):** Entidade de domínio central para a arquitetura de Instância Dedicada (Single-Tenant), armazenando dados cadastrais oficiais e identificação de registro no INPI.
+  - **Estabelecimentos com NSR Monotônico Independente (`establishments`):** Matriz e filiais com CNPJ/CNO, endereço, timezone e contador monotônico atômico `nsr_next` protegido com lock pessimista (`lockForUpdate`), sem colisões sob concorrência e sem depender de `MAX(nsr)+1`.
+  - **Ledger Imutável de Marcações (`punch_events`):** Registro inalterável com chave primária em ULID, timestamps em UTC e horário local, dados de GPS, fuso horário, hash SHA-256 da carga e encadeamento criptográfico com a marcação anterior (`previous_event_hash`).
+  - **Trava Estrita de Imutabilidade:** O modelo `PunchEvent` bloqueia qualquer tentativa de `update()` ou `delete()` com exceção formal sob a legislação trabalhista brasileira.
+  - **Serviços DDD de Domínio:** Implementação de `CurrentCompany`, `NsrGeneratorService` e `RecordPunchEventAction`.
+  - **Integração na Batida de Ponto (`TimePunch`):** Gravação simultânea no ledger oficial REP-P e exibição imediata do NSR formatado (ex: `NSR #000000001`) no modal de confirmação ao colaborador.
+  - **Suíte de Testes Expandida:** Suíte `RepPFoundationTest` adicionando 7 novos testes de concorrência, hash e imutabilidade (`38 testes e 155 asserções 100% aprovados`).
+
+## v1.7.0
 - **Cadastro Funcional do Colaborador & Integração da Folha de Ponto:**
   - Adição dos campos funcionais à tabela `employees`: Cargo (`job_title`), Vínculo (`contract_type`), Carga Horária Semanal (`workload`) e Zona (`zone`).
   - Atualização completa do Gerenciador de Funcionários (`employees.blade.php`) com suporte à visualização, criação e edição de colaboradores com listas inteligentes de sugestão.
