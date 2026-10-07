@@ -2,6 +2,7 @@
 
 namespace App\Domain\Compliance\AEJ;
 
+use App\Domain\Compliance\Fiscal\Services\FiscalHashService;
 use App\Domain\PTRP\Actions\CalculateDailyJourneyAction;
 use App\Models\ClosedPeriod;
 use App\Models\Employee;
@@ -10,11 +11,17 @@ use App\Models\TimeBankAccount;
 use App\Models\TimeBankPolicy;
 use App\Models\WorkSchedule;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Log;
 
 class AejGenerator_2026_07_31 implements AejGeneratorInterface
 {
-    public const LAYOUT_VERSION = '0002';
+    public const LAYOUT_VERSION = '001';
+
+    protected FiscalHashService $fiscalHashService;
+
+    public function __construct(?FiscalHashService $fiscalHashService = null)
+    {
+        $this->fiscalHashService = $fiscalHashService ?: new FiscalHashService;
+    }
 
     public function generate(
         Establishment $establishment,
@@ -112,66 +119,71 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
         }
 
         $lines = [];
-        $currentNsr = 0;
 
-        // 1. Cabeçalho (Tipo 1) - 236 caracteres
-        $headerNsr = '000000000';
-        $headerTipo = '1';
-        $idType = ($establishment->identifier_type === 'cpf') ? '2' : '1';
-        $idNumber = str_pad(preg_replace('/\D/', '', $establishment->identifier_number), 14, '0', STR_PAD_LEFT);
-        $caepfCno = str_pad('', 12, '0', STR_PAD_LEFT);
-        $legalName = mb_str_pad(mb_substr($this->sanitize($company->legal_name), 0, 150), 150, ' ', STR_PAD_RIGHT);
+        $count01 = 0;
+        $count02 = 0;
+        $count03 = 0;
+        $count04 = 0;
+        $count05 = 0;
+        $count06 = 0;
+        $count07 = 0;
+        $count08 = 0;
 
-        $softwareIdentifier = $isPreview
-            ? 'PREVIA-NAO-FECHADA'
-            : $company->getInpiFiscalCode();
-        $inpiRegistration = mb_str_pad(mb_substr($this->sanitize($softwareIdentifier), 0, 17), 17, ' ', STR_PAD_RIGHT);
+        // 1. Registro 01: Cabeçalho
+        $count01++;
+        $tpIdtEmpregador = ($establishment->identifier_type === 'cpf') ? '2' : '1';
+        $idtEmpregador = preg_replace('/\D/', '', $establishment->identifier_number);
+        $caepf = '';
+        $cno = '';
+        $razaoOuNome = $this->sanitize($company->legal_name);
+        $dataInicialAej = $startDate->format('Y-m-d');
+        $dataFinalAej = $endDate->format('Y-m-d');
+        $dataHoraGerAej = $this->fiscalHashService->formatDateTimeIso($genTime);
+        $versaoAej = self::LAYOUT_VERSION;
 
-        $dtInicio = $startDate->format('dmY');
-        $dtFim = $endDate->format('dmY');
-        $dtGeracao = $genTime->format('dmY');
-        $hrGeracao = $genTime->format('Hi');
-        $versao = self::LAYOUT_VERSION;
+        $lines[] = implode('|', ['01', $tpIdtEmpregador, $idtEmpregador, $caepf, $cno, $razaoOuNome, $dataInicialAej, $dataFinalAej, $dataHoraGerAej, $versaoAej]);
 
-        $lines[] = $headerNsr.$headerTipo.$idType.$idNumber.$caepfCno.$legalName.$inpiRegistration.$dtInicio.$dtFim.$dtGeracao.$hrGeracao.$versao;
+        // 2. Registro 02: REPs Utilizados
+        $count02++;
+        $idRepAej = '1';
+        $tpRep = '3'; // REP-P
+        $nrRep = $isPreview ? 'PREVIA-NAO-FECHADA' : trim($company->getInpiFiscalCode());
+        $lines[] = implode('|', ['02', $idRepAej, $tpRep, $nrRep]);
 
-        // 2. Relação de Empregados (Tipo 2) - 249 caracteres
-        $countTipo2 = 0;
+        // 3. Registro 03: Vínculos (Empregados)
+        $vinculoMap = [];
+        $vinculoCounter = 0;
         foreach ($employeeDataList as $item) {
-            $countTipo2++;
-            $currentNsr++;
+            $vinculoCounter++;
+            $count03++;
+            $empId = $item['employee']['id'] ?? $vinculoCounter;
+            $vinculoMap[$empId] = (string) $vinculoCounter;
 
-            $nsr = str_pad((string) $currentNsr, 9, '0', STR_PAD_LEFT);
-            $tipo = '2';
-            $cpfRaw = preg_replace('/\D/', '', $item['employee']['cpf'] ?? '');
-            $cpf = str_pad(substr($cpfRaw, 0, 11), 11, '0', STR_PAD_LEFT);
-            $nome = mb_str_pad(mb_substr($this->sanitize($item['employee']['name'] ?? ''), 0, 150), 150, ' ', STR_PAD_RIGHT);
-            $matricula = mb_str_pad(mb_substr($this->sanitize((string) ($item['employee']['registration_number'] ?? '')), 0, 20), 20, ' ', STR_PAD_RIGHT);
-            $dtAdmissao = '00000000';
-            $cargo = mb_str_pad(mb_substr($this->sanitize($item['employee']['job_title'] ?? ''), 0, 50), 50, ' ', STR_PAD_RIGHT);
+            $cpf = str_pad(substr(preg_replace('/\D/', '', $item['employee']['cpf'] ?? ''), 0, 11), 11, '0', STR_PAD_LEFT);
+            $nomeEmp = $this->sanitize($item['employee']['name'] ?? '');
 
-            $lines[] = $nsr.$tipo.$cpf.$nome.$matricula.$dtAdmissao.$cargo;
+            $lines[] = implode('|', ['03', (string) $vinculoCounter, $cpf, $nomeEmp]);
         }
 
-        // 3. Horários e Escalas (Tipo 3) - 70 caracteres
-        $countTipo3 = 0;
+        // 4. Registro 04: Horários Contratuais
         $processedSchedules = [];
+        $scheduleCounter = 0;
         foreach ($employeeDataList as $item) {
             $sched = $item['schedule'];
-            $schedId = $sched['id'] ?? 1;
+            $schedId = (string) ($sched['id'] ?? 1);
             if (isset($processedSchedules[$schedId])) {
                 continue;
             }
-            $processedSchedules[$schedId] = true;
-            $countTipo3++;
-            $currentNsr++;
+            $scheduleCounter++;
+            $count04++;
+            $processedSchedules[$schedId] = (string) $scheduleCounter;
 
-            $nsr = str_pad((string) $currentNsr, 9, '0', STR_PAD_LEFT);
-            $tipo = '3';
-            $codigo = str_pad(substr((string) $schedId, 0, 4), 4, '0', STR_PAD_LEFT);
-            $descricao = mb_str_pad(mb_substr($this->sanitize($sched['name'] ?? 'Padrao'), 0, 40), 40, ' ', STR_PAD_RIGHT);
+            $weeklyHours = (int) ($sched['weekly_hours'] ?? 40);
+            $durJornada = (int) ($weeklyHours * 60 / 5);
+            if ($durJornada <= 0) {
+                $durJornada = 480;
+            }
 
-            // Obter períodos do primeiro dia útil configurado
             $e1 = '0800';
             $s1 = '1200';
             $e2 = '1300';
@@ -179,148 +191,109 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
 
             $daysConfig = $sched['days_config'] ?? [];
             if (! empty($daysConfig[1]['periods'][0])) {
-                $e1 = str_replace(':', '', $daysConfig[1]['periods'][0]['start'] ?? '0800');
-                $s1 = str_replace(':', '', $daysConfig[1]['periods'][0]['end'] ?? '1200');
+                $e1 = str_pad(str_replace(':', '', $daysConfig[1]['periods'][0]['start'] ?? '0800'), 4, '0', STR_PAD_RIGHT);
+                $s1 = str_pad(str_replace(':', '', $daysConfig[1]['periods'][0]['end'] ?? '1200'), 4, '0', STR_PAD_RIGHT);
             }
             if (! empty($daysConfig[1]['periods'][1])) {
-                $e2 = str_replace(':', '', $daysConfig[1]['periods'][1]['start'] ?? '1300');
-                $s2 = str_replace(':', '', $daysConfig[1]['periods'][1]['end'] ?? '1700');
+                $e2 = str_pad(str_replace(':', '', $daysConfig[1]['periods'][1]['start'] ?? '1300'), 4, '0', STR_PAD_RIGHT);
+                $s2 = str_pad(str_replace(':', '', $daysConfig[1]['periods'][1]['end'] ?? '1700'), 4, '0', STR_PAD_RIGHT);
             }
 
-            $e1 = str_pad(substr($e1, 0, 4), 4, '0', STR_PAD_RIGHT);
-            $s1 = str_pad(substr($s1, 0, 4), 4, '0', STR_PAD_RIGHT);
-            $e2 = str_pad(substr($e2, 0, 4), 4, '0', STR_PAD_RIGHT);
-            $s2 = str_pad(substr($s2, 0, 4), 4, '0', STR_PAD_RIGHT);
-
-            $lines[] = $nsr.$tipo.$codigo.$descricao.$e1.$s1.$e2.$s2;
+            $lines[] = implode('|', ['04', (string) $scheduleCounter, (string) $durJornada, $e1, $s1, $e2, $s2]);
         }
 
-        // 4. Marcações e Tratamentos (Tipo 4) - 48 caracteres
-        $countTipo4 = 0;
+        // 5. Registro 05: Marcações Tratadas
         foreach ($employeeDataList as $item) {
-            $cpfRaw = preg_replace('/\D/', '', $item['employee']['cpf'] ?? '');
-            $cpf = str_pad(substr($cpfRaw, 0, 11), 11, '0', STR_PAD_LEFT);
+            $empId = $item['employee']['id'] ?? 1;
+            $idtVinculoAej = $vinculoMap[$empId] ?? '1';
 
             foreach ($item['journeys'] as $j) {
-                $dateFormatted = Carbon::parse($j['date'])->format('dmY');
                 $effectivePunches = $j['effective_punches'] ?? [];
-
                 foreach ($effectivePunches as $pIdx => $punch) {
-                    $countTipo4++;
-                    $currentNsr++;
+                    $count05++;
+                    $ts = isset($punch['timestamp'])
+                        ? Carbon::parse($punch['timestamp'])
+                        : Carbon::parse($j['date'].' '.($punch['time'] ?? '00:00:00'));
 
-                    $nsr = str_pad((string) $currentNsr, 9, '0', STR_PAD_LEFT);
-                    $tipo = '4';
-                    $timeFormatted = str_pad(str_replace(':', '', substr($punch['time'] ?? '00:00', 0, 5)), 4, '0', STR_PAD_RIGHT);
+                    $tsLocal = $ts->copy()->setTimezone($establishment->timezone ?: 'America/Maceio');
+                    $dataHoraMarc = $this->fiscalHashService->formatDateTimeIso($tsLocal);
+                    $numNsr = (string) ($punch['nsr'] ?? ($pIdx + 1));
+                    $repId = '1';
+                    $tpMarc = ($pIdx % 2 === 0) ? 'E' : 'S';
+                    $tipoFonte = ($punch['source'] ?? '') === 'ptrp_manual' ? '2' : '1';
+                    $motivo = ($tipoFonte === '2') ? ($this->sanitize($punch['reason'] ?? 'Inclusao manual de ponto')) : '';
 
-                    // NSR do REP se original, ou zeros se inclusão manual
-                    $repNsr = '000000000';
-                    $direction = ($pIdx % 2 === 0) ? 'E' : 'S';
-                    $origin = ($punch['source'] ?? '') === 'manual' ? 'I' : 'O';
-                    $reasonCode = '0000';
-
-                    $lines[] = $nsr.$tipo.$dateFormatted.$timeFormatted.$cpf.$repNsr.$direction.$origin.$reasonCode;
+                    $lines[] = implode('|', ['05', $idtVinculoAej, $dataHoraMarc, $numNsr, $repId, $tpMarc, $tipoFonte, $motivo]);
                 }
             }
         }
 
-        // 5. Apuração Mensal por Trabalhador (Tipo 5) - 41 caracteres
-        $countTipo5 = 0;
+        // 6. Registro 06: Matrícula eSocial
         foreach ($employeeDataList as $item) {
-            $countTipo5++;
-            $currentNsr++;
-
-            $nsr = str_pad((string) $currentNsr, 9, '0', STR_PAD_LEFT);
-            $tipo = '5';
-            $cpfRaw = preg_replace('/\D/', '', $item['employee']['cpf'] ?? '');
-            $cpf = str_pad(substr($cpfRaw, 0, 11), 11, '0', STR_PAD_LEFT);
-
-            $totalWorked = 0;
-            $totalOvertime = 0;
-            $totalLate = 0;
-
-            foreach ($item['journeys'] as $j) {
-                $totalWorked += (int) ($j['worked_minutes'] ?? 0);
-                $totalOvertime += (int) ($j['overtime_minutes'] ?? 0);
-                $totalLate += (int) ($j['late_minutes'] ?? 0) + (int) ($j['absence_minutes'] ?? 0);
+            $empId = $item['employee']['id'] ?? 1;
+            $idtVinculoAej = $vinculoMap[$empId] ?? '1';
+            $regNum = trim((string) ($item['employee']['registration_number'] ?? ''));
+            if ($regNum !== '') {
+                $count06++;
+                $lines[] = implode('|', ['06', $idtVinculoAej, $this->sanitize($regNum)]);
             }
-
-            $hn = $this->minutesToHhmm($totalWorked);
-            $he50 = $this->minutesToHhmm($totalOvertime);
-            $he100 = '0000';
-            $adNoturno = '0000';
-            $faltasAtrasos = $this->minutesToHhmm($totalLate);
-
-            $lines[] = $nsr.$tipo.$cpf.$hn.$he50.$he100.$adNoturno.$faltasAtrasos;
         }
 
-        // 6. Movimentação do Banco de Horas (Tipo 6) - 47 caracteres
-        $countTipo6 = 0;
+        // 7. Registro 07: Ausências e Banco de Horas
         foreach ($employeeDataList as $item) {
-            $countTipo6++;
-            $currentNsr++;
+            $empId = $item['employee']['id'] ?? 1;
+            $idtVinculoAej = $vinculoMap[$empId] ?? '1';
 
-            $nsr = str_pad((string) $currentNsr, 9, '0', STR_PAD_LEFT);
-            $tipo = '6';
-            $cpfRaw = preg_replace('/\D/', '', $item['employee']['cpf'] ?? '');
-            $cpf = str_pad(substr($cpfRaw, 0, 11), 11, '0', STR_PAD_LEFT);
-
-            $tb = $item['time_bank'] ?? [];
-            $balBefore = (int) ($tb['balance_before'] ?? 0);
-            $balFinal = (int) ($tb['final_balance'] ?? 0);
-
-            // Calcular créditos e débitos acumulados das jornadas do mês
-            $credits = 0;
-            $debits = 0;
+            // Ausências registradas na competência
             foreach ($item['journeys'] as $j) {
-                $credits += (int) ($j['bank_credit_minutes'] ?? 0);
-                $debits += (int) ($j['bank_debit_minutes'] ?? 0);
+                $absenceMinutes = (int) ($j['absence_minutes'] ?? 0);
+                if ($absenceMinutes > 0) {
+                    $count07++;
+                    $dataAusencia = Carbon::parse($j['date'])->format('Y-m-d');
+                    $lines[] = implode('|', ['07', $idtVinculoAej, '2', $dataAusencia, (string) $absenceMinutes]);
+                }
             }
 
-            $signBefore = $balBefore < 0 ? '-' : '+';
-            $minsBefore = str_pad((string) abs($balBefore), 6, '0', STR_PAD_LEFT);
-            $minsCredits = str_pad((string) abs($credits), 6, '0', STR_PAD_LEFT);
-            $minsDebits = str_pad((string) abs($debits), 6, '0', STR_PAD_LEFT);
-            $signFinal = $balFinal < 0 ? '-' : '+';
-            $minsFinal = str_pad((string) abs($balFinal), 6, '0', STR_PAD_LEFT);
-
-            $lines[] = $nsr.$tipo.$cpf.$signBefore.$minsBefore.$minsCredits.$minsDebits.$signFinal.$minsFinal;
+            // Movimentação / Saldo do Banco de Horas
+            $timeBank = $item['time_bank'] ?? [];
+            if (($timeBank['policy_mode'] ?? 'DISABLED') !== 'DISABLED') {
+                $count07++;
+                $closingDate = $endDate->format('Y-m-d');
+                $finalBalance = (int) ($timeBank['final_balance'] ?? 0);
+                $lines[] = implode('|', ['07', $idtVinculoAej, '3', $closingDate, (string) $finalBalance]);
+            }
         }
 
-        // 7. Trailer (Tipo 9) - 72 caracteres
-        $trailerNsr = '999999999';
-        $trailerTipo = '9';
-        $qtd2 = str_pad((string) $countTipo2, 9, '0', STR_PAD_LEFT);
-        $qtd3 = str_pad((string) $countTipo3, 9, '0', STR_PAD_LEFT);
-        $qtd4 = str_pad((string) $countTipo4, 9, '0', STR_PAD_LEFT);
-        $qtd5 = str_pad((string) $countTipo5, 9, '0', STR_PAD_LEFT);
-        $qtd6 = str_pad((string) $countTipo6, 9, '0', STR_PAD_LEFT);
-        $totalLinhas = str_pad((string) (count($lines) + 1), 9, '0', STR_PAD_LEFT);
+        // 8. Registro 08: Identificação do PTRP / Desenvolvedor
+        $count08++;
+        $tpIdtDesenv = '1';
+        $idtDesenv = preg_replace('/\D/', '', $company->cnpj ?: $establishment->identifier_number);
+        $nomeDesenv = $this->sanitize($company->legal_name);
+        $nomeSoftware = $this->sanitize($company->rep_p_software_name ?: 'PontoFacil');
+        $versaoSoftware = $this->sanitize($company->rep_p_software_version ?: '2.0.0');
 
-        $trailerBase = $trailerNsr.$trailerTipo.$qtd2.$qtd3.$qtd4.$qtd5.$qtd6.$totalLinhas;
+        $lines[] = implode('|', ['08', $tpIdtDesenv, $idtDesenv, $nomeDesenv, $nomeSoftware, $versaoSoftware]);
 
-        // Cálculo do Checksum CRC-32
-        $contentBeforeCrc = implode("\r\n", $lines)."\r\n".$trailerBase;
-        $crcChecksum = sprintf('%08X', crc32($contentBeforeCrc));
-
-        $lines[] = $trailerBase.$crcChecksum;
+        // 9. Registro 99: Trailer com Totalizadores por Tipo
+        $lines[] = implode('|', [
+            '99',
+            (string) $count01,
+            (string) $count02,
+            (string) $count03,
+            (string) $count04,
+            (string) $count05,
+            (string) $count06,
+            (string) $count07,
+            (string) $count08,
+        ]);
 
         $finalContent = implode("\r\n", $lines)."\r\n";
 
-        $cnpjQuery = preg_replace('/\D/', '', $establishment->identifier_number);
+        $cnpjClean = preg_replace('/\D/', '', $establishment->identifier_number);
         $prefix = $isPreview ? 'AEJ_PREVIA' : 'AEJ';
-        $filename = sprintf('%s_%s_%04d%02d.txt', $prefix, $cnpjQuery, $year, $month);
+        $filename = sprintf('%s_%s_%04d%02d.txt', $prefix, $cnpjClean, $year, $month);
 
-        Log::info('aej.generated', [
-            'establishment_id' => $establishment->id,
-            'year' => $year,
-            'month' => $month,
-            'is_preview' => $isPreview,
-            'total_records' => count($lines) - 2,
-            'crc32' => $crcChecksum,
-            'snapshot_hash' => $closedPeriod?->snapshot_hash,
-            'filename' => $filename,
-        ]);
+        $totalRecords = $count01 + $count02 + $count03 + $count04 + $count05 + $count06 + $count07 + $count08 + 1;
 
         return new AejExportResult(
             content: $finalContent,
@@ -329,30 +302,22 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
             closedPeriod: $closedPeriod,
             startDate: $startDate,
             endDate: $endDate,
-            totalRecords: count($lines) - 2,
-            crcChecksum: $crcChecksum,
+            totalRecords: $totalRecords,
+            crcChecksum: '',
             isPreview: $isPreview,
-            snapshotHash: $closedPeriod?->snapshot_hash,
-            signatureStatus: 'AEJ GERADO — NÃO ASSINADO DIGITALMENTE (MODO DE DESENVOLVIMENTO)'
+            snapshotHash: $closedPeriod?->snapshot_hash
         );
     }
 
-    protected function sanitize(?string $text): string
+    protected function sanitize(?string $str): string
     {
-        if ($text === null) {
+        if ($str === null) {
             return '';
         }
-        $unaccented = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $text);
 
-        return preg_replace('/[^\x20-\x7E]/', '', $unaccented ?: $text);
-    }
+        $str = str_replace(["\r", "\n", '|'], ['', '', ' '], $str);
+        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $str);
 
-    protected function minutesToHhmm(int $minutes): string
-    {
-        $abs = abs($minutes);
-        $hours = intdiv($abs, 60);
-        $rem = $abs % 60;
-
-        return sprintf('%02d%02d', min($hours, 99), $rem);
+        return trim($ascii !== false ? $ascii : $str);
     }
 }

@@ -97,15 +97,32 @@ class RecordPunchEventAction
             $nowLocal = Carbon::now($tz);
             $utcOffset = $nowLocal->format('P'); // ex: "-03:00"
 
-            // 4. Cálculo do Hash Fiscal Oficial MTE (Portaria 671/2021)
-            $fiscalHash = $this->fiscalHashService->calculatePunchFiscalHash(
+            // 4. Busca o hash fiscal da batida (Tipo 7) imediatamente anterior para encadeamento fiscal oficial
+            $previousPunchArp = ArpEvent::where('establishment_id', $est->id)
+                ->where('event_type', ArpEventType::Punch)
+                ->orderBy('nsr', 'desc')
+                ->first();
+            $previousTipo7FiscalHash = $previousPunchArp?->fiscal_hash;
+
+            $collectorType = match ($source) {
+                'mobile_app', 'mobile' => '01',
+                'desktop' => '03',
+                'device', 'hardware' => '04',
+                default => '02',
+            };
+
+            // 5. Cálculo do Hash Fiscal Oficial MTE Tipo 7 (Portaria 671/2021)
+            $fiscalHash = $this->fiscalHashService->calculateTipo7FiscalHash(
                 nsr: $nsr,
                 occurredAtLocal: $nowLocal,
-                utcOffset: $utcOffset,
-                cpf: $employee?->cpf
+                recordedAtLocal: $nowLocal,
+                cpf: $employee?->cpf,
+                collectorType: $collectorType,
+                punchType: '0',
+                previousTipo7FiscalHash: $previousTipo7FiscalHash
             );
 
-            // 5. Cálculo do Hash Interno de Auditoria Encadeado (PontoFácil)
+            // 6. Cálculo do Hash Interno de Auditoria Encadeado (PontoFácil)
             $auditChainHash = $this->auditChainHashService->calculateAuditHash(
                 establishmentId: $est->id,
                 userId: $user->id,
@@ -117,7 +134,7 @@ class RecordPunchEventAction
 
             $punchId = (string) Str::ulid();
 
-            // 6. Registro no Ledger Fiscal Central da ARP (Armazenamento de Registro de Ponto)
+            // 7. Registro no Ledger Fiscal Central da ARP (Armazenamento de Registro de Ponto)
             ArpEvent::create([
                 'id' => (string) Str::ulid(),
                 'establishment_id' => $est->id,
@@ -135,7 +152,8 @@ class RecordPunchEventAction
                 'payload' => [
                     'direction' => $direction,
                     'source' => $source ?? 'web_pwa',
-                    'collector_type' => 'browser',
+                    'collector_type' => $collectorType,
+                    'is_offline' => false,
                     'latitude' => $latitude,
                     'longitude' => $longitude,
                     'location_accuracy' => $accuracy,

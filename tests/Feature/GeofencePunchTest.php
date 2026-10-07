@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Domain\Compliance\ARP\Enums\ArpEventType;
 use App\Enums\UserRole;
 use App\Models\ArpEvent;
 use App\Models\Employee;
@@ -80,7 +81,9 @@ class GeofencePunchTest extends TestCase
         $this->assertSame('in', $entry->type);
 
         // Verifica que foi registrado no ledger central ARP
-        $arp = ArpEvent::where('user_id', $this->user->id)->first();
+        $arp = ArpEvent::where('user_id', $this->user->id)
+            ->where('event_type', ArpEventType::Punch)
+            ->first();
         $this->assertNotNull($arp);
         $this->assertSame($punch->nsr, $arp->nsr);
     }
@@ -109,8 +112,10 @@ class GeofencePunchTest extends TestCase
         // Projeção TimeEntry deve existir
         $this->assertEquals(1, TimeEntry::where('user_id', $this->user->id)->count());
 
-        // Registro fiscal ARP deve existir
-        $this->assertEquals(1, ArpEvent::where('user_id', $this->user->id)->count());
+        // Registro fiscal ARP da batida deve existir
+        $this->assertEquals(1, ArpEvent::where('user_id', $this->user->id)
+            ->where('event_type', ArpEventType::Punch)
+            ->count());
     }
 
     public function test_punch_without_gps_is_recorded_successfully_as_evidence_fallback(): void

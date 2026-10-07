@@ -111,6 +111,7 @@ class CalculateDailyJourneyAction
 
             $effectivePunches[] = [
                 'id' => $punch->id,
+                'nsr' => $punch->nsr,
                 'time' => $punch->occurred_at_local->format('H:i'),
                 'timestamp' => $punch->occurred_at_local,
                 'type' => $punch->direction ?? 'punch',
@@ -122,10 +123,12 @@ class CalculateDailyJourneyAction
         foreach ($approvedTreatments->where('type', TreatmentEventType::ManualPunchAdded) as $manual) {
             $effectivePunches[] = [
                 'id' => $manual->id,
+                'nsr' => 0,
                 'time' => $manual->effective_at->format('H:i'),
                 'timestamp' => $manual->effective_at,
                 'type' => 'manual',
                 'source' => 'ptrp_manual',
+                'reason' => $manual->reason_text,
             ];
             $treatmentNotes[] = sprintf('Batida manual inserida às %s (%s).', $manual->effective_at->format('H:i'), $manual->reason_text);
         }

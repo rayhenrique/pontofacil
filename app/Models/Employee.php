@@ -2,7 +2,10 @@
 
 namespace App\Models;
 
+use App\Domain\Company\Services\CurrentCompany;
+use App\Domain\Compliance\ARP\Actions\RecordArpEventAction;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 
 class Employee extends Model
 {
@@ -42,5 +45,27 @@ class Employee extends Model
     public function treatmentEvents()
     {
         return $this->hasMany(TreatmentEvent::class);
+    }
+
+    /**
+     * Inativa / desliga fiscalmente o trabalhador, gerando o evento de mutação tipo 'E' na ARP.
+     */
+    public function inactivate(?string $reason = null): void
+    {
+        $establishment = $this->sector?->establishment ?? CurrentCompany::defaultEstablishment() ?? Establishment::first();
+        if ($establishment) {
+            app(RecordArpEventAction::class)->recordWorkerMutation(
+                establishment: $establishment,
+                employee: $this,
+                mutationType: 'E',
+                details: [
+                    'cpf' => $this->cpf,
+                    'name' => $this->user?->name ?? 'Colaborador',
+                    'registration_number' => $this->registration_number,
+                    'reason' => $reason ?? 'Inativação/desligamento do trabalhador',
+                ],
+                actor: Auth::user()
+            );
+        }
     }
 }

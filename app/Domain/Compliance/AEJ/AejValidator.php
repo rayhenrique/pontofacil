@@ -2,12 +2,11 @@
 
 namespace App\Domain\Compliance\AEJ;
 
-use Illuminate\Support\Facades\Log;
-
 class AejValidator
 {
     /**
-     * Valida formal e estruturalmente o conteúdo de um arquivo AEJ segundo a Portaria 671 MTE.
+     * Valida formal e estruturalmente o conteúdo de um arquivo AEJ segundo o leiaute oficial
+     * do Anexo VI da Portaria 671/2021 MTP (formato delimitado por pipe '|').
      *
      * @param  string  $content  Conteúdo bruto do arquivo AEJ
      * @return array{is_valid: bool, errors: array<string>, total_records: int}
@@ -25,7 +24,7 @@ class AejValidator
         if (count($rawLines) < 2) {
             return [
                 'is_valid' => false,
-                'errors' => ['O arquivo AEJ deve conter no mínimo Cabeçalho (Tipo 1) e Trailer (Tipo 9).'],
+                'errors' => ['O arquivo AEJ deve conter no mínimo Cabeçalho (Tipo 01) e Trailer (Tipo 99).'],
                 'total_records' => 0,
             ];
         }
@@ -34,246 +33,252 @@ class AejValidator
         $trailer = end($rawLines);
         $bodyLines = array_slice($rawLines, 1, -1);
 
-        // 1. Validação do Cabeçalho (Tipo 1) - 236 caracteres
-        if (strlen($header) !== 236) {
-            $errors[] = sprintf('Cabeçalho (Tipo 1) possui %d caracteres; o leiaute MTE exige exatamente 236.', strlen($header));
+        // Contadores reais encontrados no arquivo
+        $actualCounts = [
+            '01' => 0,
+            '02' => 0,
+            '03' => 0,
+            '04' => 0,
+            '05' => 0,
+            '06' => 0,
+            '07' => 0,
+            '08' => 0,
+        ];
+
+        // 1. Validação do Cabeçalho (Tipo 01)
+        $headerParts = explode('|', $header);
+        if ($headerParts[0] !== '01') {
+            $errors[] = "A primeira linha do arquivo deve ser o Cabeçalho (Tipo 01). Encontrado: '{$headerParts[0]}'.";
+        } elseif (count($headerParts) < 10) {
+            $errors[] = sprintf('Cabeçalho (Tipo 01) possui %d campos; o leiaute MTE exige 10 campos.', count($headerParts));
         } else {
-            if (substr($header, 0, 9) !== '000000000') {
-                $errors[] = 'NSR do Cabeçalho deve ser obrigatoriamente 000000000.';
-            }
-            if ($header[9] !== '1') {
-                $errors[] = 'Tipo de registro do cabeçalho deve ser 1.';
-            }
-            if (! in_array($header[10], ['1', '2'])) {
-                $errors[] = 'Identificador do empregador deve ser 1 (CNPJ) ou 2 (CPF).';
-            }
-            if (! ctype_digit(substr($header, 11, 14))) {
-                $errors[] = 'CNPJ/CPF do empregador deve conter apenas dígitos numéricos.';
-            }
+            $actualCounts['01']++;
+            $tpIdt = $headerParts[1];
+            $idtEmp = $headerParts[2];
+            $razao = $headerParts[5];
+            $dtInicio = $headerParts[6];
+            $dtFim = $headerParts[7];
+            $dtHoraGer = $headerParts[8];
+            $versao = $headerParts[9];
 
-            $dtInicio = substr($header, 204, 8);
-            $dtFim = substr($header, 212, 8);
-            $dtGeracao = substr($header, 220, 8);
-            $hrGeracao = substr($header, 228, 4);
-
-            if (! $this->isValidDate($dtInicio)) {
-                $errors[] = "Data inicial no cabeçalho inválida: {$dtInicio}";
+            if (! in_array($tpIdt, ['1', '2'], true)) {
+                $errors[] = "Tipo de identificador do empregador no cabeçalho deve ser 1 (CNPJ) ou 2 (CPF). Encontrado: '{$tpIdt}'.";
             }
-            if (! $this->isValidDate($dtFim)) {
-                $errors[] = "Data final no cabeçalho inválida: {$dtFim}";
+            if (! ctype_digit($idtEmp)) {
+                $errors[] = "CNPJ/CPF do empregador no cabeçalho deve conter apenas dígitos numéricos: '{$idtEmp}'.";
             }
-            if (! $this->isValidDate($dtGeracao)) {
-                $errors[] = "Data de geração no cabeçalho inválida: {$dtGeracao}";
+            if (trim($razao) === '') {
+                $errors[] = 'Razão social ou nome do empregador não pode ser vazio no cabeçalho.';
             }
-            if (! $this->isValidTime($hrGeracao)) {
-                $errors[] = "Horário de geração no cabeçalho inválido: {$hrGeracao}";
+            if (! $this->isValidIsoDate($dtInicio)) {
+                $errors[] = "Data inicial no cabeçalho inválida (exigido AAAA-MM-dd): '{$dtInicio}'.";
+            }
+            if (! $this->isValidIsoDate($dtFim)) {
+                $errors[] = "Data final no cabeçalho inválida (exigido AAAA-MM-dd): '{$dtFim}'.";
+            }
+            if (! $this->isValidIsoDateTime($dtHoraGer)) {
+                $errors[] = "Data e hora de geração no cabeçalho inválida (exigido AAAA-MM-ddThh:mm:00ZZZZZ): '{$dtHoraGer}'.";
+            }
+            if (trim($versao) === '') {
+                $errors[] = 'Versão do leiaute do AEJ não pode ser vazia no cabeçalho.';
             }
         }
 
-        // 2. Validação dos Registros de Corpo (Tipos 2, 3, 4, 5, 6)
-        $previousNsr = 0;
-        $countTipo2 = 0;
-        $countTipo3 = 0;
-        $countTipo4 = 0;
-        $countTipo5 = 0;
-        $countTipo6 = 0;
-
+        // 2. Validação dos Registros de Corpo
         foreach ($bodyLines as $idx => $line) {
             $lineNum = $idx + 2;
-            $len = strlen($line);
+            $parts = explode('|', $line);
+            $tipo = $parts[0] ?? '';
 
-            if ($len < 10) {
-                $errors[] = "Linha {$lineNum} possui comprimento insuficiente ({$len} caracteres).";
-
-                continue;
+            if (isset($actualCounts[$tipo])) {
+                $actualCounts[$tipo]++;
             }
-
-            $nsrRaw = substr($line, 0, 9);
-            if (! ctype_digit($nsrRaw)) {
-                $errors[] = "Linha {$lineNum}: NSR não numérico: {$nsrRaw}";
-
-                continue;
-            }
-
-            $nsr = (int) $nsrRaw;
-            if ($nsr <= $previousNsr) {
-                $errors[] = "Linha {$lineNum}: NSR ({$nsr}) quebrou a sequência monotônica ascendente (anterior: {$previousNsr}).";
-            }
-            $previousNsr = $nsr;
-
-            $tipo = $line[9];
 
             switch ($tipo) {
-                case '2': // Cadastro de Empregados - 249 caracteres
-                    $countTipo2++;
-                    if ($len !== 249) {
-                        $errors[] = "Linha {$lineNum} (Tipo 2) possui {$len} caracteres; exigido: 249.";
+                case '02': // REPs utilizados: 02|idRepAej|tpRep|nrRep
+                    if (count($parts) < 4) {
+                        $errors[] = "Linha {$lineNum}: Registro 02 possui número insuficiente de campos.";
                     } else {
-                        $cpf = substr($line, 10, 11);
-                        if (! ctype_digit($cpf) || strlen($cpf) !== 11) {
-                            $errors[] = "Linha {$lineNum}: CPF inválido no registro Tipo 2: {$cpf}";
+                        if (! ctype_digit($parts[1])) {
+                            $errors[] = "Linha {$lineNum}: idRepAej deve ser numérico no registro 02: '{$parts[1]}'.";
+                        }
+                        if (! in_array($parts[2], ['1', '2', '3'], true)) {
+                            $errors[] = "Linha {$lineNum}: tpRep deve ser 1, 2 ou 3 no registro 02: '{$parts[2]}'.";
+                        }
+                        if (trim($parts[3]) === '') {
+                            $errors[] = "Linha {$lineNum}: nrRep não pode ser vazio no registro 02.";
                         }
                     }
                     break;
 
-                case '3': // Horários e Escalas - 70 caracteres
-                    $countTipo3++;
-                    if ($len !== 70) {
-                        $errors[] = "Linha {$lineNum} (Tipo 3) possui {$len} caracteres; exigido: 70.";
-                    }
-                    break;
-
-                case '4': // Marcações e Tratamentos - 48 caracteres
-                    $countTipo4++;
-                    if ($len !== 48) {
-                        $errors[] = "Linha {$lineNum} (Tipo 4) possui {$len} caracteres; exigido: 48.";
+                case '03': // Vínculos: 03|idtVinculoAej|cpf|nomeEmp
+                    if (count($parts) < 4) {
+                        $errors[] = "Linha {$lineNum}: Registro 03 possui número insuficiente de campos.";
                     } else {
-                        $dt = substr($line, 10, 8);
-                        $hr = substr($line, 18, 4);
-                        $cpf = substr($line, 22, 11);
-                        $tipoMarcacao = $line[42];
-                        $origem = $line[43];
-
-                        if (! $this->isValidDate($dt)) {
-                            $errors[] = "Linha {$lineNum}: Data inválida no registro Tipo 4: {$dt}";
+                        if (! ctype_digit($parts[1])) {
+                            $errors[] = "Linha {$lineNum}: idtVinculoAej deve ser numérico no registro 03: '{$parts[1]}'.";
                         }
-                        if (! $this->isValidTime($hr)) {
-                            $errors[] = "Linha {$lineNum}: Horário inválido no registro Tipo 4: {$hr}";
+                        if (! ctype_digit($parts[2]) || strlen($parts[2]) !== 11) {
+                            $errors[] = "Linha {$lineNum}: CPF deve conter exatamente 11 dígitos numéricos no registro 03: '{$parts[2]}'.";
                         }
-                        if (! ctype_digit($cpf) || strlen($cpf) !== 11) {
-                            $errors[] = "Linha {$lineNum}: CPF inválido no registro Tipo 4: {$cpf}";
-                        }
-                        if (! in_array($tipoMarcacao, ['E', 'S', 'O'])) {
-                            $errors[] = "Linha {$lineNum}: Tipo de marcação inválido (esperado E, S ou O): {$tipoMarcacao}";
-                        }
-                        if (! in_array($origem, ['O', 'I', 'D'])) {
-                            $errors[] = "Linha {$lineNum}: Origem de marcação inválida (esperado O, I ou D): {$origem}";
+                        if (trim($parts[3]) === '') {
+                            $errors[] = "Linha {$lineNum}: nomeEmp não pode ser vazio no registro 03.";
                         }
                     }
                     break;
 
-                case '5': // Apuração Mensal - 41 caracteres
-                    $countTipo5++;
-                    if ($len !== 41) {
-                        $errors[] = "Linha {$lineNum} (Tipo 5) possui {$len} caracteres; exigido: 41.";
+                case '04': // Horários contratuais: 04|codHorContratual|durJornada|hrEntrada01|hrSaida01...
+                    if (count($parts) < 5) {
+                        $errors[] = "Linha {$lineNum}: Registro 04 possui número insuficiente de campos (mínimo 5).";
                     } else {
-                        $cpf = substr($line, 10, 11);
-                        if (! ctype_digit($cpf) || strlen($cpf) !== 11) {
-                            $errors[] = "Linha {$lineNum}: CPF inválido no registro Tipo 5: {$cpf}";
+                        if (trim($parts[1]) === '') {
+                            $errors[] = "Linha {$lineNum}: codHorContratual não pode ser vazio no registro 04.";
+                        }
+                        if (! ctype_digit($parts[2])) {
+                            $errors[] = "Linha {$lineNum}: durJornada deve ser numérico em minutos no registro 04: '{$parts[2]}'.";
+                        }
+                        if (! $this->isValidTimeHhmm($parts[3])) {
+                            $errors[] = "Linha {$lineNum}: hrEntrada01 inválida no registro 04: '{$parts[3]}'.";
+                        }
+                        if (! $this->isValidTimeHhmm($parts[4])) {
+                            $errors[] = "Linha {$lineNum}: hrSaida01 inválida no registro 04: '{$parts[4]}'.";
                         }
                     }
                     break;
 
-                case '6': // Banco de Horas - 47 caracteres
-                    $countTipo6++;
-                    if ($len !== 47) {
-                        $errors[] = "Linha {$lineNum} (Tipo 6) possui {$len} caracteres; exigido: 47.";
+                case '05': // Marcações: 05|idtVinculoAej|dataHoraMarc|numNsr|idRepAej|tpMarc|tipoFonte|motivo
+                    if (count($parts) < 7) {
+                        $errors[] = "Linha {$lineNum}: Registro 05 possui número insuficiente de campos (mínimo 7).";
                     } else {
-                        $cpf = substr($line, 10, 11);
-                        $sinalAnt = $line[21];
-                        $sinalFim = $line[40];
+                        if (! ctype_digit($parts[1])) {
+                            $errors[] = "Linha {$lineNum}: idtVinculoAej deve ser numérico no registro 05: '{$parts[1]}'.";
+                        }
+                        if (! $this->isValidIsoDateTime($parts[2])) {
+                            $errors[] = "Linha {$lineNum}: dataHoraMarc inválida no registro 05: '{$parts[2]}'.";
+                        }
+                        if (! ctype_digit($parts[3])) {
+                            $errors[] = "Linha {$lineNum}: numNsr deve ser numérico no registro 05: '{$parts[3]}'.";
+                        }
+                        if (! ctype_digit($parts[4])) {
+                            $errors[] = "Linha {$lineNum}: idRepAej deve ser numérico no registro 05: '{$parts[4]}'.";
+                        }
+                        if (! in_array($parts[5], ['E', 'S'], true)) {
+                            $errors[] = "Linha {$lineNum}: tpMarc deve ser 'E' ou 'S' no registro 05: '{$parts[5]}'.";
+                        }
+                        if (! in_array($parts[6], ['1', '2', '3'], true)) {
+                            $errors[] = "Linha {$lineNum}: tipoFonte deve ser '1', '2' ou '3' no registro 05: '{$parts[6]}'.";
+                        }
+                    }
+                    break;
 
-                        if (! ctype_digit($cpf) || strlen($cpf) !== 11) {
-                            $errors[] = "Linha {$lineNum}: CPF inválido no registro Tipo 6: {$cpf}";
+                case '06': // Matrícula eSocial: 06|idtVinculoAej|matrEsocial
+                    if (count($parts) < 3) {
+                        $errors[] = "Linha {$lineNum}: Registro 06 possui número insuficiente de campos.";
+                    } else {
+                        if (! ctype_digit($parts[1])) {
+                            $errors[] = "Linha {$lineNum}: idtVinculoAej deve ser numérico no registro 06: '{$parts[1]}'.";
                         }
-                        if (! in_array($sinalAnt, ['+', '-'])) {
-                            $errors[] = "Linha {$lineNum}: Sinal do saldo anterior deve ser + ou -: {$sinalAnt}";
+                        if (trim($parts[2]) === '') {
+                            $errors[] = "Linha {$lineNum}: matrEsocial não pode ser vazia no registro 06.";
                         }
-                        if (! in_array($sinalFim, ['+', '-'])) {
-                            $errors[] = "Linha {$lineNum}: Sinal do saldo final deve ser + ou -: {$sinalFim}";
+                    }
+                    break;
+
+                case '07': // Ausências e Banco de Horas: 07|idtVinculoAej|tipoAusenOuComp|data|qtMinutos
+                    if (count($parts) < 5) {
+                        $errors[] = "Linha {$lineNum}: Registro 07 possui número insuficiente de campos.";
+                    } else {
+                        if (! ctype_digit($parts[1])) {
+                            $errors[] = "Linha {$lineNum}: idtVinculoAej deve ser numérico no registro 07: '{$parts[1]}'.";
+                        }
+                        if (! in_array($parts[2], ['1', '2', '3', '4'], true)) {
+                            $errors[] = "Linha {$lineNum}: tipoAusenOuComp deve ser 1, 2, 3 ou 4 no registro 07: '{$parts[2]}'.";
+                        }
+                        if (! $this->isValidIsoDate($parts[3])) {
+                            $errors[] = "Linha {$lineNum}: data inválida no registro 07: '{$parts[3]}'.";
+                        }
+                        if (! is_numeric($parts[4])) {
+                            $errors[] = "Linha {$lineNum}: qtMinutos deve ser numérico no registro 07: '{$parts[4]}'.";
+                        }
+                    }
+                    break;
+
+                case '08': // Identificação do PTRP: 08|tpIdtDesenv|idtDesenv|nomeDesenv|nomeSoftware|versaoSoftware
+                    if (count($parts) < 6) {
+                        $errors[] = "Linha {$lineNum}: Registro 08 possui número insuficiente de campos.";
+                    } else {
+                        if (! in_array($parts[1], ['1', '2'], true)) {
+                            $errors[] = "Linha {$lineNum}: tpIdtDesenv deve ser 1 ou 2 no registro 08: '{$parts[1]}'.";
+                        }
+                        if (! ctype_digit($parts[2])) {
+                            $errors[] = "Linha {$lineNum}: idtDesenv deve ser numérico no registro 08: '{$parts[2]}'.";
+                        }
+                        if (trim($parts[3]) === '') {
+                            $errors[] = "Linha {$lineNum}: nomeDesenv não pode ser vazio no registro 08.";
+                        }
+                        if (trim($parts[4]) === '') {
+                            $errors[] = "Linha {$lineNum}: nomeSoftware não pode ser vazio no registro 08.";
+                        }
+                        if (trim($parts[5]) === '') {
+                            $errors[] = "Linha {$lineNum}: versaoSoftware não pode ser vazia no registro 08.";
                         }
                     }
                     break;
 
                 default:
-                    $errors[] = "Linha {$lineNum}: Tipo de registro desconhecido: '{$tipo}'.";
+                    $errors[] = "Linha {$lineNum}: Tipo de registro inválido ou desconhecido no AEJ: '{$tipo}'.";
                     break;
             }
         }
 
-        // 3. Validação do Trailer (Tipo 9) - 72 caracteres
-        if (strlen($trailer) !== 72) {
-            $errors[] = sprintf('Trailer (Tipo 9) possui %d caracteres; o leiaute MTE exige exatamente 72.', strlen($trailer));
+        // 3. Validação do Trailer (Tipo 99)
+        $trailerParts = explode('|', $trailer);
+        if ($trailerParts[0] !== '99') {
+            $errors[] = "A última linha do arquivo deve ser o Trailer (Tipo 99). Encontrado: '{$trailerParts[0]}'.";
+        } elseif (count($trailerParts) < 9) {
+            $errors[] = sprintf('Trailer (Tipo 99) possui %d campos; o leiaute MTE exige no mínimo 9 campos.', count($trailerParts));
         } else {
-            if (substr($trailer, 0, 9) !== '999999999') {
-                $errors[] = 'NSR do Trailer deve ser 999999999.';
-            }
-            if ($trailer[9] !== '9') {
-                $errors[] = 'Tipo de registro do trailer deve ser 9.';
-            }
-
-            $qtdTipo2Trailer = (int) substr($trailer, 10, 9);
-            $qtdTipo3Trailer = (int) substr($trailer, 19, 9);
-            $qtdTipo4Trailer = (int) substr($trailer, 28, 9);
-            $qtdTipo5Trailer = (int) substr($trailer, 37, 9);
-            $qtdTipo6Trailer = (int) substr($trailer, 46, 9);
-            $totalLinhasTrailer = (int) substr($trailer, 55, 9);
-            $totalLinhasReais = count($rawLines);
-
-            if ($qtdTipo2Trailer !== $countTipo2) {
-                $errors[] = "Trailer indica {$qtdTipo2Trailer} registros Tipo 2, mas o arquivo contém {$countTipo2}.";
-            }
-            if ($qtdTipo3Trailer !== $countTipo3) {
-                $errors[] = "Trailer indica {$qtdTipo3Trailer} registros Tipo 3, mas o arquivo contém {$countTipo3}.";
-            }
-            if ($qtdTipo4Trailer !== $countTipo4) {
-                $errors[] = "Trailer indica {$qtdTipo4Trailer} registros Tipo 4, mas o arquivo contém {$countTipo4}.";
-            }
-            if ($qtdTipo5Trailer !== $countTipo5) {
-                $errors[] = "Trailer indica {$qtdTipo5Trailer} registros Tipo 5, mas o arquivo contém {$countTipo5}.";
-            }
-            if ($qtdTipo6Trailer !== $countTipo6) {
-                $errors[] = "Trailer indica {$qtdTipo6Trailer} registros Tipo 6, mas o arquivo contém {$countTipo6}.";
-            }
-            if ($totalLinhasTrailer !== $totalLinhasReais) {
-                $errors[] = "Trailer indica total de {$totalLinhasTrailer} linhas, mas o arquivo possui {$totalLinhasReais}.";
-            }
-
-            // Validação de CRC-32
-            $contentBeforeCrc = implode("\r\n", array_slice($rawLines, 0, -1))."\r\n".substr($trailer, 0, 64);
-            $expectedCrc = sprintf('%08X', crc32($contentBeforeCrc));
-            $actualCrc = substr($trailer, 64, 8);
-
-            if (strtoupper($actualCrc) !== strtoupper($expectedCrc)) {
-                $errors[] = "CRC-32 divergente no trailer (calculado: {$expectedCrc}, arquivo: {$actualCrc}).";
+            for ($i = 1; $i <= 8; $i++) {
+                $code = sprintf('%02d', $i);
+                $declared = (int) ($trailerParts[$i] ?? 0);
+                $actual = $actualCounts[$code] ?? 0;
+                if ($declared !== $actual) {
+                    $errors[] = "Trailer indica {$declared} registros Tipo {$code}, mas o arquivo contém {$actual}.";
+                }
             }
         }
 
-        $isValid = empty($errors);
-
-        Log::info('aej.validated', [
-            'is_valid' => $isValid,
-            'errors_count' => count($errors),
-            'total_records' => count($bodyLines),
-        ]);
+        $totalRecords = array_sum($actualCounts) + 1;
 
         return [
-            'is_valid' => $isValid,
+            'is_valid' => empty($errors),
             'errors' => $errors,
-            'total_records' => count($bodyLines),
+            'total_records' => $totalRecords,
         ];
     }
 
-    protected function isValidDate(string $d): bool
+    protected function isValidIsoDate(string $d): bool
     {
-        if (strlen($d) !== 8 || ! ctype_digit($d)) {
+        if (! preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $d, $m)) {
             return false;
         }
-        $day = (int) substr($d, 0, 2);
-        $month = (int) substr($d, 2, 2);
-        $year = (int) substr($d, 4, 4);
 
-        return checkdate($month, $day, $year);
+        return checkdate((int) $m[2], (int) $m[3], (int) $m[1]);
     }
 
-    protected function isValidTime(string $t): bool
+    protected function isValidIsoDateTime(string $dt): bool
+    {
+        return (bool) preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00[+-]\d{4}$/', $dt);
+    }
+
+    protected function isValidTimeHhmm(string $t): bool
     {
         if (strlen($t) !== 4 || ! ctype_digit($t)) {
             return false;
         }
-        $hour = (int) substr($t, 0, 2);
-        $minute = (int) substr($t, 2, 2);
+        $h = (int) substr($t, 0, 2);
+        $m = (int) substr($t, 2, 2);
 
-        return ($hour >= 0 && $hour <= 23) && ($minute >= 0 && $minute <= 59);
+        return ($h >= 0 && $h <= 23) && ($m >= 0 && $m <= 59);
     }
 }

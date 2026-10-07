@@ -41,7 +41,8 @@ class RepPFoundationTest extends TestCase
         $establishment = CurrentCompany::defaultEstablishment();
         $this->assertInstanceOf(Establishment::class, $establishment);
         $this->assertEquals('MATRIZ', $establishment->code);
-        $this->assertEquals(1, $establishment->nsr_next);
+        // O evento fiscal de criação do estabelecimento consome o NSR 1 na ARP:
+        $this->assertEquals(2, $establishment->nsr_next);
     }
 
     public function test_nsr_generator_generates_strictly_consecutive_monotonic_numbers(): void
@@ -53,12 +54,12 @@ class RepPFoundationTest extends TestCase
         $nsr2 = $service->reserveNextNsr($establishment->id);
         $nsr3 = $service->reserveNextNsr($establishment->id);
 
-        $this->assertEquals(1, $nsr1);
-        $this->assertEquals(2, $nsr2);
-        $this->assertEquals(3, $nsr3);
+        $this->assertEquals(2, $nsr1);
+        $this->assertEquals(3, $nsr2);
+        $this->assertEquals(4, $nsr3);
 
         $establishment->refresh();
-        $this->assertEquals(4, $establishment->nsr_next);
+        $this->assertEquals(5, $establishment->nsr_next);
     }
 
     public function test_multiple_establishments_maintain_independent_nsr_counters(): void
@@ -84,11 +85,11 @@ class RepPFoundationTest extends TestCase
         $filialNsr2 = $service->reserveNextNsr($filial->id);
         $matrizNsr2 = $service->reserveNextNsr($matriz->id);
 
-        $this->assertEquals(1, $matrizNsr1);
-        $this->assertEquals(2, $matrizNsr2);
+        $this->assertEquals(2, $matrizNsr1);
+        $this->assertEquals(3, $matrizNsr2);
 
-        $this->assertEquals(1, $filialNsr1);
-        $this->assertEquals(2, $filialNsr2);
+        $this->assertEquals(2, $filialNsr1);
+        $this->assertEquals(3, $filialNsr2);
     }
 
     public function test_record_punch_event_action_creates_immutable_event_with_chained_sha256_hash(): void
@@ -113,9 +114,10 @@ class RepPFoundationTest extends TestCase
         );
 
         $this->assertInstanceOf(PunchEvent::class, $punch1);
-        $this->assertEquals(1, $punch1->nsr);
+        $this->assertEquals(2, $punch1->nsr);
         $this->assertEquals('in', $punch1->direction);
-        $this->assertNull($punch1->previous_event_hash);
+        // O hash anterior encadeia com o evento fiscal de criação de estabelecimento (NSR 1):
+        $this->assertNotNull($punch1->previous_event_hash);
         $this->assertNotEmpty($punch1->payload_hash);
         $this->assertEquals(64, strlen($punch1->payload_hash));
 
@@ -129,7 +131,7 @@ class RepPFoundationTest extends TestCase
             locationValid: true
         );
 
-        $this->assertEquals(2, $punch2->nsr);
+        $this->assertEquals(3, $punch2->nsr);
         $this->assertEquals('out', $punch2->direction);
         $this->assertEquals($punch1->payload_hash, $punch2->previous_event_hash);
     }
@@ -203,7 +205,7 @@ class RepPFoundationTest extends TestCase
         $this->assertDatabaseHas('punch_events', [
             'user_id' => $user->id,
             'direction' => 'in',
-            'nsr' => 1,
+            'nsr' => 3,
         ]);
     }
 }

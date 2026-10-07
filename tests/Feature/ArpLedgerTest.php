@@ -68,73 +68,77 @@ class ArpLedgerTest extends TestCase
 
     public function test_arp_generates_single_monotonic_nsr_sequence_across_diverse_event_types(): void
     {
-        $arpAction = app(RecordArpEventAction::class);
+        // 1. Establishment::create já gerou NSR 1 (cadastro empregador)
+        // 2. Employee::create já gerou NSR 2 (cadastro trabalhador)
+        $arpEvents = ArpEvent::where('establishment_id', $this->establishment->id)->orderBy('nsr')->get();
+        $this->assertCount(2, $arpEvents);
+        $this->assertSame(1, $arpEvents[0]->nsr);
+        $this->assertSame(ArpEventType::EmployerEstablishmentMutation, $arpEvents[0]->event_type);
+        $this->assertSame(2, $arpEvents[1]->nsr);
+        $this->assertSame(ArpEventType::WorkerMutation, $arpEvents[1]->event_type);
+
         $punchAction = app(RecordPunchEventAction::class);
+        $arpAction = app(RecordArpEventAction::class);
 
-        // Evento 1: Mutação de Empregador / Estabelecimento (NSR 1)
-        $event1 = $arpAction->execute(
-            establishment: $this->establishment,
-            eventType: ArpEventType::EmployerEstablishmentMutation,
-            payload: ['action' => 'company_registered', 'cnpj' => $this->company->cnpj]
-        );
-        $this->assertSame(1, $event1->nsr);
-
-        // Evento 2: Mutação de Trabalhador (NSR 2)
-        $event2 = $arpAction->execute(
-            establishment: $this->establishment,
-            eventType: ArpEventType::WorkerMutation,
-            user: $this->user,
-            employee: $this->employee,
-            payload: ['action' => 'worker_admitted', 'cpf' => $this->employee->cpf]
-        );
-        $this->assertSame(2, $event2->nsr);
-
-        // Evento 3: Marcação de Ponto (NSR 3)
-        $punch = $punchAction->execute(
+        // NSR 3 → batida (in)
+        $punch1 = $punchAction->execute(
             user: $this->user,
             direction: 'in',
             latitude: -9.665800,
             longitude: -35.735000,
             establishment: $this->establishment
         );
-        $this->assertSame(3, $punch->nsr);
+        $this->assertSame(3, $punch1->nsr);
 
-        // Evento 4: Sincronização de Relógio (NSR 4)
-        $event4 = $arpAction->execute(
-            establishment: $this->establishment,
-            eventType: ArpEventType::TimeSync,
-            payload: ['source' => 'ntp.br', 'offset_ms' => 12]
-        );
-        $this->assertSame(4, $event4->nsr);
-
-        // Evento 5: Outra Marcação de Ponto (NSR 5)
+        // NSR 4 → batida (out)
         $punch2 = $punchAction->execute(
             user: $this->user,
             direction: 'out',
             establishment: $this->establishment
         );
-        $this->assertSame(5, $punch2->nsr);
+        $this->assertSame(4, $punch2->nsr);
 
-        // Verifica que o contador no estabelecimento avançou para 6
+        // NSR 5 → alteração trabalhador (mutação cadastral)
+        $this->employee->update(['job_title' => 'Especialista em Compliance']);
+        $event5 = ArpEvent::where('establishment_id', $this->establishment->id)->where('nsr', 5)->first();
+        $this->assertNotNull($event5);
+        $this->assertSame(ArpEventType::WorkerMutation, $event5->event_type);
+        $this->assertSame('A', $event5->payload['mutation_type']);
+
+        // NSR 6 → evento sensível do REP-P (disponibilidade / verificação de integridade)
+        $event6 = $arpAction->recordRepSensitiveEvent(
+            establishment: $this->establishment,
+            eventDescription: 'Verificação de integridade do ledger fiscal REP-P',
+            metadata: ['event_code' => '01']
+        );
+        $this->assertSame(6, $event6->nsr);
+        $this->assertSame(ArpEventType::RepSensitiveEvent, $event6->event_type);
+
+        // NSR 7 → batida (in)
+        $punch3 = $punchAction->execute(
+            user: $this->user,
+            direction: 'in',
+            establishment: $this->establishment
+        );
+        $this->assertSame(7, $punch3->nsr);
+
+        // Verifica que o contador no estabelecimento avançou para 8
         $this->establishment->refresh();
-        $this->assertSame(6, (int) $this->establishment->nsr_next);
+        $this->assertSame(8, (int) $this->establishment->nsr_next);
 
-        // Verifica que todos os 5 eventos foram registrados na tabela central arp_events
-        $this->assertEquals(5, ArpEvent::where('establishment_id', $this->establishment->id)->count());
-
+        // Verifica a sequência estritamente contígua e monotônica de 1 a 7
         $nsrs = ArpEvent::where('establishment_id', $this->establishment->id)
             ->orderBy('nsr', 'asc')
             ->pluck('nsr')
             ->toArray();
-        $this->assertSame([1, 2, 3, 4, 5], $nsrs);
-
-        // Verifica que a batida no punch_events compartilha o mesmo NSR da ARP (não inicia sequência própria)
-        $this->assertSame(3, $punch->nsr);
-        $this->assertSame(5, $punch2->nsr);
+        $this->assertSame([1, 2, 3, 4, 5, 6, 7], $nsrs);
     }
 
     public function test_independent_establishments_maintain_isolated_monotonic_nsr_sequences(): void
     {
+        // Matriz já possui NSR 1 (establishment) e NSR 2 (employee) de setUp
+        $this->assertEquals(2, ArpEvent::where('establishment_id', $this->establishment->id)->count());
+
         $estFilial = Establishment::create([
             'company_id' => $this->company->id,
             'code' => 'FILIAL_1',
@@ -145,36 +149,31 @@ class ArpLedgerTest extends TestCase
             'nsr_next' => 1,
         ]);
 
-        $arpAction = app(RecordArpEventAction::class);
-
-        // Evento na Matriz: NSR 1
-        $eMatriz1 = $arpAction->execute(
-            establishment: $this->establishment,
-            eventType: ArpEventType::EmployerEstablishmentMutation,
-            payload: ['code' => 'MATRIZ']
-        );
-        $this->assertSame(1, $eMatriz1->nsr);
-
-        // Evento na Filial: NSR 1
-        $eFilial1 = $arpAction->execute(
-            establishment: $estFilial,
-            eventType: ArpEventType::EmployerEstablishmentMutation,
-            payload: ['code' => 'FILIAL']
-        );
+        // Criação da Filial gerou automaticamente seu próprio NSR 1 isolado
+        $eFilial1 = ArpEvent::where('establishment_id', $estFilial->id)->first();
+        $this->assertNotNull($eFilial1);
         $this->assertSame(1, $eFilial1->nsr);
 
+        $arpAction = app(RecordArpEventAction::class);
+
+        // Evento na Matriz: NSR 3
+        $eMatriz1 = $arpAction->recordTimeSync(
+            establishment: $this->establishment,
+            syncDetails: ['source' => 'NTP']
+        );
+        $this->assertSame(3, $eMatriz1->nsr);
+
         // Evento 2 na Filial: NSR 2
-        $eFilial2 = $arpAction->execute(
+        $eFilial2 = $arpAction->recordTimeSync(
             establishment: $estFilial,
-            eventType: ArpEventType::TimeSync,
-            payload: ['source' => 'NTP']
+            syncDetails: ['source' => 'NTP']
         );
         $this->assertSame(2, $eFilial2->nsr);
 
-        // Matriz ainda está no NSR 1 (próximo é 2)
+        // Contadores avançaram isoladamente
         $this->establishment->refresh();
         $estFilial->refresh();
-        $this->assertSame(2, (int) $this->establishment->nsr_next);
+        $this->assertSame(4, (int) $this->establishment->nsr_next);
         $this->assertSame(3, (int) $estFilial->nsr_next);
     }
 

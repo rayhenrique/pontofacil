@@ -71,11 +71,29 @@ class RecordArpEventAction
             // 4. Determinação dos hashes
             if ($fiscalHash === null) {
                 if ($eventType === ArpEventType::Punch) {
-                    $fiscalHash = $this->fiscalHashService->calculatePunchFiscalHash(
-                        $nsr,
-                        $nowLocal,
-                        $utcOffset,
-                        $employee?->cpf
+                    $previousPunchArp = ArpEvent::where('establishment_id', $est->id)
+                        ->where('event_type', ArpEventType::Punch)
+                        ->orderBy('nsr', 'desc')
+                        ->first();
+                    $previousTipo7Hash = $previousPunchArp?->fiscal_hash;
+
+                    $collectorType = match ($payload['collector_type'] ?? $payload['source'] ?? 'browser') {
+                        'mobile_app', 'mobile' => '01',
+                        'desktop' => '03',
+                        'device', 'hardware' => '04',
+                        default => '02',
+                    };
+
+                    $punchType = ($payload['is_offline'] ?? false) ? '1' : '0';
+
+                    $fiscalHash = $this->fiscalHashService->calculateTipo7FiscalHash(
+                        nsr: $nsr,
+                        occurredAtLocal: $nowLocal,
+                        recordedAtLocal: $nowLocal,
+                        cpf: $employee?->cpf,
+                        collectorType: $collectorType,
+                        punchType: $punchType,
+                        previousTipo7FiscalHash: $previousTipo7Hash
                     );
                 } else {
                     $fiscalHash = $this->fiscalHashService->calculateGenericArpFiscalHash(

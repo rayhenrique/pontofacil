@@ -4,6 +4,12 @@ namespace App\Providers;
 
 use App\Domain\Compliance\Signing\DevSigningService;
 use App\Domain\Compliance\Signing\SigningServiceInterface;
+use App\Models\Company;
+use App\Models\Employee;
+use App\Models\Establishment;
+use App\Observers\CompanyObserver;
+use App\Observers\EmployeeObserver;
+use App\Observers\EstablishmentObserver;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
@@ -35,5 +41,9 @@ class AppServiceProvider extends ServiceProvider
         if ($this->app->environment('production')) {
             URL::forceScheme('https');
         }
+
+        Establishment::observe(EstablishmentObserver::class);
+        Company::observe(CompanyObserver::class);
+        Employee::observe(EmployeeObserver::class);
     }
 }

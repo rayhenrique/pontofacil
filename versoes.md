@@ -1,6 +1,28 @@
 # Histórico de Versões (Changelog)
 
-## v2.4.0 (Atual)
+## v2.5.0 (Atual)
+- **Conformidade MTE 31/07/2026: AFD Tipo 7, Integração ARP Real e AEJ Delimitado:**
+  - **AFD Oficial REP-P & Hash Tipo 7 Encadeado:**
+    - Substituição do Registro Tipo 3 pelo Registro Tipo 7 oficial para o REP-P (comprimento estrito de 137 caracteres).
+    - Prefixo canônico oficial de 73 caracteres (`NSR(9) + TIPO(1) + DATA_HORA_ISO(24) + COLETOR(2) + TIPO_MARCACAO(1) + CPF(11) + MATRICULA_HASH(25)`).
+    - Encadeamento fiscal do hash SHA-256 Tipo 7 com o hash do Tipo 7 imediatamente anterior do mesmo estabelecimento (ou 64 zeros no registro gênese).
+    - Implementação de todos os tipos de registros oficiais do AFD: Tipo 1 (236 car.), Tipo 2 (203 car. com CRC-16 Kermit), Tipo 4 (49 car. com CRC-16 Kermit), Tipo 5 (189 car. com CRC-16 Kermit), Tipo 6 (136 car.), Tipo 7 (137 car.) e Tipo 9 Trailer (73 car.).
+    - Substituição definitiva de CRC-32 por CRC-16 CCITT-TRUE / Kermit nos registros previstos.
+    - Exportação do AFD derivada diretamente de `arp_events`, preservando os NSRs originais sem renumerar eventos.
+  - **Integração Real da ARP aos Eventos do Sistema:**
+    - Mutações de Empregador e Estabelecimento (`ArpEventType::EmployerEstablishmentMutation`) integradas via `EstablishmentObserver` e `CompanyObserver`.
+    - Mutações Cadastrais de Trabalhadores (`ArpEventType::WorkerMutation`) integradas via `EmployeeObserver` para Inclusão (`I`), Alteração (`A`) e Inativação (`E`).
+    - Eventos de Sincronismo de Relógio (`TimeSync`) e Eventos Sensíveis do REP-P (`RepSensitiveEvent`) estruturados no ledger.
+    - Sequência unificada e monotônica de NSR por estabelecimento compartilhada por todos os eventos fiscais, com bloqueio pessimista (`lockForUpdate()`) e imutabilidade absoluta.
+  - **AEJ Oficial Delimitado por Pipes (`|`) & Golden Tests:**
+    - Reestruturação completa do gerador e validador do AEJ para formato delimitado por pipes `|` conforme o leiaute oficial do MTE.
+    - Implementação dos registros 01 (Cabeçalho), 02 (REPs), 03 (Vínculos), 04 (Horários Contratuais), 05 (Marcações Tratadas), 06 (Matrículas), 07 (Ausências e DSRs apurados), 08 (Software PTRP) e 99 (Trailer com contadores).
+    - Remoção de tamanhos fixos e remoção de CRC-32 do AEJ.
+    - Bloqueio de emissão fiscal definitiva sem período formalmente fechado (`ClosedPeriod`), mantendo modo preview transparente.
+    - Golden Tests com comparação byte a byte em formato Windows CRLF e fixtures versionadas somente-leitura.
+  - **Suíte de Testes Expandida:** `147 testes e 658 asserções 100% aprovados`.
+
+## v2.4.0
 - **Compliance Portaria MTP 671/2021, ARP Completa e Integridade Criptográfica:**
   - **Armazenamento de Registro de Ponto Completo (ARP Central):**
     - Criação da tabela central `arp_events` como ledger fiscal único e imutável para todos os eventos oficiais (marcações, mutações de empregador e trabalhador, sincronismos de relógio e eventos sensíveis).

@@ -2,10 +2,19 @@
 
 namespace App\Domain\Compliance\AFD;
 
+use App\Domain\Compliance\Fiscal\Services\FiscalHashService;
+
 class AfdValidator
 {
+    protected FiscalHashService $fiscalHashService;
+
+    public function __construct(?FiscalHashService $fiscalHashService = null)
+    {
+        $this->fiscalHashService = $fiscalHashService ?: new FiscalHashService;
+    }
+
     /**
-     * Valida formal e estruturalmente o conteúdo de um arquivo AFD segundo a Portaria 671 MTE.
+     * Valida formal e estruturalmente o conteúdo de um arquivo AFD segundo a Portaria 671 MTE (leiaute vigente REP-P).
      *
      * @param  string  $content  Conteúdo bruto do arquivo
      * @return array{is_valid: bool, errors: array<string>, total_records: int}
@@ -52,6 +61,7 @@ class AfdValidator
             $dtInicio = substr($header, 204, 8);
             $dtFim = substr($header, 212, 8);
             $dtGeracao = substr($header, 220, 8);
+            $hrGeracao = substr($header, 228, 4);
 
             if (! $this->isValidDate($dtInicio)) {
                 $errors[] = "Data inicial no cabeçalho inválida: {$dtInicio}";
@@ -62,16 +72,26 @@ class AfdValidator
             if (! $this->isValidDate($dtGeracao)) {
                 $errors[] = "Data de geração no cabeçalho inválida: {$dtGeracao}";
             }
+            if (! $this->isValidTime($hrGeracao)) {
+                $errors[] = "Hora de geração no cabeçalho inválida: {$hrGeracao}";
+            }
         }
 
-        // 2. Validação dos Registros de Marcação (Tipo 3) - 101 caracteres
+        // 2. Validação dos Registros de Corpo (Tipos 2, 4, 5, 6, 7)
         $previousNsr = 0;
-        $type3Count = 0;
+        $countTipo2 = 0;
+        $countTipo3 = 0;
+        $countTipo4 = 0;
+        $countTipo5 = 0;
+        $countTipo6 = 0;
+        $countTipo7 = 0;
 
         foreach ($bodyLines as $idx => $line) {
             $lineNum = $idx + 2;
-            if (strlen($line) !== 101) {
-                $errors[] = sprintf('Linha %d possui %d caracteres; o registro Tipo 3 exige exatamente 101.', $lineNum, strlen($line));
+            $len = strlen($line);
+
+            if ($len < 10) {
+                $errors[] = "Linha {$lineNum}: Registro com tamanho insuficiente ({$len} caracteres).";
 
                 continue;
             }
@@ -89,38 +109,97 @@ class AfdValidator
             }
             $previousNsr = $nsr;
 
-            if ($line[9] !== '3') {
-                $errors[] = "Linha {$lineNum}: Tipo de registro inválido (esperado 3, encontrado '{$line[9]}').";
-            }
+            $tipo = $line[9];
 
-            $dtMarcacao = substr($line, 10, 8);
-            $hrMarcacao = substr($line, 18, 4);
-            $offset = substr($line, 22, 4);
-            $cpf = substr($line, 26, 11);
-            $hash = substr($line, 37, 64);
+            switch ($tipo) {
+                case '2': // Identificação do Empregador - 203 caracteres com CRC-16
+                    $countTipo2++;
+                    if ($len !== 203) {
+                        $errors[] = "Linha {$lineNum}: Registro Tipo 2 possui {$len} caracteres; exigido: 203.";
+                    } else {
+                        $prefix = substr($line, 0, 199);
+                        $expectedCrc = $this->fiscalHashService->calculateCrc16($prefix);
+                        $actualCrc = substr($line, 199, 4);
+                        if (strtoupper($actualCrc) !== strtoupper($expectedCrc)) {
+                            $errors[] = "Linha {$lineNum}: CRC-16 divergente no registro Tipo 2 (calculado: {$expectedCrc}, arquivo: {$actualCrc}).";
+                        }
+                    }
+                    break;
 
-            if (! $this->isValidDate($dtMarcacao)) {
-                $errors[] = "Linha {$lineNum}: Data de marcação inválida ({$dtMarcacao}).";
-            }
-            if (! $this->isValidTime($hrMarcacao)) {
-                $errors[] = "Linha {$lineNum}: Horário de marcação inválido ({$hrMarcacao}).";
-            }
-            if (! preg_match('/^[+-]\d{3}$/', $offset)) {
-                $errors[] = "Linha {$lineNum}: Fuso horário deve seguir o formato [+-]HHMM ou [+-]HH: {$offset}";
-            }
-            if (! ctype_digit($cpf) || strlen($cpf) !== 11) {
-                $errors[] = "Linha {$lineNum}: CPF deve conter 11 dígitos numéricos: {$cpf}";
-            }
-            if (! preg_match('/^[a-f0-9]{64}$/i', $hash)) {
-                $errors[] = "Linha {$lineNum}: Hash SHA-256 inválido: {$hash}";
-            }
+                case '3': // Marcação REP-C/REP-A (Não aplicável ao REP-P)
+                    $countTipo3++;
+                    $errors[] = "Linha {$lineNum}: O modelo REP-P deve utilizar Registro Tipo 7 para marcações, não Tipo 3.";
+                    break;
 
-            $type3Count++;
+                case '4': // Ajuste do Relógio - 49 caracteres com CRC-16
+                    $countTipo4++;
+                    if ($len !== 49) {
+                        $errors[] = "Linha {$lineNum}: Registro Tipo 4 possui {$len} caracteres; exigido: 49.";
+                    } else {
+                        $prefix = substr($line, 0, 45);
+                        $expectedCrc = $this->fiscalHashService->calculateCrc16($prefix);
+                        $actualCrc = substr($line, 45, 4);
+                        if (strtoupper($actualCrc) !== strtoupper($expectedCrc)) {
+                            $errors[] = "Linha {$lineNum}: CRC-16 divergente no registro Tipo 4 (calculado: {$expectedCrc}, arquivo: {$actualCrc}).";
+                        }
+                    }
+                    break;
+
+                case '5': // Empregado - 189 caracteres com CRC-16
+                    $countTipo5++;
+                    if ($len !== 189) {
+                        $errors[] = "Linha {$lineNum}: Registro Tipo 5 possui {$len} caracteres; exigido: 189.";
+                    } else {
+                        $prefix = substr($line, 0, 185);
+                        $expectedCrc = $this->fiscalHashService->calculateCrc16($prefix);
+                        $actualCrc = substr($line, 185, 4);
+                        if (strtoupper($actualCrc) !== strtoupper($expectedCrc)) {
+                            $errors[] = "Linha {$lineNum}: CRC-16 divergente no registro Tipo 5 (calculado: {$expectedCrc}, arquivo: {$actualCrc}).";
+                        }
+                    }
+                    break;
+
+                case '6': // Eventos Sensíveis - 136 caracteres
+                    $countTipo6++;
+                    if ($len !== 136) {
+                        $errors[] = "Linha {$lineNum}: Registro Tipo 6 possui {$len} caracteres; exigido: 136.";
+                    }
+                    break;
+
+                case '7': // Marcação de Ponto REP-P - 137 caracteres
+                    $countTipo7++;
+                    if ($len !== 137) {
+                        $errors[] = "Linha {$lineNum}: Registro Tipo 7 possui {$len} caracteres; o leiaute MTE exige exatamente 137.";
+                    } else {
+                        $cpf = substr($line, 34, 12);
+                        $collector = substr($line, 70, 2);
+                        $punchType = $line[72];
+                        $hash = substr($line, 73, 64);
+
+                        if (! ctype_digit($cpf)) {
+                            $errors[] = "Linha {$lineNum}: CPF deve conter dígitos numéricos no registro Tipo 7: {$cpf}";
+                        }
+                        if (! ctype_digit($collector)) {
+                            $errors[] = "Linha {$lineNum}: Identificador do coletor deve ser numérico: {$collector}";
+                        }
+                        if (! in_array($punchType, ['0', '1'])) {
+                            $errors[] = "Linha {$lineNum}: Tipo de marcação deve ser 0 (online) ou 1 (offline): {$punchType}";
+                        }
+                        if (! preg_match('/^[a-f0-9]{64}$/i', $hash)) {
+                            $errors[] = "Linha {$lineNum}: Hash SHA-256 inválido: {$hash}";
+                        }
+                    }
+                    break;
+
+                default:
+                    $errors[] = "Linha {$lineNum}: Tipo de registro inválido ou não suportado para REP-P: '{$tipo}'.";
+                    break;
+            }
         }
 
-        // 3. Validação do Trailer (Tipo 9) - 63 caracteres
-        if (strlen($trailer) !== 63) {
-            $errors[] = sprintf('Trailer (Tipo 9) possui %d caracteres; o leiaute MTE exige exatamente 63.', strlen($trailer));
+        // 3. Validação do Trailer (Tipo 9) - exatamente 73 caracteres
+        if (strlen($trailer) !== 73) {
+            $errors[] = sprintf('Trailer (Tipo 9) possui %d caracteres; o leiaute MTE exige exatamente 73.', strlen($trailer));
         } else {
             if (substr($trailer, 0, 9) !== '999999999') {
                 $errors[] = 'NSR do Trailer deve ser 999999999.';
@@ -129,22 +208,44 @@ class AfdValidator
                 $errors[] = 'Tipo de registro do trailer deve ser 9.';
             }
 
-            $qtdTipo3Trailer = (int) substr($trailer, 10, 9);
-            if ($qtdTipo3Trailer !== $type3Count) {
-                $errors[] = "Trailer indica {$qtdTipo3Trailer} registros Tipo 3, mas o arquivo contém {$type3Count}.";
-            }
-
-            $totalLinhasTrailer = (int) substr($trailer, 46, 9);
+            $qtdTipo2Trailer = (int) substr($trailer, 10, 9);
+            $qtdTipo3Trailer = (int) substr($trailer, 19, 9);
+            $qtdTipo4Trailer = (int) substr($trailer, 28, 9);
+            $qtdTipo5Trailer = (int) substr($trailer, 37, 9);
+            $qtdTipo6Trailer = (int) substr($trailer, 46, 9);
+            $qtdTipo7Trailer = (int) substr($trailer, 55, 9);
+            $totalLinhasTrailer = (int) substr($trailer, 64, 9);
             $totalLinhasReais = count($rawLines);
+
+            if ($qtdTipo2Trailer !== $countTipo2) {
+                $errors[] = "Trailer indica {$qtdTipo2Trailer} registros Tipo 2, mas o arquivo contém {$countTipo2}.";
+            }
+            if ($qtdTipo3Trailer !== $countTipo3) {
+                $errors[] = "Trailer indica {$qtdTipo3Trailer} registros Tipo 3, mas o arquivo contém {$countTipo3}.";
+            }
+            if ($qtdTipo4Trailer !== $countTipo4) {
+                $errors[] = "Trailer indica {$qtdTipo4Trailer} registros Tipo 4, mas o arquivo contém {$countTipo4}.";
+            }
+            if ($qtdTipo5Trailer !== $countTipo5) {
+                $errors[] = "Trailer indica {$qtdTipo5Trailer} registros Tipo 5, mas o arquivo contém {$countTipo5}.";
+            }
+            if ($qtdTipo6Trailer !== $countTipo6) {
+                $errors[] = "Trailer indica {$qtdTipo6Trailer} registros Tipo 6, mas o arquivo contém {$countTipo6}.";
+            }
+            if ($qtdTipo7Trailer !== $countTipo7) {
+                $errors[] = "Trailer indica {$qtdTipo7Trailer} registros Tipo 7, mas o arquivo contém {$countTipo7}.";
+            }
             if ($totalLinhasTrailer !== $totalLinhasReais) {
                 $errors[] = "Trailer indica total de {$totalLinhasTrailer} linhas, mas o arquivo possui {$totalLinhasReais}.";
             }
         }
 
+        $totalRecords = $countTipo2 + $countTipo3 + $countTipo4 + $countTipo5 + $countTipo6 + $countTipo7;
+
         return [
             'is_valid' => empty($errors),
             'errors' => $errors,
-            'total_records' => $type3Count,
+            'total_records' => $totalRecords,
         ];
     }
 
