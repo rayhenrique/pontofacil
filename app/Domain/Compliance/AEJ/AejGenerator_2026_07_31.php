@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\Establishment;
 use App\Models\TimeBankAccount;
 use App\Models\TimeBankPolicy;
+use App\Models\TimeBankTransaction;
 use App\Models\WorkSchedule;
 use Carbon\Carbon;
 
@@ -147,7 +148,7 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
         $count02++;
         $idRepAej = '1';
         $tpRep = '3'; // REP-P
-        $nrRep = $isPreview ? 'PREVIA-NAO-FECHADA' : trim($company->getInpiFiscalCode());
+        $nrRep = $company->isRegisteredInpi() ? trim((string) $company->inpi_registration_number) : '';
         $lines[] = implode('|', ['02', $idRepAej, $tpRep, $nrRep]);
 
         // 3. Registro 03: Vínculos (Empregados)
@@ -203,6 +204,7 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
         }
 
         // 5. Registro 05: Marcações Tratadas
+        // 05|idtVinculoAej|dataHoraMarc|idRepAej|tpMarc|seqEntSaida|fonteMarc|codHorContratual|motivo
         foreach ($employeeDataList as $item) {
             $empId = $item['employee']['id'] ?? 1;
             $idtVinculoAej = $vinculoMap[$empId] ?? '1';
@@ -217,13 +219,45 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
 
                     $tsLocal = $ts->copy()->setTimezone($establishment->timezone ?: 'America/Maceio');
                     $dataHoraMarc = $this->fiscalHashService->formatDateTimeIso($tsLocal);
-                    $numNsr = (string) ($punch['nsr'] ?? ($pIdx + 1));
-                    $repId = '1';
+                    $idRepAej = '1';
                     $tpMarc = ($pIdx % 2 === 0) ? 'E' : 'S';
-                    $tipoFonte = ($punch['source'] ?? '') === 'ptrp_manual' ? '2' : '1';
-                    $motivo = ($tipoFonte === '2') ? ($this->sanitize($punch['reason'] ?? 'Inclusao manual de ponto')) : '';
+                    $pairSeq = (int) floor($pIdx / 2) + 1;
+                    $seqEntSaida = (string) $pairSeq;
 
-                    $lines[] = implode('|', ['05', $idtVinculoAej, $dataHoraMarc, $numNsr, $repId, $tpMarc, $tipoFonte, $motivo]);
+                    // Mapeamento oficial da fonte da marcação:
+                    // O = original do REP
+                    // I = incluída manualmente
+                    // P = pré-assinalada
+                    // X = ponto por exceção
+                    // T = outra
+                    $rawSource = $punch['source'] ?? 'rep_p';
+                    $fonteMarc = match ($rawSource) {
+                        'rep_p', 'rep' => 'O',
+                        'ptrp_manual', 'manual' => 'I',
+                        'pre_assigned' => 'P',
+                        'exception' => 'X',
+                        default => 'O',
+                    };
+
+                    // codHorContratual: '1' na primeira entrada do dia, vazio nas demais
+                    $codHorContratual = ($tpMarc === 'E' && $pairSeq === 1) ? '1' : '';
+
+                    // motivo: preenchido se tpMarc = 'D' ou fonteMarc = 'I'
+                    $motivo = ($tpMarc === 'D' || $fonteMarc === 'I')
+                        ? $this->sanitize($punch['reason'] ?? 'Inclusao manual de ponto')
+                        : '';
+
+                    $lines[] = implode('|', [
+                        '05',
+                        $idtVinculoAej,
+                        $dataHoraMarc,
+                        $idRepAej,
+                        $tpMarc,
+                        $seqEntSaida,
+                        $fonteMarc,
+                        $codHorContratual,
+                        $motivo,
+                    ]);
                 }
             }
         }
@@ -240,39 +274,58 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
         }
 
         // 7. Registro 07: Ausências e Banco de Horas
+        // 07|idtVinculoAej|tipoAusenOuComp|data|qtMinutos|tipoMovBH
         foreach ($employeeDataList as $item) {
             $empId = $item['employee']['id'] ?? 1;
             $idtVinculoAej = $vinculoMap[$empId] ?? '1';
 
-            // Ausências registradas na competência
+            // Ausências registradas na competência (tipo 2)
             foreach ($item['journeys'] as $j) {
                 $absenceMinutes = (int) ($j['absence_minutes'] ?? 0);
                 if ($absenceMinutes > 0) {
                     $count07++;
                     $dataAusencia = Carbon::parse($j['date'])->format('Y-m-d');
-                    $lines[] = implode('|', ['07', $idtVinculoAej, '2', $dataAusencia, (string) $absenceMinutes]);
+                    $lines[] = implode('|', ['07', $idtVinculoAej, '2', $dataAusencia, (string) $absenceMinutes, '']);
                 }
             }
 
-            // Movimentação / Saldo do Banco de Horas
-            $timeBank = $item['time_bank'] ?? [];
-            if (($timeBank['policy_mode'] ?? 'DISABLED') !== 'DISABLED') {
-                $count07++;
-                $closingDate = $endDate->format('Y-m-d');
-                $finalBalance = (int) ($timeBank['final_balance'] ?? 0);
-                $lines[] = implode('|', ['07', $idtVinculoAej, '3', $closingDate, (string) $finalBalance]);
+            // Movimentações reais do banco de horas do PTRP (tipo 3)
+            $account = TimeBankAccount::where('employee_id', $empId)->first();
+            if ($account) {
+                $transactions = TimeBankTransaction::where('time_bank_account_id', $account->id)
+                    ->whereBetween('reference_date', [$startDate->toDateString(), $endDate->toDateString()])
+                    ->orderBy('reference_date', 'asc')
+                    ->orderBy('created_at', 'asc')
+                    ->get();
+
+                foreach ($transactions as $tx) {
+                    $qtMinutos = abs((int) $tx->minutes);
+                    if ($qtMinutos === 0) {
+                        continue;
+                    }
+
+                    // 1 = Inclusão de horas no banco de horas (crédito)
+                    // 2 = Compensação de horas do banco de horas (débito)
+                    $tipoMovBH = ($tx->minutes > 0) ? '1' : '2';
+
+                    $count07++;
+                    $dataMov = Carbon::parse($tx->reference_date)->format('Y-m-d');
+                    $lines[] = implode('|', ['07', $idtVinculoAej, '3', $dataMov, (string) $qtMinutos, $tipoMovBH]);
+                }
             }
         }
 
         // 8. Registro 08: Identificação do PTRP / Desenvolvedor
+        // 08|nomePrograma|versaoPrograma|tpIdDev|numIdDev|razaoSocialDev|emailDev
         $count08++;
-        $tpIdtDesenv = '1';
-        $idtDesenv = preg_replace('/\D/', '', $company->cnpj ?: $establishment->identifier_number);
-        $nomeDesenv = $this->sanitize($company->legal_name);
-        $nomeSoftware = $this->sanitize($company->rep_p_software_name ?: 'PontoFacil');
-        $versaoSoftware = $this->sanitize($company->rep_p_software_version ?: '2.0.0');
+        $nomeSoftware = $this->sanitize((string) config('compliance.software.name', 'PontoFacil'));
+        $versaoSoftware = $this->sanitize((string) config('compliance.software.version', '2.5.0'));
+        $tpIdtDesenv = (string) config('compliance.developer.document_type', '1');
+        $idtDesenv = preg_replace('/\D/', '', (string) config('compliance.developer.document', '12345678000199'));
+        $nomeDesenv = $this->sanitize((string) config('compliance.developer.name', 'PontoFacil Tecnologia Ltda'));
+        $emailDesenv = $this->sanitize((string) config('compliance.developer.email', 'compliance@pontofacil.local'));
 
-        $lines[] = implode('|', ['08', $tpIdtDesenv, $idtDesenv, $nomeDesenv, $nomeSoftware, $versaoSoftware]);
+        $lines[] = implode('|', ['08', $nomeSoftware, $versaoSoftware, $tpIdtDesenv, $idtDesenv, $nomeDesenv, $emailDesenv]);
 
         // 9. Registro 99: Trailer com Totalizadores por Tipo
         $lines[] = implode('|', [
@@ -286,6 +339,9 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
             (string) $count07,
             (string) $count08,
         ]);
+
+        // Linha de assinatura externa CAdES (.p7s)
+        $lines[] = str_pad('ASSINATURA_DIGITAL_EM_ARQUIVO_P7S', 100, ' ', STR_PAD_RIGHT);
 
         $finalContent = implode("\r\n", $lines)."\r\n";
 

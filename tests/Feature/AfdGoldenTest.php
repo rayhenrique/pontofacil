@@ -94,24 +94,25 @@ class AfdGoldenTest extends TestCase
             Carbon::parse('2026-10-01 18:00:00', 'America/Maceio')
         );
 
-        $lines = explode("\r\n", trim($result->content));
-        // Header (1) + Tipo 2 (1) + Tipo 5 (2) + Tipo 7 (4) + Trailer (1) = 9 linhas
-        $this->assertCount(9, $lines);
+        $lines = explode("\r\n", rtrim($result->content, "\r\n"));
+        // Header (1) + Tipo 2 (1) + Tipo 5 (2) + Tipo 7 (4) + Trailer (1) + Signature (1) = 10 linhas
+        $this->assertCount(10, $lines);
 
-        // Cabeçalho (Tipo 1) - 236 caracteres
-        $this->assertSame(236, strlen($lines[0]), 'Cabeçalho AFD Tipo 1 deve conter exatamente 236 caracteres.');
+        // Cabeçalho (Tipo 1) - 284 caracteres com CRC-16 Kermit
+        $this->assertSame(284, strlen($lines[0]), 'Cabeçalho AFD Tipo 1 deve conter exatamente 284 caracteres.');
         $this->assertStringStartsWith('0000000001', $lines[0]);
         $this->assertStringContainsString('12345678000199', $lines[0]);
-        $this->assertStringContainsString('PENDENTE REGISTRO', $lines[0]);
+        $this->assertStringContainsString('00000000000000000', $lines[0]);
+        $this->assertStringNotContainsString('PENDENTE REGISTRO', $lines[0]);
 
-        // Registro Tipo 2 (Empregador) - 203 caracteres com CRC-16
-        $this->assertSame(203, strlen($lines[1]), 'Registro Tipo 2 deve conter exatamente 203 caracteres.');
+        // Registro Tipo 2 (Empregador) - 314 caracteres com CRC-16 Kermit
+        $this->assertSame(314, strlen($lines[1]), 'Registro Tipo 2 deve conter exatamente 314 caracteres.');
         $this->assertSame('2', $lines[1][9]);
 
-        // Registros Tipo 5 (Trabalhador) - 189 caracteres com CRC-16
-        $this->assertSame(189, strlen($lines[2]), 'Registro Tipo 5 deve conter exatamente 189 caracteres.');
+        // Registros Tipo 5 (Trabalhador) - 101 caracteres com CRC-16 Kermit
+        $this->assertSame(101, strlen($lines[2]), 'Registro Tipo 5 deve conter exatamente 101 caracteres.');
         $this->assertSame('5', $lines[2][9]);
-        $this->assertSame(189, strlen($lines[3]), 'Registro Tipo 5 deve conter exatamente 189 caracteres.');
+        $this->assertSame(101, strlen($lines[3]), 'Registro Tipo 5 deve conter exatamente 101 caracteres.');
         $this->assertSame('5', $lines[3][9]);
 
         // Registros Tipo 7 (Marcação REP-P) - 137 caracteres com SHA-256 encadeado
@@ -121,9 +122,13 @@ class AfdGoldenTest extends TestCase
             $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/i', substr($lines[$i], 73, 64));
         }
 
-        // Trailer (Tipo 9) - 73 caracteres
-        $this->assertSame(73, strlen($lines[8]), 'Trailer Tipo 9 deve conter exatamente 73 caracteres.');
+        // Trailer (Tipo 9) - 64 caracteres (sem totalLinhas)
+        $this->assertSame(64, strlen($lines[8]), 'Trailer Tipo 9 deve conter exatamente 64 caracteres.');
         $this->assertStringStartsWith('9999999999', $lines[8]);
+
+        // Linha de assinatura digital (.p7s) - 100 caracteres
+        $this->assertSame(100, strlen($lines[9]), 'Linha de assinatura digital deve conter exatamente 100 caracteres.');
+        $this->assertStringStartsWith('ASSINATURA_DIGITAL_EM_ARQUIVO_P7S', $lines[9]);
 
         Carbon::setTestNow();
     }
@@ -143,7 +148,7 @@ class AfdGoldenTest extends TestCase
             Carbon::parse('2026-10-01 18:00:00', 'America/Maceio')
         );
 
-        $lines = explode("\r\n", trim($result->content));
+        $lines = explode("\r\n", rtrim($result->content, "\r\n"));
 
         // Checa sequência ascendente contígua dos NSRs (1 a 7)
         for ($i = 1; $i <= 7; $i++) {
@@ -151,7 +156,7 @@ class AfdGoldenTest extends TestCase
             $this->assertStringStartsWith($expectedNsr, $lines[$i]);
         }
 
-        // Checa totalizadores no trailer Tipo 9 (73 caracteres)
+        // Checa totalizadores no trailer Tipo 9 (64 caracteres)
         $trailer = $lines[8];
         $qtdTipo2 = (int) substr($trailer, 10, 9);
         $qtdTipo3 = (int) substr($trailer, 19, 9);
@@ -159,7 +164,6 @@ class AfdGoldenTest extends TestCase
         $qtdTipo5 = (int) substr($trailer, 37, 9);
         $qtdTipo6 = (int) substr($trailer, 46, 9);
         $qtdTipo7 = (int) substr($trailer, 55, 9);
-        $totalLinhas = (int) substr($trailer, 64, 9);
 
         $this->assertSame(1, $qtdTipo2);
         $this->assertSame(0, $qtdTipo3); // REP-P não usa tipo 3
@@ -167,7 +171,6 @@ class AfdGoldenTest extends TestCase
         $this->assertSame(2, $qtdTipo5);
         $this->assertSame(0, $qtdTipo6);
         $this->assertSame(4, $qtdTipo7);
-        $this->assertSame(9, $totalLinhas);
 
         Carbon::setTestNow();
     }
@@ -226,16 +229,18 @@ class AfdGoldenTest extends TestCase
         $validator = new AfdValidator;
 
         // 1. Arquivo com cabeçalho truncado
-        $invalidHeader = "0000000001112345678000199\r\n9999999999000000000000000000000000000000000000000000000000000000000000002\r\n";
+        $invalidHeader = "0000000001112345678000199\r\n9999999999000000000000000000000000000000000000000000000000000002\r\n";
         $val1 = $validator->validate($invalidHeader);
         $this->assertFalse($val1['is_valid']);
-        $this->assertStringContainsString('exige exatamente 236', $val1['errors'][0]);
+        $this->assertStringContainsString('exige exatamente 284', $val1['errors'][0]);
 
         // 2. Arquivo com NSR fora de ordem monotônica
-        $header = str_pad('0000000001112345678000199000000000000EMPRESA TESTE', 204, ' ').'01102026311020260110202612000002';
+        $headerPrefix = str_pad('0000000001112345678000199000000000000EMPRESA TESTE', 204, ' ').'0110202631102026011020261200003112345678000199'.str_pad('PontoFacil', 30, ' ', STR_PAD_RIGHT);
+        $headerCrc = (new FiscalHashService)->calculateCrc16($headerPrefix);
+        $header = $headerPrefix.$headerCrc;
         $punch1 = '00000000572026-10-01T12:00:00-03000111222333442026-10-01T12:00:00-0300020'.str_repeat('a', 64);
         $punch2 = '00000000372026-10-01T13:00:00-03000111222333442026-10-01T13:00:00-0300020'.str_repeat('b', 64);
-        $trailer = '9999999999000000000000000000000000000000000000000000000000000000000000004';
+        $trailer = '9999999999000000000000000000000000000000000000000000000000000002';
 
         $invalidContent = $header."\r\n".$punch1."\r\n".$punch2."\r\n".$trailer."\r\n";
         $val2 = $validator->validate($invalidContent);

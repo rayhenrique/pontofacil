@@ -14,6 +14,8 @@ class AfdExportResult
         public Carbon $startDate,
         public Carbon $endDate,
         public int $totalRecords,
-        public string $crcChecksum
+        public string $crcChecksum,
+        public bool $isHomologated = false,
+        public string $signatureStatus = 'pending_certificate',
     ) {}
 }

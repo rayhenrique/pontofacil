@@ -6,12 +6,18 @@ use App\Domain\Company\Services\CurrentCompany;
 use App\Domain\Compliance\AEJ\AejGenerator_2026_07_31;
 use App\Domain\Compliance\AEJ\AejValidator;
 use App\Domain\PTRP\Actions\CloseMonthlyPeriodAction;
+use App\Domain\PTRP\Enums\TimeBankTransactionType;
+use App\Domain\PTRP\Enums\TreatmentEventStatus;
+use App\Domain\PTRP\Enums\TreatmentEventType;
 use App\Domain\TimeClock\Actions\RecordPunchEventAction;
 use App\Enums\UserRole;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Establishment;
 use App\Models\Sector;
+use App\Models\TimeBankAccount;
+use App\Models\TimeBankTransaction;
+use App\Models\TreatmentEvent;
 use App\Models\User;
 use App\Models\WorkSchedule;
 use Carbon\Carbon;
@@ -136,7 +142,6 @@ class AejGoldenTest extends TestCase
         );
 
         $this->assertTrue($result->isPreview);
-        $this->assertStringContainsString('PREVIA-NAO-FECHADA', $result->content);
         $this->assertStringStartsWith('AEJ_PREVIA_', $result->filename);
 
         $validation = $validator->validate($result->content);
@@ -202,7 +207,7 @@ class AejGoldenTest extends TestCase
             forcePreview: false
         );
 
-        $lines = explode("\r\n", trim($result->content));
+        $lines = explode("\r\n", rtrim($result->content, "\r\n"));
         $headerParts = explode('|', $lines[0]);
 
         $this->assertSame('01', $headerParts[0]);
@@ -231,14 +236,14 @@ class AejGoldenTest extends TestCase
             forcePreview: false
         );
 
-        $lines = explode("\r\n", trim($result->content));
+        $lines = explode("\r\n", rtrim($result->content, "\r\n"));
 
-        // Registro 02: REPs utilizados
+        // Registro 02: REPs utilizados (02|idRepAej|tpRep|numRegRep)
         $repParts = explode('|', $lines[1]);
         $this->assertSame('02', $repParts[0]);
         $this->assertSame('1', $repParts[1]); // idRepAej
         $this->assertSame('3', $repParts[2]); // 3 = REP-P
-        $this->assertSame('PENDENTE REGISTRO', $repParts[3]);
+        $this->assertSame('', $repParts[3]); // Vazio quando pendente INPI (sem texto fictício)
 
         // Registro 03: Vínculos
         $empParts = explode('|', $lines[2]);
@@ -264,7 +269,7 @@ class AejGoldenTest extends TestCase
             forcePreview: false
         );
 
-        $lines = explode("\r\n", trim($result->content));
+        $lines = explode("\r\n", rtrim($result->content, "\r\n"));
         $schedParts = explode('|', $lines[3]);
 
         $this->assertSame('04', $schedParts[0]);
@@ -277,7 +282,7 @@ class AejGoldenTest extends TestCase
     }
 
     /**
-     * Teste de Marcações e Tratamento (Registro 05):
+     * Teste de Marcações e Tratamento (Registro 05 Oficial):
      */
     public function test_aej_punches_and_treatments_records(): void
     {
@@ -292,36 +297,80 @@ class AejGoldenTest extends TestCase
             forcePreview: false
         );
 
-        $lines = explode("\r\n", trim($result->content));
+        $lines = explode("\r\n", rtrim($result->content, "\r\n"));
         $punchLines = array_values(array_filter($lines, fn ($l) => str_starts_with($l, '05|')));
 
         $this->assertCount(4, $punchLines);
 
-        // Batida 1: Entrada 08:00
+        // Batida 1: Entrada 08:00 (par 1)
+        // 05|idtVinculoAej|dataHoraMarc|idRepAej|tpMarc|seqEntSaida|fonteMarc|codHorContratual|motivo
         $p1 = explode('|', $punchLines[0]);
         $this->assertSame('05', $p1[0]);
         $this->assertSame('1', $p1[1]); // vínculo 1
         $this->assertSame('2026-01-05T08:00:00-0300', $p1[2]);
-        $this->assertSame('3', $p1[3]); // NSR (1=establishment, 2=employee, 3..6=punches)
-        $this->assertSame('1', $p1[4]); // REP
-        $this->assertSame('E', $p1[5]); // Entrada
-        $this->assertSame('1', $p1[6]); // Fonte 1 = Original REP
+        $this->assertSame('1', $p1[3]); // idRepAej
+        $this->assertSame('E', $p1[4]); // Entrada
+        $this->assertSame('1', $p1[5]); // seqEntSaida (par 1)
+        $this->assertSame('O', $p1[6]); // Fonte 'O' = Original REP
+        $this->assertSame('1', $p1[7]); // codHorContratual na 1ª entrada
+        $this->assertSame('', $p1[8]); // motivo vazio
 
-        // Batida 2: Saída 12:00
+        // Batida 2: Saída 12:00 (par 1)
         $p2 = explode('|', $punchLines[1]);
-        $this->assertSame('S', $p2[5]);
+        $this->assertSame('05', $p2[0]);
+        $this->assertSame('S', $p2[4]); // Saída
+        $this->assertSame('1', $p2[5]); // seqEntSaida (par 1)
+        $this->assertSame('O', $p2[6]);
+        $this->assertSame('', $p2[7]);
 
-        // Batida 3: Entrada 13:00
+        // Batida 3: Entrada 13:00 (par 2)
         $p3 = explode('|', $punchLines[2]);
-        $this->assertSame('E', $p3[5]);
+        $this->assertSame('05', $p3[0]);
+        $this->assertSame('E', $p3[4]); // Entrada
+        $this->assertSame('2', $p3[5]); // seqEntSaida (par 2)
+        $this->assertSame('O', $p3[6]);
+        $this->assertSame('', $p3[7]);
 
-        // Batida 4: Saída 17:00
+        // Batida 4: Saída 17:00 (par 2)
         $p4 = explode('|', $punchLines[3]);
-        $this->assertSame('S', $p4[5]);
+        $this->assertSame('05', $p4[0]);
+        $this->assertSame('S', $p4[4]); // Saída
+        $this->assertSame('2', $p4[5]); // seqEntSaida (par 2)
+        $this->assertSame('O', $p4[6]);
+        $this->assertSame('', $p4[7]);
     }
 
     /**
-     * Teste de Trailer e Contadores (Registro 99):
+     * Teste de Identificação do Desenvolvedor / PTRP (Registro 08):
+     */
+    public function test_aej_developer_record_08_structure(): void
+    {
+        $this->createClosedPeriodWithPunches();
+
+        $generator = app(AejGenerator_2026_07_31::class);
+        $result = $generator->generate(
+            establishment: $this->establishment,
+            year: 2026,
+            month: 1,
+            generationTime: Carbon::parse('2026-02-01 09:30:00', 'America/Maceio'),
+            forcePreview: false
+        );
+
+        $lines = explode("\r\n", rtrim($result->content, "\r\n"));
+        $rec08 = array_values(array_filter($lines, fn ($l) => str_starts_with($l, '08|')))[0] ?? '';
+        $parts08 = explode('|', $rec08);
+
+        $this->assertSame('08', $parts08[0]);
+        $this->assertSame('PontoFacil', $parts08[1]); // nomePrograma
+        $this->assertSame('2.5.0', $parts08[2]); // versaoPrograma
+        $this->assertSame('1', $parts08[3]); // tpIdDev (1=CNPJ)
+        $this->assertSame('12345678000199', $parts08[4]); // numIdDev
+        $this->assertSame('PontoFacil Tecnologia Ltda', $parts08[5]); // razaoSocialDev
+        $this->assertSame('compliance@pontofacil.local', $parts08[6]); // emailDev
+    }
+
+    /**
+     * Teste de Trailer, Contadores (Registro 99) e Marcador de Assinatura CAdES:
      */
     public function test_aej_trailer_and_record_counters(): void
     {
@@ -336,8 +385,11 @@ class AejGoldenTest extends TestCase
             forcePreview: false
         );
 
-        $lines = explode("\r\n", trim($result->content));
-        $trailerParts = explode('|', end($lines));
+        $lines = explode("\r\n", rtrim($result->content, "\r\n"));
+
+        // Penúltima linha é o Trailer (Tipo 99)
+        $trailerIndex = count($lines) - 2;
+        $trailerParts = explode('|', $lines[$trailerIndex]);
 
         $this->assertSame('99', $trailerParts[0]);
         $this->assertSame('1', $trailerParts[1]); // qt01
@@ -348,6 +400,11 @@ class AejGoldenTest extends TestCase
         $this->assertSame('1', $trailerParts[6]); // qt06 (matrícula)
         $this->assertSame('21', $trailerParts[7]); // qt07 (21 ausências apuradas nos dias úteis sem batida)
         $this->assertSame('1', $trailerParts[8]); // qt08 (PTRP)
+
+        // Última linha é a assinatura externa CAdES (.p7s)
+        $sigLine = $lines[count($lines) - 1];
+        $this->assertSame(100, strlen($sigLine));
+        $this->assertStringStartsWith('ASSINATURA_DIGITAL_EM_ARQUIVO_P7S', $sigLine);
     }
 
     /**
@@ -377,6 +434,170 @@ class AejGoldenTest extends TestCase
         $validation = $validator->validate($result->content);
 
         $this->assertTrue($validation['is_valid'], 'Pipes acidentais não devem corromper a estrutura do AEJ: '.implode('; ', $validation['errors']));
+    }
+
+    /**
+     * Teste de Relação de Empregados e Matrícula eSocial (Registro 06):
+     */
+    public function test_aej_record_06_esocial_registration(): void
+    {
+        $generator = app(AejGenerator_2026_07_31::class);
+        $result = $generator->generate(
+            establishment: $this->establishment,
+            year: 2026,
+            month: 1,
+            forcePreview: true
+        );
+
+        $lines = explode("\r\n", rtrim($result->content, "\r\n"));
+        $rec06 = array_values(array_filter($lines, fn ($l) => str_starts_with($l, '06|')))[0] ?? '';
+        $parts06 = explode('|', $rec06);
+
+        $this->assertSame('06', $parts06[0]);
+        $this->assertSame('1', $parts06[1]); // idtVinculoAej
+        $this->assertSame('MAT-202', $parts06[2]); // matrícula eSocial
+    }
+
+    /**
+     * Teste de Inclusão Manual no Registro 05 (fonteMarc = 'I' com motivo obrigatório):
+     */
+    public function test_aej_record_05_manual_punch_source_i_with_reason(): void
+    {
+        // Registrar batida manual aprovada no PTRP
+        TreatmentEvent::create([
+            'employee_id' => $this->employee->id,
+            'type' => TreatmentEventType::ManualPunchAdded,
+            'status' => TreatmentEventStatus::Approved,
+            'effective_at' => Carbon::parse('2026-01-06 08:00:00', 'America/Maceio'),
+            'reason_text' => 'Esquecimento de cracha',
+            'requested_by' => $this->worker->id,
+            'approved_by' => $this->admin->id,
+            'decided_at' => Carbon::parse('2026-01-06 08:30:00'),
+        ]);
+
+        $generator = app(AejGenerator_2026_07_31::class);
+        $result = $generator->generate(
+            establishment: $this->establishment,
+            year: 2026,
+            month: 1,
+            forcePreview: true
+        );
+
+        $lines = explode("\r\n", rtrim($result->content, "\r\n"));
+        $manualPunchLines = array_values(array_filter($lines, fn ($l) => str_starts_with($l, '05|') && str_contains($l, '|I|')));
+
+        $this->assertCount(1, $manualPunchLines);
+        $p = explode('|', $manualPunchLines[0]);
+
+        $this->assertSame('05', $p[0]);
+        $this->assertSame('1', $p[1]); // vínculo
+        $this->assertSame('2026-01-06T08:00:00-0300', $p[2]); // dataHoraMarc
+        $this->assertSame('1', $p[3]); // idRepAej
+        $this->assertSame('E', $p[4]); // tipo
+        $this->assertSame('1', $p[5]); // seqEntSaida
+        $this->assertSame('I', $p[6]); // fonteMarc = 'I' (incluída manualmente)
+        $this->assertSame('1', $p[7]); // codHorContratual na primeira entrada
+        $this->assertSame('Esquecimento de cracha', $p[8]); // motivo obrigatório
+
+        // Validação formal com AejValidator
+        $validator = app(AejValidator::class);
+        $validation = $validator->validate($result->content);
+        $this->assertTrue($validation['is_valid'], 'Erros de validação do AEJ com batida manual: '.implode('; ', $validation['errors']));
+    }
+
+    /**
+     * Teste de Banco de Horas no Registro 07 (movimentações reais crédito e débito):
+     */
+    public function test_aej_record_07_time_bank_movements(): void
+    {
+        $account = TimeBankAccount::getOrCreateForEmployee($this->employee);
+
+        // Crédito de 120 minutos (+2h)
+        TimeBankTransaction::create([
+            'time_bank_account_id' => $account->id,
+            'type' => TimeBankTransactionType::OvertimeCredit,
+            'minutes' => 120,
+            'reference_date' => '2026-01-10',
+            'description' => 'Horas extras de sabado',
+            'created_by' => $this->admin->id,
+        ]);
+
+        // Débito/Compensação de 60 minutos (-1h)
+        TimeBankTransaction::create([
+            'time_bank_account_id' => $account->id,
+            'type' => TimeBankTransactionType::CompensationDebit,
+            'minutes' => -60,
+            'reference_date' => '2026-01-15',
+            'description' => 'Compensacao de folga parcial',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $generator = app(AejGenerator_2026_07_31::class);
+        $result = $generator->generate(
+            establishment: $this->establishment,
+            year: 2026,
+            month: 1,
+            forcePreview: true
+        );
+
+        $lines = explode("\r\n", rtrim($result->content, "\r\n"));
+        $tbLines = array_values(array_filter($lines, fn ($l) => str_starts_with($l, '07|') && str_contains($l, '|3|')));
+
+        $this->assertCount(2, $tbLines);
+
+        // Crédito: 07|idtVinculoAej|3|data|120|1
+        $credit = explode('|', $tbLines[0]);
+        $this->assertSame('07', $credit[0]);
+        $this->assertSame('1', $credit[1]);
+        $this->assertSame('3', $credit[2]); // 3 = banco de horas
+        $this->assertSame('2026-01-10', $credit[3]);
+        $this->assertSame('120', $credit[4]); // qtMinutos
+        $this->assertSame('1', $credit[5]); // tipoMovBH = '1' (crédito)
+
+        // Débito: 07|idtVinculoAej|3|data|60|2
+        $debit = explode('|', $tbLines[1]);
+        $this->assertSame('07', $debit[0]);
+        $this->assertSame('1', $debit[1]);
+        $this->assertSame('3', $debit[2]); // 3 = banco de horas
+        $this->assertSame('2026-01-15', $debit[3]);
+        $this->assertSame('60', $debit[4]); // qtMinutos positivo
+        $this->assertSame('2', $debit[5]); // tipoMovBH = '2' (compensação/débito)
+
+        $validator = app(AejValidator::class);
+        $validation = $validator->validate($result->content);
+        $this->assertTrue($validation['is_valid'], 'Erros de validação do AEJ com movimentações de banco de horas: '.implode('; ', $validation['errors']));
+    }
+
+    /**
+     * Teste de Registro 02 com INPI Homologado vs Pendente:
+     */
+    public function test_aej_record_02_with_inpi_homologated_and_pending(): void
+    {
+        $generator = app(AejGenerator_2026_07_31::class);
+
+        // 1. Cenário Pendente: sem texto fictício, campo 4 vazio
+        $resultPending = $generator->generate($this->establishment, 2026, 1, forcePreview: true);
+        $linesPending = explode("\r\n", rtrim($resultPending->content, "\r\n"));
+        $rec02Pending = explode('|', $linesPending[1]);
+        $this->assertSame('02', $rec02Pending[0]);
+        $this->assertSame('1', $rec02Pending[1]);
+        $this->assertSame('3', $rec02Pending[2]);
+        $this->assertSame('', $rec02Pending[3]);
+
+        // 2. Cenário Homologado com número de registro INPI real
+        $this->company->update([
+            'inpi_registration_status' => 'registered',
+            'inpi_registration_number' => 'BR5120260000010',
+        ]);
+        $this->establishment->refresh();
+
+        $resultRegistered = $generator->generate($this->establishment, 2026, 1, forcePreview: true);
+        $linesRegistered = explode("\r\n", rtrim($resultRegistered->content, "\r\n"));
+        $rec02Registered = explode('|', $linesRegistered[1]);
+        $this->assertSame('02', $rec02Registered[0]);
+        $this->assertSame('1', $rec02Registered[1]);
+        $this->assertSame('3', $rec02Registered[2]);
+        $this->assertSame('BR5120260000010', $rec02Registered[3]);
     }
 
     /**

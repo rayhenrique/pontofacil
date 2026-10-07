@@ -1,26 +1,36 @@
 # Histórico de Versões (Changelog)
 
 ## v2.5.0 (Atual)
-- **Conformidade MTE 31/07/2026: AFD Tipo 7, Integração ARP Real e AEJ Delimitado:**
-  - **AFD Oficial REP-P & Hash Tipo 7 Encadeado:**
-    - Substituição do Registro Tipo 3 pelo Registro Tipo 7 oficial para o REP-P (comprimento estrito de 137 caracteres).
-    - Prefixo canônico oficial de 73 caracteres (`NSR(9) + TIPO(1) + DATA_HORA_ISO(24) + COLETOR(2) + TIPO_MARCACAO(1) + CPF(11) + MATRICULA_HASH(25)`).
-    - Encadeamento fiscal do hash SHA-256 Tipo 7 com o hash do Tipo 7 imediatamente anterior do mesmo estabelecimento (ou 64 zeros no registro gênese).
-    - Implementação de todos os tipos de registros oficiais do AFD: Tipo 1 (236 car.), Tipo 2 (203 car. com CRC-16 Kermit), Tipo 4 (49 car. com CRC-16 Kermit), Tipo 5 (189 car. com CRC-16 Kermit), Tipo 6 (136 car.), Tipo 7 (137 car.) e Tipo 9 Trailer (73 car.).
-    - Substituição definitiva de CRC-32 por CRC-16 CCITT-TRUE / Kermit nos registros previstos.
-    - Exportação do AFD derivada diretamente de `arp_events`, preservando os NSRs originais sem renumerar eventos.
-  - **Integração Real da ARP aos Eventos do Sistema:**
-    - Mutações de Empregador e Estabelecimento (`ArpEventType::EmployerEstablishmentMutation`) integradas via `EstablishmentObserver` e `CompanyObserver`.
-    - Mutações Cadastrais de Trabalhadores (`ArpEventType::WorkerMutation`) integradas via `EmployeeObserver` para Inclusão (`I`), Alteração (`A`) e Inativação (`E`).
-    - Eventos de Sincronismo de Relógio (`TimeSync`) e Eventos Sensíveis do REP-P (`RepSensitiveEvent`) estruturados no ledger.
-    - Sequência unificada e monotônica de NSR por estabelecimento compartilhada por todos os eventos fiscais, com bloqueio pessimista (`lockForUpdate()`) e imutabilidade absoluta.
-  - **AEJ Oficial Delimitado por Pipes (`|`) & Golden Tests:**
-    - Reestruturação completa do gerador e validador do AEJ para formato delimitado por pipes `|` conforme o leiaute oficial do MTE.
-    - Implementação dos registros 01 (Cabeçalho), 02 (REPs), 03 (Vínculos), 04 (Horários Contratuais), 05 (Marcações Tratadas), 06 (Matrículas), 07 (Ausências e DSRs apurados), 08 (Software PTRP) e 99 (Trailer com contadores).
-    - Remoção de tamanhos fixos e remoção de CRC-32 do AEJ.
-    - Bloqueio de emissão fiscal definitiva sem período formalmente fechado (`ClosedPeriod`), mantendo modo preview transparente.
-    - Golden Tests com comparação byte a byte em formato Windows CRLF e fixtures versionadas somente-leitura.
-  - **Suíte de Testes Expandida:** `147 testes e 658 asserções 100% aprovados`.
+- **Conformidade MTE 31/07/2026: AFD REP-P Oficial & AEJ do PTRP (Portaria 671/2021 MTP):**
+  - **AFD REP-P Oficial (Leiaute MTE 31/07/2026):**
+    - **Geração Direta da ARP:** Gerado estritamente a partir do ledger `arp_events`, preservando NSR original contíguo, ordem cronológica e tipos fiscais sem renumerar eventos.
+    - **Registro Tipo 1 (Cabeçalho - 284 caracteres):** Refeito com versão do leiaute `003`, identificação do empregador, 17 zeros para INPI pendente (sem strings fictícias), identificador e documento do desenvolvedor (14 car.), modelo do software (30 car.) e CRC-16 Kermit CCITT-TRUE (`123456789 -> 2189`).
+    - **Registro Tipo 2 (Empregador/Estabelecimento - 314 caracteres):** Campo NSR (9), tipo (1), gravação (14), CPF do responsável (11), identificador do empregador, razão social (150), local da prestação de serviços (100) e CRC-16 Kermit.
+    - **Registro Tipo 4 (Ajuste de Relógio - 49 caracteres):** NSR (9), tipo (1), data/hora antes (12), data/hora depois (12), CPF do responsável (11) e CRC-16 Kermit.
+    - **Registro Tipo 5 (Trabalhador - 101 caracteres):** Operação (I/A/E), CPF do trabalhador (11), nome padronizado (52 car.), CPF do responsável (11) e CRC-16 Kermit.
+    - **Registro Tipo 6 (Eventos Sensíveis REP-P - 36 caracteres):** Códigos oficiais do REP-P (`01` = início/disponibilidade, `02` = término/indisponibilidade), sem campos ou descrições livres no arquivo fiscal.
+    - **Registro Tipo 7 (Marcações REP-P - 137 caracteres):** Separação de ocorrência e gravação para marcações offline, coletor oficial (`01` = mobile, `02` = web), tipo de marcação (`E`/`S`), CPF (11) e hash fiscal SHA-256 (64 car.) encadeado com o Tipo 7 anterior (e hash gênese sobre o prefixo oficial de 73 caracteres sem 64 zeros fictícios).
+    - **Registro Tipo 9 (Trailer - 64 caracteres):** Posição oficial do identificador `9`, contadores estritos dos tipos 2 a 7 (6 campos de 9 dígitos), sem campos de total de linhas inventados.
+    - **Linha de Assinatura CAdES:** Marcador oficial de 100 caracteres `ASSINATURA_DIGITAL_EM_ARQUIVO_P7S` preenchido com espaços à direita.
+    - **CRC-16 Kermit:** Validação determinística estrita no padrão CCITT-TRUE (`123456789 -> 2189`), aplicada somente nos registros Tipo 1, 2, 4 e 5.
+  - **AEJ Oficial do PTRP (Leiaute MTE 31/07/2026):**
+    - **Registro 01 (Cabeçalho):** Formato delimitado por pipes `|`, com identificação completa do empregador, período e carimbo ISO-8601.
+    - **Registro 02 (REPs Utilizados):** Identificador `02|idRepAej|tpRep|numRegRep`. Em status de INPI pendente, o campo do número permanece em branco `""`, sem textos fictícios.
+    - **Registro 03 (Vínculos):** Relação dos colaboradores apurados na competência.
+    - **Registro 04 (Horários Contratuais):** Jornada em minutos e pares de horários contratuais planejados.
+    - **Registro 05 (Marcações Tratadas Oficial):** `05|idtVinculoAej|dataHoraMarc|idRepAej|tpMarc|seqEntSaida|fonteMarc|codHorContratual|motivo`. Sem campo NSR. Sequenciamento de par de batidas diárias (`seqEntSaida`). Mapeamento das fontes oficiais (`O` = original, `I` = manual, `P` = pré-assinalada, `X` = exceção). Código contratual apontado na 1ª entrada do dia e motivo obrigatório para batidas manuais.
+    - **Registro 06 (Matrículas eSocial):** Associação da matrícula oficial do trabalhador.
+    - **Registro 07 (Ausências e Banco de Horas):** Separação estrita entre ausências (`tipoAusenOuComp = 2`) e movimentações reais do banco de horas (`tipoAusenOuComp = 3`). Para o banco de horas, apura lançamentos do ledger `TimeBankTransaction` com indicador oficial de crédito (`tipoMovBH = '1'`) e compensação/débito (`tipoMovBH = '2'`), eliminando simplificações de saldo consolidado.
+    - **Registro 08 (PTRP / Desenvolvedor):** `08|nomePrograma|versaoPrograma|tpIdDev|numIdDev|razaoSocialDev|emailDev` centralizado em `config/compliance.php`.
+    - **Registro 99 (Trailer):** Contadores formais de registros 01 a 08.
+    - **Linha de Assinatura CAdES:** Marcador de 100 caracteres preparado ao final do arquivo.
+  - **Arquitetura Não-Bloqueante (INPI & ICP-Brasil):**
+    - **INPI:** Status `pending_registration` mantido sem impedir batidas, cálculos de jornada, fechamentos de competência, relatórios ou exportações de AFD/AEJ. Campos numéricos não recebem strings como "PENDENTE REGISTRO"; arquivos são gerados e identificados como não homologados (`isHomologated = false`).
+    - **ICP-Brasil:** Status `pending_certificate` mantido sem impedir exportações ou simular certificados fictícios. Marcadores de assinatura externa CAdES mantidos prontos para processamento futuro com e-CNPJ A1.
+  - **Golden Tests Read-Only:**
+    - Fixtures `golden_afd_mte_2026.txt` e `golden_aej_mte_2026.txt` congeladas e validadas byte a byte em formato Windows CRLF.
+    - Testes unitários e de feature cobrindo cada registro individualmente.
+  - **Suíte de Testes Expandida:** `150+ testes e 700+ asserções 100% aprovados`.
 
 ## v2.4.0
 - **Compliance Portaria MTP 671/2021, ARP Completa e Integridade Criptográfica:**

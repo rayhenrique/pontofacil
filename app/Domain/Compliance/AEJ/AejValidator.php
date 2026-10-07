@@ -21,6 +21,11 @@ class AejValidator
             array_pop($rawLines);
         }
 
+        // Se a última linha for o marcador de assinatura digital externa CAdES (.p7s), remove para analisar o trailer (99)
+        if (! empty($rawLines) && str_starts_with(trim(end($rawLines)), 'ASSINATURA_DIGITAL_EM_ARQUIVO_P7S')) {
+            array_pop($rawLines);
+        }
+
         if (count($rawLines) < 2) {
             return [
                 'is_valid' => false,
@@ -105,8 +110,9 @@ class AejValidator
                         if (! in_array($parts[2], ['1', '2', '3'], true)) {
                             $errors[] = "Linha {$lineNum}: tpRep deve ser 1, 2 ou 3 no registro 02: '{$parts[2]}'.";
                         }
-                        if (trim($parts[3]) === '') {
-                            $errors[] = "Linha {$lineNum}: nrRep não pode ser vazio no registro 02.";
+                        // nrRep pode ser vazio se registro INPI estiver pendente
+                        if (trim($parts[3]) !== '' && ! ctype_alnum($parts[3])) {
+                            $errors[] = "Linha {$lineNum}: nrRep deve ser alfanumérico no registro 02: '{$parts[3]}'.";
                         }
                     }
                     break;
@@ -146,9 +152,9 @@ class AejValidator
                     }
                     break;
 
-                case '05': // Marcações: 05|idtVinculoAej|dataHoraMarc|numNsr|idRepAej|tpMarc|tipoFonte|motivo
-                    if (count($parts) < 7) {
-                        $errors[] = "Linha {$lineNum}: Registro 05 possui número insuficiente de campos (mínimo 7).";
+                case '05': // Marcações: 05|idtVinculoAej|dataHoraMarc|idRepAej|tpMarc|seqEntSaida|fonteMarc|codHorContratual|motivo
+                    if (count($parts) < 9) {
+                        $errors[] = "Linha {$lineNum}: Registro 05 possui número insuficiente de campos (exigido 9 campos).";
                     } else {
                         if (! ctype_digit($parts[1])) {
                             $errors[] = "Linha {$lineNum}: idtVinculoAej deve ser numérico no registro 05: '{$parts[1]}'.";
@@ -157,16 +163,22 @@ class AejValidator
                             $errors[] = "Linha {$lineNum}: dataHoraMarc inválida no registro 05: '{$parts[2]}'.";
                         }
                         if (! ctype_digit($parts[3])) {
-                            $errors[] = "Linha {$lineNum}: numNsr deve ser numérico no registro 05: '{$parts[3]}'.";
+                            $errors[] = "Linha {$lineNum}: idRepAej deve ser numérico no registro 05: '{$parts[3]}'.";
                         }
-                        if (! ctype_digit($parts[4])) {
-                            $errors[] = "Linha {$lineNum}: idRepAej deve ser numérico no registro 05: '{$parts[4]}'.";
+                        if (! in_array($parts[4], ['E', 'S', 'D'], true)) {
+                            $errors[] = "Linha {$lineNum}: tpMarc deve ser 'E', 'S' ou 'D' no registro 05: '{$parts[4]}'.";
                         }
-                        if (! in_array($parts[5], ['E', 'S'], true)) {
-                            $errors[] = "Linha {$lineNum}: tpMarc deve ser 'E' ou 'S' no registro 05: '{$parts[5]}'.";
+                        if (! ctype_digit($parts[5])) {
+                            $errors[] = "Linha {$lineNum}: seqEntSaida deve ser numérico no registro 05: '{$parts[5]}'.";
                         }
-                        if (! in_array($parts[6], ['1', '2', '3'], true)) {
-                            $errors[] = "Linha {$lineNum}: tipoFonte deve ser '1', '2' ou '3' no registro 05: '{$parts[6]}'.";
+                        if (! in_array($parts[6], ['O', 'I', 'P', 'X', 'T'], true)) {
+                            $errors[] = "Linha {$lineNum}: fonteMarc deve ser 'O', 'I', 'P', 'X' ou 'T' no registro 05: '{$parts[6]}'.";
+                        }
+                        if ($parts[4] === 'E' && $parts[5] === '1' && trim($parts[7]) === '') {
+                            $errors[] = "Linha {$lineNum}: codHorContratual é obrigatório na primeira entrada do dia no registro 05.";
+                        }
+                        if (($parts[4] === 'D' || $parts[6] === 'I') && trim($parts[8]) === '') {
+                            $errors[] = "Linha {$lineNum}: motivo é obrigatório para marcação desconsiderada ou incluída manualmente no registro 05.";
                         }
                     }
                     break;
@@ -184,7 +196,7 @@ class AejValidator
                     }
                     break;
 
-                case '07': // Ausências e Banco de Horas: 07|idtVinculoAej|tipoAusenOuComp|data|qtMinutos
+                case '07': // Ausências e Banco de Horas: 07|idtVinculoAej|tipoAusenOuComp|data|qtMinutos|tipoMovBH
                     if (count($parts) < 5) {
                         $errors[] = "Linha {$lineNum}: Registro 07 possui número insuficiente de campos.";
                     } else {
@@ -200,27 +212,36 @@ class AejValidator
                         if (! is_numeric($parts[4])) {
                             $errors[] = "Linha {$lineNum}: qtMinutos deve ser numérico no registro 07: '{$parts[4]}'.";
                         }
+                        if ($parts[2] === '3') {
+                            $mov = $parts[5] ?? '';
+                            if (! in_array($mov, ['1', '2'], true)) {
+                                $errors[] = "Linha {$lineNum}: tipoMovBH deve ser '1' (inclusão) ou '2' (compensação) quando tipoAusenOuComp for 3: '{$mov}'.";
+                            }
+                        }
                     }
                     break;
 
-                case '08': // Identificação do PTRP: 08|tpIdtDesenv|idtDesenv|nomeDesenv|nomeSoftware|versaoSoftware
-                    if (count($parts) < 6) {
-                        $errors[] = "Linha {$lineNum}: Registro 08 possui número insuficiente de campos.";
+                case '08': // Identificação do PTRP: 08|nomePrograma|versaoPrograma|tpIdDev|numIdDev|razaoSocialDev|emailDev
+                    if (count($parts) < 7) {
+                        $errors[] = "Linha {$lineNum}: Registro 08 possui número insuficiente de campos (exigido 7 campos).";
                     } else {
-                        if (! in_array($parts[1], ['1', '2'], true)) {
-                            $errors[] = "Linha {$lineNum}: tpIdtDesenv deve ser 1 ou 2 no registro 08: '{$parts[1]}'.";
+                        if (trim($parts[1]) === '') {
+                            $errors[] = "Linha {$lineNum}: nomePrograma não pode ser vazio no registro 08.";
                         }
-                        if (! ctype_digit($parts[2])) {
-                            $errors[] = "Linha {$lineNum}: idtDesenv deve ser numérico no registro 08: '{$parts[2]}'.";
+                        if (trim($parts[2]) === '') {
+                            $errors[] = "Linha {$lineNum}: versaoPrograma não pode ser vazia no registro 08.";
                         }
-                        if (trim($parts[3]) === '') {
-                            $errors[] = "Linha {$lineNum}: nomeDesenv não pode ser vazio no registro 08.";
+                        if (! in_array($parts[3], ['1', '2'], true)) {
+                            $errors[] = "Linha {$lineNum}: tpIdDev deve ser 1 ou 2 no registro 08: '{$parts[3]}'.";
                         }
-                        if (trim($parts[4]) === '') {
-                            $errors[] = "Linha {$lineNum}: nomeSoftware não pode ser vazio no registro 08.";
+                        if (! ctype_digit($parts[4])) {
+                            $errors[] = "Linha {$lineNum}: numIdDev deve ser numérico no registro 08: '{$parts[4]}'.";
                         }
                         if (trim($parts[5]) === '') {
-                            $errors[] = "Linha {$lineNum}: versaoSoftware não pode ser vazia no registro 08.";
+                            $errors[] = "Linha {$lineNum}: razaoSocialDev não pode ser vazia no registro 08.";
+                        }
+                        if (trim($parts[6]) === '' || ! filter_var($parts[6], FILTER_VALIDATE_EMAIL)) {
+                            $errors[] = "Linha {$lineNum}: emailDev deve ser um e-mail válido no registro 08: '{$parts[6]}'.";
                         }
                     }
                     break;

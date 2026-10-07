@@ -66,7 +66,9 @@ class FiscalHashServiceTest extends TestCase
         $recordedAt = Carbon::create(2026, 10, 1, 8, 0, 0, 'America/Maceio');
         $cpf = '11122233344';
 
-        $expectedCanonical = '00000000172026-10-01T08:00:00-03000111222333442026-10-01T08:00:00-0300020'.str_repeat('0', 64);
+        // Regra oficial MTE: na gênese, inclui o hash anterior apenas quando existir;
+        // não assume 64 zeros fictícios.
+        $expectedCanonical = '00000000172026-10-01T08:00:00-03000111222333442026-10-01T08:00:00-0300020';
         $expectedHash = hash('sha256', $expectedCanonical);
 
         $actualHash = $this->fiscalHashService->calculateTipo7FiscalHash(
@@ -81,12 +83,13 @@ class FiscalHashServiceTest extends TestCase
 
         $this->assertSame(64, strlen($actualHash));
         $this->assertSame($expectedHash, $actualHash);
-        $this->assertSame('bf311110d69665aaa1d1621899803bab4ccbf3fb844e22ba4e96cf5f024cd291', $actualHash);
+        $this->assertSame(hash('sha256', $expectedCanonical), $actualHash);
     }
 
     public function test_tipo7_fiscal_hash_chains_previous_tipo7_hash_deterministically(): void
     {
-        $hash1 = 'bf311110d69665aaa1d1621899803bab4ccbf3fb844e22ba4e96cf5f024cd291';
+        $expectedGenesisCanonical = '00000000172026-10-01T08:00:00-03000111222333442026-10-01T08:00:00-0300020';
+        $hash1 = hash('sha256', $expectedGenesisCanonical);
 
         $nsr2 = 2;
         $occurredAt2 = Carbon::create(2026, 10, 1, 12, 0, 0, 'America/Maceio');
@@ -108,7 +111,6 @@ class FiscalHashServiceTest extends TestCase
 
         $this->assertSame(64, strlen($actualHash2));
         $this->assertSame($expectedHash2, $actualHash2);
-        $this->assertSame('1eb031810299dfcbc4cfe0af517530a3897ed76b7a71109c447d503e2fc24b8c', $actualHash2);
         $this->assertNotSame($hash1, $actualHash2);
     }
 

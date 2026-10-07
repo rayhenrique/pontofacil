@@ -37,13 +37,22 @@ class AfdValidator
             ];
         }
 
+        // Verifica marcador oficial de assinatura externa CAdES (.p7s) na última linha
+        $lastLine = end($rawLines);
+        if (str_starts_with($lastLine, 'ASSINATURA_DIGITAL_EM_ARQUIVO_P7S')) {
+            $signatureLine = array_pop($rawLines);
+            if (strlen($signatureLine) !== 100) {
+                $errors[] = sprintf('Linha de assinatura CAdES possui %d caracteres; o leiaute MTE exige exatamente 100.', strlen($signatureLine));
+            }
+        }
+
         $header = $rawLines[0];
         $trailer = end($rawLines);
         $bodyLines = array_slice($rawLines, 1, -1);
 
-        // 1. Validação do Cabeçalho (Tipo 1) - 236 caracteres
-        if (strlen($header) !== 236) {
-            $errors[] = sprintf('Cabeçalho (Tipo 1) possui %d caracteres; o leiaute MTE exige exatamente 236.', strlen($header));
+        // 1. Validação do Cabeçalho (Tipo 1) - exatamente 284 caracteres com CRC-16 Kermit
+        if (strlen($header) !== 284) {
+            $errors[] = sprintf('Cabeçalho (Tipo 1) possui %d caracteres; o leiaute oficial MTE (versão 003) exige exatamente 284.', strlen($header));
         } else {
             if (substr($header, 0, 9) !== '000000000') {
                 $errors[] = 'NSR do Cabeçalho deve ser obrigatoriamente 000000000.';
@@ -51,7 +60,7 @@ class AfdValidator
             if ($header[9] !== '1') {
                 $errors[] = 'Tipo de registro do cabeçalho deve ser 1.';
             }
-            if (! in_array($header[10], ['1', '2'])) {
+            if (! in_array($header[10], ['1', '2'], true)) {
                 $errors[] = 'Identificador do empregador deve ser 1 (CNPJ) ou 2 (CPF).';
             }
             if (! ctype_digit(substr($header, 11, 14))) {
@@ -62,6 +71,7 @@ class AfdValidator
             $dtFim = substr($header, 212, 8);
             $dtGeracao = substr($header, 220, 8);
             $hrGeracao = substr($header, 228, 4);
+            $versao = substr($header, 232, 3);
 
             if (! $this->isValidDate($dtInicio)) {
                 $errors[] = "Data inicial no cabeçalho inválida: {$dtInicio}";
@@ -74,6 +84,16 @@ class AfdValidator
             }
             if (! $this->isValidTime($hrGeracao)) {
                 $errors[] = "Hora de geração no cabeçalho inválida: {$hrGeracao}";
+            }
+            if ($versao !== '003') {
+                $errors[] = "Versão do leiaute no cabeçalho deve ser 003 (encontrado: {$versao}).";
+            }
+
+            $headerPrefix = substr($header, 0, 280);
+            $expectedHeaderCrc = $this->fiscalHashService->calculateCrc16($headerPrefix);
+            $actualHeaderCrc = substr($header, 280, 4);
+            if (strtoupper($actualHeaderCrc) !== strtoupper($expectedHeaderCrc)) {
+                $errors[] = "CRC-16 divergente no cabeçalho Tipo 1 (calculado: {$expectedHeaderCrc}, arquivo: {$actualHeaderCrc}).";
             }
         }
 
@@ -112,14 +132,14 @@ class AfdValidator
             $tipo = $line[9];
 
             switch ($tipo) {
-                case '2': // Identificação do Empregador - 203 caracteres com CRC-16
+                case '2': // Identificação do Empregador - 314 caracteres com CRC-16
                     $countTipo2++;
-                    if ($len !== 203) {
-                        $errors[] = "Linha {$lineNum}: Registro Tipo 2 possui {$len} caracteres; exigido: 203.";
+                    if ($len !== 314) {
+                        $errors[] = "Linha {$lineNum}: Registro Tipo 2 possui {$len} caracteres; o leiaute MTE exige exatamente 314.";
                     } else {
-                        $prefix = substr($line, 0, 199);
+                        $prefix = substr($line, 0, 310);
                         $expectedCrc = $this->fiscalHashService->calculateCrc16($prefix);
-                        $actualCrc = substr($line, 199, 4);
+                        $actualCrc = substr($line, 310, 4);
                         if (strtoupper($actualCrc) !== strtoupper($expectedCrc)) {
                             $errors[] = "Linha {$lineNum}: CRC-16 divergente no registro Tipo 2 (calculado: {$expectedCrc}, arquivo: {$actualCrc}).";
                         }
@@ -128,13 +148,13 @@ class AfdValidator
 
                 case '3': // Marcação REP-C/REP-A (Não aplicável ao REP-P)
                     $countTipo3++;
-                    $errors[] = "Linha {$lineNum}: O modelo REP-P deve utilizar Registro Tipo 7 para marcações, não Tipo 3.";
+                    $errors[] = "Linha {$lineNum}: O modelo REP-P deve utilizar Registro Tipo 7 para marcações, nunca Tipo 3.";
                     break;
 
                 case '4': // Ajuste do Relógio - 49 caracteres com CRC-16
                     $countTipo4++;
                     if ($len !== 49) {
-                        $errors[] = "Linha {$lineNum}: Registro Tipo 4 possui {$len} caracteres; exigido: 49.";
+                        $errors[] = "Linha {$lineNum}: Registro Tipo 4 possui {$len} caracteres; o leiaute MTE exige exatamente 49.";
                     } else {
                         $prefix = substr($line, 0, 45);
                         $expectedCrc = $this->fiscalHashService->calculateCrc16($prefix);
@@ -145,24 +165,33 @@ class AfdValidator
                     }
                     break;
 
-                case '5': // Empregado - 189 caracteres com CRC-16
+                case '5': // Empregado - 101 caracteres com CRC-16
                     $countTipo5++;
-                    if ($len !== 189) {
-                        $errors[] = "Linha {$lineNum}: Registro Tipo 5 possui {$len} caracteres; exigido: 189.";
+                    if ($len !== 101) {
+                        $errors[] = "Linha {$lineNum}: Registro Tipo 5 possui {$len} caracteres; o leiaute MTE exige exatamente 101.";
                     } else {
-                        $prefix = substr($line, 0, 185);
+                        $operacao = $line[22];
+                        if (! in_array($operacao, ['I', 'A', 'E'], true)) {
+                            $errors[] = "Linha {$lineNum}: Operação inválida no registro Tipo 5: '{$operacao}' (esperado I, A ou E).";
+                        }
+                        $prefix = substr($line, 0, 97);
                         $expectedCrc = $this->fiscalHashService->calculateCrc16($prefix);
-                        $actualCrc = substr($line, 185, 4);
+                        $actualCrc = substr($line, 97, 4);
                         if (strtoupper($actualCrc) !== strtoupper($expectedCrc)) {
                             $errors[] = "Linha {$lineNum}: CRC-16 divergente no registro Tipo 5 (calculado: {$expectedCrc}, arquivo: {$actualCrc}).";
                         }
                     }
                     break;
 
-                case '6': // Eventos Sensíveis - 136 caracteres
+                case '6': // Eventos Sensíveis - 36 caracteres
                     $countTipo6++;
-                    if ($len !== 136) {
-                        $errors[] = "Linha {$lineNum}: Registro Tipo 6 possui {$len} caracteres; exigido: 136.";
+                    if ($len !== 36) {
+                        $errors[] = "Linha {$lineNum}: Registro Tipo 6 possui {$len} caracteres; o leiaute MTE exige exatamente 36.";
+                    } else {
+                        $codEvento = substr($line, 34, 2);
+                        if (! in_array($codEvento, ['01', '02'], true)) {
+                            $errors[] = "Linha {$lineNum}: Código de evento sensível inválido para REP-P: '{$codEvento}'.";
+                        }
                     }
                     break;
 
@@ -182,7 +211,7 @@ class AfdValidator
                         if (! ctype_digit($collector)) {
                             $errors[] = "Linha {$lineNum}: Identificador do coletor deve ser numérico: {$collector}";
                         }
-                        if (! in_array($punchType, ['0', '1'])) {
+                        if (! in_array($punchType, ['0', '1'], true)) {
                             $errors[] = "Linha {$lineNum}: Tipo de marcação deve ser 0 (online) ou 1 (offline): {$punchType}";
                         }
                         if (! preg_match('/^[a-f0-9]{64}$/i', $hash)) {
@@ -197,9 +226,9 @@ class AfdValidator
             }
         }
 
-        // 3. Validação do Trailer (Tipo 9) - exatamente 73 caracteres
-        if (strlen($trailer) !== 73) {
-            $errors[] = sprintf('Trailer (Tipo 9) possui %d caracteres; o leiaute MTE exige exatamente 73.', strlen($trailer));
+        // 3. Validação do Trailer (Tipo 9) - exatamente 64 caracteres
+        if (strlen($trailer) !== 64) {
+            $errors[] = sprintf('Trailer (Tipo 9) possui %d caracteres; o leiaute oficial MTE exige exatamente 64.', strlen($trailer));
         } else {
             if (substr($trailer, 0, 9) !== '999999999') {
                 $errors[] = 'NSR do Trailer deve ser 999999999.';
@@ -214,8 +243,6 @@ class AfdValidator
             $qtdTipo5Trailer = (int) substr($trailer, 37, 9);
             $qtdTipo6Trailer = (int) substr($trailer, 46, 9);
             $qtdTipo7Trailer = (int) substr($trailer, 55, 9);
-            $totalLinhasTrailer = (int) substr($trailer, 64, 9);
-            $totalLinhasReais = count($rawLines);
 
             if ($qtdTipo2Trailer !== $countTipo2) {
                 $errors[] = "Trailer indica {$qtdTipo2Trailer} registros Tipo 2, mas o arquivo contém {$countTipo2}.";
@@ -234,9 +261,6 @@ class AfdValidator
             }
             if ($qtdTipo7Trailer !== $countTipo7) {
                 $errors[] = "Trailer indica {$qtdTipo7Trailer} registros Tipo 7, mas o arquivo contém {$countTipo7}.";
-            }
-            if ($totalLinhasTrailer !== $totalLinhasReais) {
-                $errors[] = "Trailer indica total de {$totalLinhasTrailer} linhas, mas o arquivo possui {$totalLinhasReais}.";
             }
         }
 

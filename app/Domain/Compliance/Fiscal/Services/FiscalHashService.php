@@ -40,12 +40,14 @@ class FiscalHashService
             $punchType
         );
 
-        $previousHash = $previousTipo7FiscalHash
-            ? strtolower(substr(trim($previousTipo7FiscalHash), 0, 64))
-            : str_repeat('0', 64);
-
-        if (strlen($previousHash) < 64) {
-            $previousHash = str_pad($previousHash, 64, '0', STR_PAD_LEFT);
+        // Regra Oficial Portaria 671 MTE:
+        // O código hash do registro é gerado a partir dos campos do registro,
+        // acrescido do código hash do registro anterior, quando existir.
+        // Se for o primeiro registro da cadeia (gênese), o hash anterior não existe e não se acrescentam zeros.
+        $previousHash = '';
+        if ($previousTipo7FiscalHash !== null && trim($previousTipo7FiscalHash) !== '') {
+            $cleaned = strtolower(substr(trim($previousTipo7FiscalHash), 0, 64));
+            $previousHash = str_pad($cleaned, 64, '0', STR_PAD_LEFT);
         }
 
         $canonicalToHash = $prefix.$previousHash;
