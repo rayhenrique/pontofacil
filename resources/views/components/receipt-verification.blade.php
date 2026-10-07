@@ -37,6 +37,7 @@ new class extends Component
 
         if ($this->receipt && $this->receipt->punchEvent) {
             $event = $this->receipt->punchEvent;
+            $fiscalHash = $event->fiscal_hash ?? $event->payload_hash;
             $canonicalData = sprintf(
                 '%s|%d|%d|%s|%s|%s',
                 $event->id,
@@ -44,7 +45,7 @@ new class extends Component
                 $event->nsr,
                 $event->user_id,
                 $event->occurred_at_utc->toIso8601String(),
-                $event->payload_hash
+                $fiscalHash
             );
             $expectedHash = hash('sha256', $canonicalData);
             $this->hashValid = hash_equals($expectedHash, $this->receipt->receipt_hash);
@@ -166,8 +167,12 @@ new class extends Component
 
                                 <div class="space-y-1.5 pt-1 text-[11px]">
                                     <div>
-                                        <span class="text-slate-500 block text-[10px]">Hash SHA-256 do Registro (REP-P):</span>
-                                        <span class="font-mono text-[10px] text-slate-700 break-all select-all">{{ $event->payload_hash }}</span>
+                                        <span class="text-slate-500 block text-[10px]">Hash SHA-256 Fiscal (Portaria 671):</span>
+                                        <span class="font-mono text-[10px] text-slate-700 break-all select-all">{{ $event->fiscal_hash ?? $event->payload_hash }}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-slate-500 block text-[10px]">Registro no INPI:</span>
+                                        <span class="text-slate-700 text-[10px]">{{ $event->establishment?->company?->isRegisteredInpi() ? $event->establishment->company->inpi_registration_number : 'Pendente de Registro Oficial' }}</span>
                                     </div>
                                     <div>
                                         <span class="text-slate-500 block text-[10px]">Hash SHA-256 do Comprovante:</span>

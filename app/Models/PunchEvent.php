@@ -30,8 +30,12 @@ class PunchEvent extends Model
         'latitude',
         'longitude',
         'location_accuracy',
+        'location_distance_meters',
         'qr_location_valid',
         'location_valid',
+        'fiscal_hash',
+        'audit_chain_hash',
+        'previous_audit_hash',
         'payload_hash',
         'previous_event_hash',
         'created_at',
@@ -45,6 +49,7 @@ class PunchEvent extends Model
         'latitude' => 'float',
         'longitude' => 'float',
         'location_accuracy' => 'float',
+        'location_distance_meters' => 'float',
         'qr_location_valid' => 'boolean',
         'location_valid' => 'boolean',
     ];
@@ -82,5 +87,10 @@ class PunchEvent extends Model
     public function receipt(): HasOne
     {
         return $this->hasOne(PunchReceipt::class, 'punch_event_id', 'id');
+    }
+
+    public function arpEvent(): HasOne
+    {
+        return $this->hasOne(ArpEvent::class, 'reference_id', 'id');
     }
 }

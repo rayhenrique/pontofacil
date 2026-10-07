@@ -1,6 +1,30 @@
 # Histórico de Versões (Changelog)
 
-## v2.3.0 (Atual)
+## v2.4.0 (Atual)
+- **Compliance Portaria MTP 671/2021, ARP Completa e Integridade Criptográfica:**
+  - **Armazenamento de Registro de Ponto Completo (ARP Central):**
+    - Criação da tabela central `arp_events` como ledger fiscal único e imutável para todos os eventos oficiais (marcações, mutações de empregador e trabalhador, sincronismos de relógio e eventos sensíveis).
+    - Numeração Sequencial de Registro (NSR) única e monotônica por estabelecimento garantida atomicamente com lock pessimista (`lockForUpdate()`), sem séries isoladas para batidas.
+    - Imutabilidade absoluta: bloqueio técnico de atualização e exclusão (`LogicException`) e integridade referencial protegida contra exclusões em cascata.
+  - **Eliminação de Duas Fontes de Verdade (Single Source of Truth):**
+    - Unificação do fluxo de registro sob a `RecordPunchEventAction`.
+    - Eliminação do dual-write descompassado em `time-punch.blade.php`. A tabela `time_entries` passa a ser uma projeção atômica e subordinada de `punch_events`, persistida na mesma transação.
+  - **Validação Geográfica Antifraude (Geofence Não-Bloqueante):**
+    - O GPS atua estritamente como evidência e validação antifraude, sem impedir o registro do trabalhador fora do raio autorizado nem alterar carimbos originais de data/hora.
+    - Registro transparente com `location_valid = false` e auditoria de distância (`location_distance_meters`). Alerta visual de conformidade emitido na interface.
+    - Remoção de qualquer menção inverídica de que a Portaria 671 exigiria geolocalização obrigatória para autorizar batidas.
+  - **Separação Estrita de Hashes Fiscais e de Auditoria:**
+    - `FiscalHashService`: Cálculo determinístico do hash fiscal oficial MTE Tipo 3 (SHA-256 sobre a cadeia canônica estrita de 37 caracteres).
+    - `AuditChainHashService`: Encadeamento criptográfico interno do PontoFácil preservado em `audit_chain_hash` e `previous_audit_hash`.
+  - **Suporte ao Registro de Software REP-P no INPI:**
+    - Campos estruturados para registro INPI na entidade `Company` com status padrão `pending_registration` e exibição explícita de `PENDENTE REGISTRO` nos arquivos fiscais e comprovantes.
+  - **Preparação para Assinatura ICP-Brasil:**
+    - Serviço `IcpBrasilSigningService` implementado para integração futura com certificados A1 (PAdES para PDFs e CAdES destacada para AFD/AEJ) com status transparente `pending_certificate`.
+  - **Golden Tests Oficiais Read-Only:**
+    - Refatoração dos testes fiscais de AFD e AEJ para consumo estritamente somente-leitura de fixtures versionadas, com comparação byte a byte em formato Windows CRLF.
+  - **Suíte de Testes Expandida:** `132 testes e 537 asserções 100% aprovados`.
+
+## v2.3.0
 - **Modelo Ideal de Tratamento de Ponto & Segregação de Funções (Portaria MTP 671 / PTRP):**
   - **Gestor Imediato (Aprova o Operacional):**
     - Aprovação e recusa de solicitações de inclusão de batida esquecida (`manual_punch_added`) e desconsiderações de marcações duplicadas ou erradas (`punch_disregarded`).

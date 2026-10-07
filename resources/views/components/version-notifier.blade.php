@@ -28,7 +28,7 @@ new class extends Component
     {
         $path = base_path('versoes.md');
         if (!File::exists($path)) {
-            $this->currentVersion = 'v2.3.0';
+            $this->currentVersion = 'v2.4.0';
             return;
         }
 
@@ -37,14 +37,14 @@ new class extends Component
             $trimmed = trim($line);
             if (str_starts_with($trimmed, '## ')) {
                 $rawTitle = trim(substr($trimmed, 3));
-                // Remove "(Atual)" ou variações para extrair a tag pura: "v2.3.0"
+                // Remove "(Atual)" ou variações para extrair a tag pura: "v2.4.0"
                 $this->currentVersion = trim(str_replace('(Atual)', '', $rawTitle));
                 break;
             }
         }
 
         if (empty($this->currentVersion)) {
-            $this->currentVersion = 'v2.3.0';
+            $this->currentVersion = 'v2.4.0';
         }
     }
 

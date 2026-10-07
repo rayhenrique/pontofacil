@@ -24,6 +24,8 @@ class GeneratePunchReceiptAction
 
         $code = 'PF-'.strtoupper(Str::random(4)).'-'.strtoupper(Str::random(4)).'-'.strtoupper(Str::random(4));
 
+        $fiscalHash = $punchEvent->fiscal_hash ?? $punchEvent->payload_hash;
+
         $canonicalData = sprintf(
             '%s|%d|%d|%s|%s|%s',
             $punchEvent->id,
@@ -31,10 +33,12 @@ class GeneratePunchReceiptAction
             $punchEvent->nsr,
             $punchEvent->user_id,
             $punchEvent->occurred_at_utc->toIso8601String(),
-            $punchEvent->payload_hash
+            $fiscalHash
         );
 
         $receiptHash = hash('sha256', $canonicalData);
+
+        $company = $punchEvent->establishment?->company;
 
         return PunchReceipt::create([
             'punch_event_id' => $punchEvent->id,
@@ -46,7 +50,8 @@ class GeneratePunchReceiptAction
                 'mode' => 'development_unsigned',
                 'notice' => 'Documento de desenvolvimento / teste. Certificado ICP-Brasil pendente de configuração.',
                 'software_rep_p' => 'PontoFácil 2.0',
-                'inpi_status' => 'pending_registration',
+                'inpi_status' => $company?->inpi_registration_status ?? 'pending_registration',
+                'inpi_number' => $company?->inpi_registration_number,
             ],
         ]);
     }

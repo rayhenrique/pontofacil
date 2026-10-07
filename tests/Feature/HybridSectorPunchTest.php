@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\UserRole;
 use App\Models\Employee;
+use App\Models\PunchEvent;
 use App\Models\Sector;
 use App\Models\SystemSetting;
 use App\Models\TimeEntry;
@@ -131,22 +132,39 @@ class HybridSectorPunchTest extends TestCase
             'admission_date' => now()->toDateString(),
         ]);
 
-        // Tentativa de bater o ponto na Matriz (-9.665800, -35.735000) estando alocado na Filial Ponta Verde
+        // Tentativa de bater o ponto fora do raio da Filial Ponta Verde (registra com alerta antifraude)
         Livewire::actingAs($user)
             ->test('time-punch')
             ->call('registerPunch', 'COMPANY_GLOBAL_QR_12345', -9.665800, -35.735000)
-            ->assertSet('status', 'error')
-            ->assertSee('Você está fora do raio permitido para bater o ponto do seu setor (Filial Ponta Verde)');
+            ->assertSet('status', 'warning')
+            ->assertSee('Fora do raio permitido');
 
-        $this->assertEquals(0, TimeEntry::where('user_id', $user->id)->count());
+        $this->assertEquals(1, TimeEntry::where('user_id', $user->id)->count());
+        $this->assertFalse((bool) PunchEvent::where('user_id', $user->id)->first()->location_valid);
 
-        // Batendo o ponto no local correto da filial
-        Livewire::actingAs($user)
+        // Batendo o ponto no local correto da filial (dentro do raio)
+        $user2 = User::create([
+            'name' => 'Atendente Ponta Verde 2',
+            'email' => 'atendente2@test.com',
+            'password' => 'secret123',
+            'role' => UserRole::Employee,
+        ]);
+
+        Employee::create([
+            'user_id' => $user2->id,
+            'sector_id' => $filialSector->id,
+            'cpf' => '999.888.777-55',
+            'job_title' => 'Atendente',
+            'admission_date' => now()->toDateString(),
+        ]);
+
+        Livewire::actingAs($user2)
             ->test('time-punch')
             ->call('registerPunch', 'COMPANY_GLOBAL_QR_12345', -9.645000, -35.705000)
             ->assertSet('status', 'success');
 
-        $this->assertEquals(1, TimeEntry::where('user_id', $user->id)->count());
+        $this->assertEquals(1, TimeEntry::where('user_id', $user2->id)->count());
+        $this->assertTrue((bool) PunchEvent::where('user_id', $user2->id)->first()->location_valid);
     }
 
     public function test_admin_can_manage_hybrid_sector_settings_in_admin_component(): void

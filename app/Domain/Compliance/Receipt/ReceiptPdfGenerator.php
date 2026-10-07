@@ -57,9 +57,10 @@ class ReceiptPdfGenerator
 
             ['font' => 'F2', 'size' => 10, 'x' => 50, 'y' => 455, 'text' => '4. INTEGRIDADE CRIPTOGRAFICA E AUTENTICIDADE'],
             ['font' => 'F1', 'size' => 8,  'x' => 60, 'y' => 438, 'text' => 'Codigo de Verificacao: '.$receipt->verification_code],
-            ['font' => 'F1', 'size' => 8,  'x' => 60, 'y' => 424, 'text' => 'Hash SHA-256 do Registro: '.$event->payload_hash],
+            ['font' => 'F1', 'size' => 8,  'x' => 60, 'y' => 424, 'text' => 'Hash SHA-256 Fiscal (Portaria 671): '.($event->fiscal_hash ?? $event->payload_hash)],
             ['font' => 'F1', 'size' => 8,  'x' => 60, 'y' => 410, 'text' => 'Hash SHA-256 do Comprovante: '.$receipt->receipt_hash],
             ['font' => 'F1', 'size' => 8,  'x' => 60, 'y' => 396, 'text' => 'Software REP-P: '.$softwareName.' v'.$softwareVersion.' (Instancia Dedicada)'],
+            ['font' => 'F1', 'size' => 8,  'x' => 60, 'y' => 382, 'text' => $company->isRegisteredInpi() ? ('Registro INPI: '.$company->inpi_registration_number) : 'Registro INPI: Pendente de Registro'],
 
             ['font' => 'F2', 'size' => 9,  'x' => 50, 'y' => 360, 'text' => 'CONSULTA DE AUTENTICIDADE PUBLICA:'],
             ['font' => 'F1', 'size' => 8,  'x' => 50, 'y' => 345, 'text' => $verificationUrl],

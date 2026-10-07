@@ -12,7 +12,7 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
     public $message = '';
     public $status = '';
 
-    public function registerPunch($qrCodeHash, $latitude, $longitude)
+    public function registerPunch($qrCodeHash, $latitude = null, $longitude = null, $accuracy = null)
     {
         $user = Auth::user();
         $employee = $user ? $user->employee : null;
@@ -56,69 +56,82 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
 
         $locationName = $hasCustomLocation ? "do seu setor ({$sector->name})" : "da empresa";
 
-        $distance = $this->calculateDistance(
-            (float) $latitude,
-            (float) $longitude,
-            $targetLatitude,
-            $targetLongitude
-        );
-
-        if ($distance > $allowedRadius) {
-            $this->message = "Você está fora do raio permitido para bater o ponto {$locationName}. (Distância: " . round($distance) . "m, permitido: {$allowedRadius}m)";
-            $this->status = 'error';
-            $this->dispatch('app-modal-alert', [
-                'type' => 'error',
-                'title' => 'Fora do Raio Permitido (GPS)',
-                'message' => $this->message,
-                'buttonText' => 'Entendido'
-            ]);
-            return;
+        $distance = null;
+        $locationValid = null;
+        if ($latitude !== null && $longitude !== null) {
+            $distance = $this->calculateDistance(
+                (float) $latitude,
+                (float) $longitude,
+                $targetLatitude,
+                $targetLongitude
+            );
+            $locationValid = ($distance <= $allowedRadius);
         }
 
-        $lastPunch = TimeEntry::where('user_id', Auth::id())
-            ->whereDate('timestamp', now()->toDateString())
-            ->orderBy('timestamp', 'desc')
+        // 3. Determinação da direção com base no ledger oficial REP-P (PunchEvent como fonte de verdade)
+        $tz = $sector?->establishment?->timezone ?? 'America/Maceio';
+        $lastPunch = \App\Models\PunchEvent::where('user_id', Auth::id())
+            ->whereDate('occurred_at_local', now($tz)->toDateString())
+            ->orderBy('occurred_at_utc', 'desc')
             ->first();
-            
-        $type = $lastPunch && $lastPunch->type === 'in' ? 'out' : 'in';
 
-        TimeEntry::create([
-            'user_id' => Auth::id(),
-            'timestamp' => now(), // Servidor define o horário exato
-            'type' => $type,
-            'latitude' => $latitude,
-            'longitude' => $longitude,
-        ]);
+        $type = ($lastPunch && $lastPunch->direction === 'in') ? 'out' : 'in';
 
+        // 4. Gravação atômica única através do RecordPunchEventAction (REP-P -> ARP -> Projeção TimeEntry)
         $nsrFormatted = null;
         try {
             $recordPunchAction = app(\App\Domain\TimeClock\Actions\RecordPunchEventAction::class);
             $punchEvent = $recordPunchAction->execute(
                 user: Auth::user(),
                 direction: $type,
-                latitude: $latitude,
-                longitude: $longitude,
-                accuracy: null,
+                latitude: $latitude !== null ? (float) $latitude : null,
+                longitude: $longitude !== null ? (float) $longitude : null,
+                accuracy: $accuracy !== null ? (float) $accuracy : null,
                 qrLocationValid: true,
-                locationValid: true,
-                source: 'web_pwa'
+                locationValid: $locationValid,
+                source: 'web_pwa',
+                establishment: $sector?->establishment,
+                locationDistanceMeters: $distance !== null ? (float) round($distance, 2) : null
             );
             $nsrFormatted = str_pad((string) $punchEvent->nsr, 9, '0', STR_PAD_LEFT);
         } catch (\Throwable $e) {
-            // Em caso de exceção de registro no ledger, registra log sem quebrar a tela
             report($e);
+            $this->status = 'error';
+            $this->message = "Falha ao registrar ponto oficial REP-P. Nenhuma marcação foi registrada. Tente novamente.";
+            $this->dispatch('app-modal-alert', [
+                'type' => 'error',
+                'title' => 'Erro no Registro REP-P',
+                'message' => 'Ocorreu uma falha ao persistir a marcação oficial. Nenhuma batida foi gravada. Por favor, tente novamente.',
+                'buttonText' => 'Entendido'
+            ]);
+            return;
         }
 
         $tipoStr = $type === 'in' ? 'Entrada' : 'Saída';
         $nsrInfo = $nsrFormatted ? " (NSR #{$nsrFormatted})" : '';
-        $this->message = "Ponto registrado com sucesso! ($tipoStr às " . now()->format('H:i:s') . "{$nsrInfo})";
-        $this->status = 'success';
-        $this->dispatch('app-modal-alert', [
-            'type' => 'success',
-            'title' => 'Ponto Registrado com Sucesso!',
-            'message' => "Sua {$tipoStr} foi confirmada às " . now()->format('H:i:s') . "{$nsrInfo} no Horário Oficial de Maceió (GMT-3).",
-            'buttonText' => 'Concluir'
-        ]);
+
+        // 5. Exibição de Alerta de Auditoria se fora do raio (não impede o registro nem altera horário)
+        if ($locationValid === false) {
+            $distRounded = round($distance);
+            $radiusRounded = round($allowedRadius);
+            $this->message = "Ponto registrado com aviso! ({$tipoStr} às " . now($tz)->format('H:i:s') . "{$nsrInfo} - Fora do raio permitido)";
+            $this->status = 'warning';
+            $this->dispatch('app-modal-alert', [
+                'type' => 'warning',
+                'title' => 'Ponto Registrado (Fora da Área Permitida)',
+                'message' => "Sua {$tipoStr} foi confirmada com sucesso às " . now($tz)->format('H:i:s') . "{$nsrInfo}, porém o GPS indicou que você estava a {$distRounded}m {$locationName} (raio autorizado: {$radiusRounded}m). Esta evidência foi registrada para fins de auditoria.",
+                'buttonText' => 'Concluir'
+            ]);
+        } else {
+            $this->message = "Ponto registrado com sucesso! ({$tipoStr} às " . now($tz)->format('H:i:s') . "{$nsrInfo})";
+            $this->status = 'success';
+            $this->dispatch('app-modal-alert', [
+                'type' => 'success',
+                'title' => 'Ponto Registrado com Sucesso!',
+                'message' => "Sua {$tipoStr} foi confirmada às " . now($tz)->format('H:i:s') . "{$nsrInfo} no Horário Oficial de Maceió (GMT-3).",
+                'buttonText' => 'Concluir'
+            ]);
+        }
     }
 
     private function calculateDistance($lat1, $lon1, $lat2, $lon2)
@@ -157,10 +170,14 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
         
         <!-- Alerts -->
         @if($message)
-            <div class="mb-5 rounded-xl p-4 flex items-center gap-3 text-left {{ $status === 'success' ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' : 'bg-red-50 text-red-900 border border-red-200' }}">
+            <div class="mb-5 rounded-xl p-4 flex items-center gap-3 text-left {{ $status === 'success' ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' : ($status === 'warning' ? 'bg-amber-50 text-amber-900 border border-amber-200' : 'bg-red-50 text-red-900 border border-red-200') }}">
                 @if($status === 'success')
                     <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 text-emerald-600">
                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                    </div>
+                @elseif($status === 'warning')
+                    <div class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 text-amber-600">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
                     </div>
                 @else
                     <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 text-red-600">
@@ -259,6 +276,11 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                     <button type="button" @click="permissionModal = false" class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition">
                         Fechar
                     </button>
+                    <template x-if="permissionType === 'gps' && lastDecodedText">
+                        <button type="button" @click="proceedWithoutGps()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-xs font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 transition">
+                            Registrar sem GPS
+                        </button>
+                    </template>
                     <button type="button" @click="retryPermission()" class="inline-flex items-center justify-center px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition">
                         <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
                         Tentar Novamente
@@ -338,7 +360,7 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                     if (navigator.geolocation) {
                         navigator.geolocation.getCurrentPosition(
                             (position) => {
-                                @this.call('registerPunch', decodedText, position.coords.latitude, position.coords.longitude)
+                                @this.call('registerPunch', decodedText, position.coords.latitude, position.coords.longitude, position.coords.accuracy)
                                     .then(() => {
                                         this.isProcessing = false;
                                         this.lastDecodedText = null;
@@ -348,16 +370,30 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                                 this.isProcessing = false;
                                 this.permissionType = 'gps';
                                 this.permissionErrorMsg = error.code === 1 
-                                    ? 'A permissão de localização (GPS) foi recusada no navegador. A Portaria 671 MTP exige a geolocalização para autenticar o registro de ponto.'
-                                    : 'Erro ao capturar localização GPS (' + error.message + '). Verifique se o GPS do aparelho está ativado.';
+                                    ? 'A permissão de localização (GPS) não foi concedida no navegador. A geolocalização é utilizada como evidência de conformidade do registro de ponto.'
+                                    : 'Não foi possível capturar a localização GPS (' + error.message + '). Verifique se o GPS do aparelho está ativado.';
                                 this.permissionModal = true;
                             },
                             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                         );
                     } else {
-                        alert("Geolocalização não é suportada por este dispositivo.");
-                        this.isProcessing = false;
+                        // Dispositivo sem suporte a GPS: registra normalmente sem coordenadas
+                        @this.call('registerPunch', decodedText, null, null, null)
+                            .then(() => {
+                                this.isProcessing = false;
+                                this.lastDecodedText = null;
+                            });
                     }
+                },
+
+                proceedWithoutGps() {
+                    this.permissionModal = false;
+                    this.isProcessing = true;
+                    @this.call('registerPunch', this.lastDecodedText, null, null, null)
+                        .then(() => {
+                            this.isProcessing = false;
+                            this.lastDecodedText = null;
+                        });
                 },
 
                 retryPermission() {

@@ -2,6 +2,8 @@
 
 namespace App\Domain\Compliance\AFD;
 
+use App\Domain\Compliance\ARP\Enums\ArpEventType;
+use App\Models\ArpEvent;
 use App\Models\Establishment;
 use App\Models\PunchEvent;
 use Carbon\Carbon;
@@ -22,15 +24,28 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
         $company = $establishment->company;
         $genTime = $generationTime ?: Carbon::now($establishment->timezone ?: 'America/Maceio');
 
-        // Extrai EXCLUSIVAMENTE marcações brutas do ledger punch_events no período
-        $punches = PunchEvent::with('employee')
+        // Extrai as marcações brutas preferencialmente do ledger fiscal central da ARP (arp_events),
+        // com fallback para punch_events para preservar histórico legado.
+        $arpPunches = ArpEvent::with('employee')
             ->where('establishment_id', $establishment->id)
+            ->where('event_type', ArpEventType::Punch->value)
             ->whereBetween('occurred_at_local', [
                 $startDate->copy()->startOfDay(),
                 $endDate->copy()->endOfDay(),
             ])
             ->orderBy('nsr', 'asc')
             ->get();
+
+        $punches = $arpPunches->isNotEmpty()
+            ? $arpPunches
+            : PunchEvent::with('employee')
+                ->where('establishment_id', $establishment->id)
+                ->whereBetween('occurred_at_local', [
+                    $startDate->copy()->startOfDay(),
+                    $endDate->copy()->endOfDay(),
+                ])
+                ->orderBy('nsr', 'asc')
+                ->get();
 
         $lines = [];
 
@@ -41,7 +56,11 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
         $idNumber = str_pad(preg_replace('/\D/', '', $establishment->identifier_number), 14, '0', STR_PAD_LEFT);
         $caepfCno = str_pad('', 12, '0', STR_PAD_LEFT);
         $legalName = mb_str_pad(mb_substr($this->sanitize($company->legal_name), 0, 150), 150, ' ', STR_PAD_RIGHT);
-        $inpiRegistration = mb_str_pad(mb_substr($this->sanitize($company->rep_p_software_name.' '.$company->rep_p_software_version), 0, 17), 17, ' ', STR_PAD_RIGHT);
+
+        // Registro INPI (17 posições). Quando pendente de homologação oficial, indica 'PENDENTE REGISTRO'.
+        // O preenchimento definitivo depende do registro real no INPI. Nunca substitui por nome/versão.
+        $inpiRegistration = $company->getInpiFiscalCode();
+
         $dtInicio = $startDate->format('dmY');
         $dtFim = $endDate->format('dmY');
         $dtGeracao = $genTime->format('dmY');
@@ -73,8 +92,9 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
             $cpfRaw = preg_replace('/\D/', '', $punch->employee?->cpf ?? '');
             $cpf = str_pad(substr($cpfRaw, 0, 11), 11, '0', STR_PAD_LEFT);
 
-            // Hash SHA-256 (64 hexadecimais)
-            $hash = str_pad(strtolower(substr($punch->payload_hash, 0, 64)), 64, '0', STR_PAD_RIGHT);
+            // Hash Fiscal Oficial SHA-256 (64 hexadecimais)
+            $fiscalHash = $punch->fiscal_hash ?? $punch->payload_hash;
+            $hash = str_pad(strtolower(substr($fiscalHash, 0, 64)), 64, '0', STR_PAD_RIGHT);
 
             $lines[] = $nsr.$tipoRegistro.$dtMarcacao.$hrMarcacao.$offset.$cpf.$hash;
         }

@@ -36,20 +36,20 @@ class ModalAndChangelogTest extends TestCase
             'email' => 'admin_notifier@test.com',
             'password' => 'secret123',
             'role' => UserRole::Admin,
-            'last_seen_version' => 'v2.2.0',
+            'last_seen_version' => 'v2.3.0',
         ]);
 
         $test = Livewire::actingAs($user)
             ->test('version-notifier')
             ->assertSet('showModal', true)
-            ->assertSet('currentVersion', 'v2.3.0')
-            ->assertSee('PontoFácil v2.3.0')
-            ->assertSee('Modelo Ideal de Tratamento')
+            ->assertSet('currentVersion', 'v2.4.0')
+            ->assertSee('PontoFácil v2.4.0')
+            ->assertSee('Compliance Portaria MTP 671/2021')
             ->call('close')
             ->assertSet('showModal', false);
 
         $user->refresh();
-        $this->assertEquals('v2.3.0', $user->last_seen_version);
+        $this->assertEquals('v2.4.0', $user->last_seen_version);
     }
 
     public function test_version_notifier_does_not_show_modal_if_user_already_viewed_current_version(): void
@@ -59,13 +59,13 @@ class ModalAndChangelogTest extends TestCase
             'email' => 'colab_updated@test.com',
             'password' => 'secret123',
             'role' => UserRole::Employee,
-            'last_seen_version' => 'v2.3.0',
+            'last_seen_version' => 'v2.4.0',
         ]);
 
         Livewire::actingAs($user)
             ->test('version-notifier')
             ->assertSet('showModal', false)
-            ->assertSet('currentVersion', 'v2.3.0');
+            ->assertSet('currentVersion', 'v2.4.0');
     }
 
     public function test_help_page_changelog_items_are_properly_parsed_without_empty_melhoria_titles(): void

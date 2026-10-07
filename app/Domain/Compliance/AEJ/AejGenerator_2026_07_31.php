@@ -124,7 +124,7 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
 
         $softwareIdentifier = $isPreview
             ? 'PREVIA-NAO-FECHADA'
-            : ($company->rep_p_software_name.' '.$company->rep_p_software_version);
+            : $company->getInpiFiscalCode();
         $inpiRegistration = mb_str_pad(mb_substr($this->sanitize($softwareIdentifier), 0, 17), 17, ' ', STR_PAD_RIGHT);
 
         $dtInicio = $startDate->format('dmY');

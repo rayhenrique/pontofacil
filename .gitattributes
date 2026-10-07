@@ -6,7 +6,9 @@
 *.md diff=markdown
 *.php diff=php
 tests/Fixtures/AFD/*.txt text eol=crlf
+tests/Fixtures/AEJ/*.txt text eol=crlf
 *.afd text eol=crlf
+*.aej text eol=crlf
 
 /.github export-ignore
 CHANGELOG.md export-ignore

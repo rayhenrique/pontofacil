@@ -24,7 +24,40 @@ class Company extends Model
         'header_sub_entity',
         'rep_p_software_name',
         'rep_p_software_version',
+        'inpi_registration_number',
+        'inpi_registration_date',
+        'inpi_registration_status',
+        'inpi_certificate_path',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'inpi_registration_date' => 'date',
+        ];
+    }
+
+    /**
+     * O preenchimento definitivo do número depende do registro formal junto ao INPI.
+     * Enquanto não registrado, o status permanece como 'pending_registration'.
+     */
+    public function isRegisteredInpi(): bool
+    {
+        return $this->inpi_registration_status === 'registered' && ! empty($this->inpi_registration_number);
+    }
+
+    /**
+     * Retorna a identificação oficial para os arquivos fiscais e comprovantes (17 caracteres).
+     * Nunca substitui por nome ou versão do software caso o registro esteja pendente.
+     */
+    public function getInpiFiscalCode(): string
+    {
+        if ($this->isRegisteredInpi()) {
+            return mb_str_pad(mb_substr((string) $this->inpi_registration_number, 0, 17), 17, ' ', STR_PAD_RIGHT);
+        }
+
+        return mb_str_pad('PENDENTE REGISTRO', 17, ' ', STR_PAD_RIGHT);
+    }
 
     /**
      * Retorna a URL pública do logotipo ou null se não configurado ou arquivo inexistente.

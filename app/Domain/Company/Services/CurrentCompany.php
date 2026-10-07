@@ -15,6 +15,10 @@ class CurrentCompany
      */
     public static function get(): Company
     {
+        if (static::$instance !== null && (! static::$instance->exists || ! Company::where('id', static::$instance->id)->exists())) {
+            static::$instance = null;
+        }
+
         if (static::$instance === null) {
             $company = Company::with('establishments')->first();
 

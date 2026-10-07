@@ -102,8 +102,12 @@
                 <span class="font-mono font-bold text-slate-900 select-all">{{ $receipt->verification_code }}</span>
             </div>
             <div>
-                <span class="text-slate-500 block text-[10px]">Hash SHA-256 do Registro:</span>
-                <span class="font-mono text-[10px] text-slate-700 break-all select-all">{{ $event->payload_hash }}</span>
+                <span class="text-slate-500 block text-[10px]">Hash SHA-256 Fiscal (Portaria 671):</span>
+                <span class="font-mono text-[10px] text-slate-700 break-all select-all">{{ $event->fiscal_hash ?? $event->payload_hash }}</span>
+            </div>
+            <div>
+                <span class="text-slate-500 block text-[10px]">Registro INPI:</span>
+                <span class="text-slate-700 text-[10px]">{{ $company->isRegisteredInpi() ? $company->inpi_registration_number : 'Pendente de Registro Oficial' }}</span>
             </div>
             <div>
                 <span class="text-slate-500 block text-[10px]">Hash do Comprovante:</span>
