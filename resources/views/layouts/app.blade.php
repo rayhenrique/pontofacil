@@ -362,7 +362,7 @@
                 </header>
 
                 <!-- Page Main Content -->
-                <main class="flex-1 p-3 sm:p-6 lg:p-8 pb-24 md:pb-8">
+                <main class="flex-1 p-2.5 sm:p-5 lg:p-6 pb-20 md:pb-6">
                     <div class="no-print">
                         <livewire:version-notifier />
                         <x-modal-feedback />

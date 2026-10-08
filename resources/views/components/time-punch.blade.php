@@ -150,70 +150,183 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
 };
 ?>
 
-<div class="max-w-xl mx-auto py-2 sm:py-6 px-1 sm:px-6 lg:px-8" x-data="timePunchComponent()">
+<style>
+    /* Ajustes dinâmicos de altura para viewports compactas (mobile, netbooks, laptops 1366x768) */
+    @media (max-height: 820px) {
+        .time-punch-container {
+            padding-top: 0.25rem !important;
+            padding-bottom: 0.5rem !important;
+        }
+        .time-punch-clock-card {
+            padding: 0.625rem 1rem !important;
+            margin-bottom: 0.5rem !important;
+        }
+        .time-punch-clock-text {
+            font-size: 2rem !important;
+            line-height: 2.25rem !important;
+        }
+        .time-punch-main-card {
+            padding: 0.875rem 1rem !important;
+        }
+        .time-punch-reader-box {
+            max-width: 210px !important;
+        }
+    }
+    @media (max-height: 700px) {
+        .time-punch-clock-card {
+            padding: 0.45rem 0.75rem !important;
+            margin-bottom: 0.35rem !important;
+        }
+        .time-punch-clock-text {
+            font-size: 1.5rem !important;
+            line-height: 1.75rem !important;
+        }
+        .time-punch-main-card {
+            padding: 0.625rem 0.875rem !important;
+        }
+        .time-punch-reader-box {
+            max-width: 170px !important;
+        }
+        .time-punch-title {
+            font-size: 1.125rem !important;
+            margin-bottom: 0.125rem !important;
+        }
+        .time-punch-subtitle {
+            margin-bottom: 0.25rem !important;
+        }
+        .time-punch-btn {
+            padding-top: 0.5rem !important;
+            padding-bottom: 0.5rem !important;
+            font-size: 0.875rem !important;
+        }
+    }
+    @media (max-height: 640px) {
+        .time-punch-clock-card {
+            padding: 0.35rem 0.6rem !important;
+            margin-bottom: 0.25rem !important;
+        }
+        .time-punch-clock-text {
+            font-size: 1.35rem !important;
+            line-height: 1.5rem !important;
+        }
+        .time-punch-clock-info {
+            display: none !important;
+        }
+        .time-punch-main-card {
+            padding: 0.5rem 0.75rem !important;
+        }
+        .time-punch-reader-box {
+            max-width: 155px !important;
+        }
+        .time-punch-title {
+            font-size: 1rem !important;
+            margin-bottom: 0 !important;
+        }
+        .time-punch-subtitle {
+            font-size: 0.6875rem !important;
+            margin-bottom: 0.25rem !important;
+        }
+        .time-punch-btn {
+            padding-top: 0.45rem !important;
+            padding-bottom: 0.45rem !important;
+            font-size: 0.8125rem !important;
+        }
+    }
+    @media (max-height: 500px) {
+        .time-punch-clock-card {
+            display: none !important; /* Somente em landscape extremamente achatado */
+        }
+        .time-punch-reader-box {
+            max-width: 130px !important;
+        }
+    }
+</style>
+
+<div class="time-punch-container w-full max-w-md sm:max-w-lg mx-auto py-1 sm:py-3 px-2 sm:px-4" x-data="timePunchComponent()">
     <!-- Digital Clock Card (Mobile First) -->
-    <div class="mb-4 bg-gradient-to-r from-indigo-700 to-indigo-900 rounded-2xl shadow-md p-5 text-white text-center">
-        <p class="text-xs uppercase tracking-widest text-indigo-200 font-semibold mb-1" x-text="currentDate"></p>
-        <div class="text-4xl sm:text-5xl font-extrabold tracking-tight font-mono text-white" x-text="currentTime">
+    <div class="time-punch-clock-card mb-2 sm:mb-3 bg-gradient-to-r from-indigo-700 via-indigo-800 to-indigo-900 rounded-2xl shadow-sm px-4 py-2.5 sm:px-6 sm:py-3.5 text-white text-center">
+        <p class="text-[10px] sm:text-xs uppercase tracking-widest text-indigo-200 font-semibold mb-0.5" x-text="currentDate"></p>
+        <div class="time-punch-clock-text text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight font-mono text-white leading-tight" x-text="currentTime">
             {{ now()->format('H:i:s') }}
         </div>
-        <div class="mt-2 flex items-center justify-center gap-2 text-xs text-indigo-200">
+        <div class="time-punch-clock-info mt-1 flex items-center justify-center gap-1.5 text-[11px] sm:text-xs text-indigo-200">
             <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
             Horário Oficial de Maceió (GMT-3)
         </div>
     </div>
 
     <!-- Main Scanner Card -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6 text-center">
-        <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Bater Ponto</h2>
-        <p class="text-xs sm:text-sm text-gray-500 mb-5">Aponte a câmera para o QR Code da empresa</p>
+    <div class="time-punch-main-card bg-white rounded-2xl shadow-sm border border-gray-200/80 p-3.5 sm:p-5 md:p-6 text-center">
+        <h2 class="time-punch-title text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mb-0.5 sm:mb-1">Bater Ponto</h2>
+        <p class="time-punch-subtitle text-[11px] sm:text-xs md:text-sm text-gray-500 mb-2 sm:mb-3">Aponte a câmera para o QR Code da empresa</p>
         
         <!-- Alerts -->
         @if($message)
-            <div class="mb-5 rounded-xl p-4 flex items-center gap-3 text-left {{ $status === 'success' ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' : ($status === 'warning' ? 'bg-amber-50 text-amber-900 border border-amber-200' : 'bg-red-50 text-red-900 border border-red-200') }}">
+            <div class="mb-3 rounded-xl p-3 flex items-center gap-2.5 text-left {{ $status === 'success' ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' : ($status === 'warning' ? 'bg-amber-50 text-amber-900 border border-amber-200' : 'bg-red-50 text-red-900 border border-red-200') }}">
                 @if($status === 'success')
-                    <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 text-emerald-600">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                    <div class="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 text-emerald-600">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
                     </div>
                 @elseif($status === 'warning')
-                    <div class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 text-amber-600">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+                    <div class="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 text-amber-600">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
                     </div>
                 @else
-                    <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 text-red-600">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+                    <div class="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 text-red-600">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
                     </div>
                 @endif
-                <p class="text-sm font-semibold">{{ $message }}</p>
+                <p class="text-xs sm:text-sm font-semibold">{{ $message }}</p>
             </div>
         @endif
 
         <div x-show="!isProcessing">
-            <!-- QR Scanner Container with mobile friendly dimensions -->
-            <div id="qr-reader" class="w-full max-w-xs mx-auto overflow-hidden rounded-xl border-2 border-dashed border-indigo-300 bg-gray-50 aspect-square flex items-center justify-center"></div>
+            <!-- QR Scanner Container with mobile friendly dimensions and camera viewfinder -->
+            <div class="time-punch-reader-box relative w-full max-w-[190px] xs:max-w-[210px] sm:max-w-[240px] md:max-w-[250px] mx-auto aspect-square overflow-hidden rounded-2xl border-2 border-dashed border-indigo-300/80 bg-slate-50 flex items-center justify-center transition-all shadow-inner">
+                <div id="qr-reader" class="w-full h-full flex items-center justify-center [&>video]:object-cover [&>video]:w-full [&>video]:h-full [&>video]:rounded-xl"></div>
+                
+                <div x-show="!isScanning" class="absolute inset-0 flex flex-col items-center justify-center p-3 pointer-events-none text-indigo-400 select-none">
+                    <div class="relative w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center mb-1 sm:mb-1.5">
+                        <div class="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-indigo-500 rounded-tl"></div>
+                        <div class="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-indigo-500 rounded-tr"></div>
+                        <div class="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-indigo-500 rounded-bl"></div>
+                        <div class="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-indigo-500 rounded-br"></div>
+                        <svg class="w-7 h-7 sm:w-9 sm:h-9 text-indigo-500/70" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.875 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5Z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M14.25 14.25h1.5v1.5h-1.5zM18.75 14.25h1.5v1.5h-1.5zM14.25 18.75h1.5v1.5h-1.5zM18.75 18.75h1.5v1.5h-1.5zM16.5 16.5h1.5v1.5h-1.5z" />
+                        </svg>
+                    </div>
+                    <p class="text-[11px] sm:text-xs text-indigo-900/60 font-medium text-center">Câmera pronta</p>
+                </div>
+            </div>
             
-            <div class="mt-5 flex flex-col sm:flex-row justify-center gap-3">
-                <button @click="startScanner()" x-show="!isScanning" type="button" class="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3.5 border border-transparent text-base font-semibold rounded-xl shadow-md text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 transition touch-manipulation">
-                    <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" /><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" /></svg>
+            <div class="mt-3 sm:mt-4 flex flex-col sm:flex-row justify-center items-center gap-2">
+                <button @click="startScanner()" x-show="!isScanning" type="button" class="time-punch-btn w-full sm:w-auto min-w-[220px] inline-flex items-center justify-center px-6 py-3 sm:py-3.5 border border-transparent text-sm sm:text-base font-bold rounded-xl shadow-lg shadow-indigo-600/20 text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 active:scale-[0.98] transition-all touch-manipulation cursor-pointer">
+                    <svg class="w-5 h-5 mr-2 -ml-1" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+                    </svg>
                     Escanear QR Code
                 </button>
-                <button @click="stopScanner()" x-show="isScanning" style="display: none;" type="button" class="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3.5 border border-transparent text-base font-semibold rounded-xl shadow-md text-white bg-red-600 hover:bg-red-700 active:bg-red-800 transition touch-manipulation">
-                    <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                <button @click="stopScanner()" x-show="isScanning" style="display: none;" type="button" class="time-punch-btn w-full sm:w-auto min-w-[200px] inline-flex items-center justify-center px-6 py-3 sm:py-3.5 border border-transparent text-sm sm:text-base font-bold rounded-xl shadow-lg shadow-rose-600/20 text-white bg-rose-600 hover:bg-rose-700 active:bg-rose-800 active:scale-[0.98] transition-all touch-manipulation cursor-pointer">
+                    <svg class="w-5 h-5 mr-2 -ml-1" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
                     Cancelar Leitura
                 </button>
             </div>
         </div>
 
         <!-- Processing State (Clean mobile spinner) -->
-        <div x-show="isProcessing" style="display: none;" class="text-center py-8">
-            <div class="inline-flex p-4 rounded-full bg-indigo-50 mb-3 animate-pulse">
-                <svg class="animate-spin h-10 w-10 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <div x-show="isProcessing" style="display: none;" class="text-center py-6 sm:py-8">
+            <div class="inline-flex p-3 sm:p-4 rounded-full bg-indigo-50 mb-2 sm:mb-3 animate-pulse">
+                <svg class="animate-spin h-8 w-8 sm:h-10 sm:w-10 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
             </div>
-            <p class="text-base font-medium text-gray-900">Validando QR Code e GPS...</p>
-            <p class="text-xs text-gray-500 mt-1">Garantindo registro inviolável do ponto</p>
+            <p class="text-sm sm:text-base font-semibold text-gray-900">Validando QR Code e GPS...</p>
+            <p class="text-[11px] sm:text-xs text-gray-500 mt-1">Garantindo registro inviolável do ponto</p>
         </div>
     </div>
 
@@ -325,7 +438,15 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                         this.html5QrcodeScanner = new Html5Qrcode("qr-reader");
                     }
                     
-                    const config = { fps: 10, qrbox: { width: 220, height: 220 } };
+                    const qrboxFunction = (viewfinderWidth, viewfinderHeight) => {
+                        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                        const qrboxSize = Math.floor(minEdge * 0.8);
+                        return {
+                            width: Math.max(120, Math.min(qrboxSize, 220)),
+                            height: Math.max(120, Math.min(qrboxSize, 220))
+                        };
+                    };
+                    const config = { fps: 15, qrbox: qrboxFunction };
                     
                     this.html5QrcodeScanner.start(
                         { facingMode: "environment" },

@@ -40,6 +40,11 @@
     - O sistema continua 100% operacional sem bloquear registros de ponto, ARP, PTRP, fechamento mensal, banco de horas, espelhos ou exportações de desenvolvimento.
   - **Golden Tests Read-Only:**
     - Fixtures `golden_afd_mte_2026.txt` (versão `004`) e `golden_aej_mte_2026.txt` (versão `001`) congeladas e validadas byte a byte em formato Windows CRLF.
+  - **Responsividade e Ergonomia da Tela de Bater Ponto (Mobile & Viewport Compacta):**
+    - **Visibilidade Contínua do Botão "Escanear QR Code":** Redução de espaçamentos verticais excessivos e dimensionamento fluído do `#qr-reader` (`max-w-[190px]` a `max-w-[250px]`) com guias de foco e mira ("Câmera pronta"), garantindo que o botão principal de batida fique 100% visível sem rolagem em qualquer dispositivo (desktop, laptops 1366x768 e smartphones).
+    - **Compactação do Relógio Digital:** Media queries dinâmicas (`@media (max-height)`) para preservar data, relógio oficial em segundos e fuso horário mesmo em telas compactas.
+    - **Proteção Contra Sobreposição:** Ajuste do padding inferior do layout principal para manter margem limpa de segurança sobre a barra de navegação móvel (`bottom-nav`).
+    - **Dimensionamento Dinâmico de QR Box:** Função de cálculo proporcional do leitor de QR Code para prevenir falhas de inicialização em viewports reduzidas.
   - **Suíte de Testes Expandida:** `169 testes e 906 asserções 100% aprovados`.
 
 ## v2.4.0
