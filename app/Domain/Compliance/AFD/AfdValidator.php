@@ -3,14 +3,28 @@
 namespace App\Domain\Compliance\AFD;
 
 use App\Domain\Compliance\Fiscal\Services\FiscalHashService;
+use App\Domain\Compliance\Signing\CadesSignatureVerifierInterface;
+use App\Domain\Compliance\Signing\PendingCadesSignatureVerifier;
 
 class AfdValidator
 {
     protected FiscalHashService $fiscalHashService;
 
-    public function __construct(?FiscalHashService $fiscalHashService = null)
-    {
-        $this->fiscalHashService = $fiscalHashService ?: new FiscalHashService;
+    protected CadesSignatureVerifierInterface $signatureVerifier;
+
+    public function __construct(
+        ?FiscalHashService $fiscalHashService = null,
+        ?CadesSignatureVerifierInterface $signatureVerifier = null,
+    ) {
+        $this->fiscalHashService = $fiscalHashService
+            ?? (function_exists('app') && app()->bound(FiscalHashService::class)
+                ? app(FiscalHashService::class)
+                : new FiscalHashService);
+
+        $this->signatureVerifier = $signatureVerifier
+            ?? (function_exists('app') && app()->bound(CadesSignatureVerifierInterface::class)
+                ? app(CadesSignatureVerifierInterface::class)
+                : new PendingCadesSignatureVerifier);
     }
 
     /**
@@ -369,7 +383,7 @@ class AfdValidator
         $hasInpi = strlen($header) === 302 && trim(substr($header, 189, 17)) !== '';
         $hasDevDoc = strlen($header) === 302 && trim(substr($header, 254, 14)) !== '';
 
-        $signatureValid = $this->isDetachedSignatureValid($content, $detachedSignature);
+        $signatureValid = $this->signatureVerifier->verify($content, $detachedSignature);
         $signatureStatus = $signatureValid ? 'signed' : 'pending_certificate';
 
         $isHomologated = $structurallyValid && $hasInpi && $hasDevDoc && $signatureValid;
@@ -403,30 +417,6 @@ class AfdValidator
             'errors' => $errors,
             'total_records' => $totalRecords,
         ];
-    }
-
-    /**
-     * Valida se a assinatura destacada CAdES (.p7s) é válida.
-     * O marcador textual "ASSINATURA_DIGITAL_EM_ARQUIVO_P7S" NÃO é uma assinatura digital.
-     */
-    public function isDetachedSignatureValid(string $content, ?string $detachedSignature): bool
-    {
-        if ($detachedSignature === null || trim($detachedSignature) === '') {
-            return false;
-        }
-
-        if (trim($detachedSignature) === 'ASSINATURA_DIGITAL_EM_ARQUIVO_P7S') {
-            return false;
-        }
-
-        if (str_starts_with($detachedSignature, '-----BEGIN PKCS7-----')
-            || (strlen($detachedSignature) >= 16 && ord($detachedSignature[0]) === 0x30)
-            || str_starts_with($detachedSignature, 'VALID_CADES_P7S_SIGNATURE')
-        ) {
-            return true;
-        }
-
-        return false;
     }
 
     protected function isValidIsoDate(string $d): bool

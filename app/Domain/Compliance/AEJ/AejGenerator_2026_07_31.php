@@ -169,7 +169,9 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
         $count02++;
         $idRepAej = '1';
         $tpRep = '3'; // REP-P
-        $nrRep = $company->isRegisteredInpi() ? trim((string) $company->inpi_registration_number) : '';
+        $nrRep = $company->isRegisteredInpi()
+            ? preg_replace('/\D/', '', (string) $company->inpi_registration_number)
+            : '';
         $lines[] = implode('|', ['02', $idRepAej, $tpRep, $nrRep]);
 
         // 3. Registro 03: Vínculos (Empregados)
@@ -400,9 +402,15 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
 
         $totalRecords = $count01 + $count02 + $count03 + $count04 + $count05 + $count06 + $count07 + $count08 + 1;
 
+        // Validação estrutural real do conteúdo gerado pelo PTRP
+        $structuralValidation = app(AejValidator::class)->validate($finalContent);
+        $structureValid = $structuralValidation['structureValid'];
+
         // Sem arquivo .p7s real gerado e validado com certificado ICP-Brasil, o arquivo permanece não homologado
         $homologationReason = null;
-        if (! $company->isRegisteredInpi() && $hasFonteMarcOriginal) {
+        if (! $structureValid) {
+            $homologationReason = 'structural_error';
+        } elseif (! $company->isRegisteredInpi() && $hasFonteMarcOriginal) {
             $homologationReason = 'pending_inpi';
         } elseif (empty($idtDesenv) || empty($nomeDesenv) || empty($emailDesenv)) {
             $homologationReason = 'missing_developer_data';
@@ -424,7 +432,7 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
             signatureStatus: 'pending_certificate',
             isHomologated: false,
             homologationReason: $homologationReason,
-            structureValid: true,
+            structureValid: $structureValid,
             signatureValid: false,
         );
     }

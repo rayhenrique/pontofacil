@@ -294,8 +294,8 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
         if ($forcePreview) {
             $filename = sprintf('AFD_PREVIA_%s_%s_%s.txt', $idClean, $startDate->format('Ymd'), $endDate->format('Ymd'));
         } elseif ($isPendingInpi) {
-            // Enquanto o registro no INPI estiver pendente, mantém nomenclatura de prévia/desenvolvimento
-            $filename = sprintf('AFD_%s_%s_%s.txt', $idClean, $startDate->format('Ymd'), $endDate->format('Ymd'));
+            // Convenção explícita de desenvolvimento quando registro no INPI estiver pendente
+            $filename = sprintf('AFD_DEV_%s_%s_%s.txt', $idClean, $startDate->format('Ymd'), $endDate->format('Ymd'));
         } else {
             // Nomenclatura oficial MTE quando houver registro no INPI (Portaria 671/2021 MTP, item 10.3):
             // Junção da palavra "AFD" com número de registro no INPI, CNPJ/CPF do empregador e "REP_P"
@@ -304,9 +304,15 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
 
         $totalRecords = $countTipo2 + $countTipo3 + $countTipo4 + $countTipo5 + $countTipo6 + $countTipo7;
 
+        // Validação estrutural real do conteúdo gerado pelo REP-P
+        $structuralValidation = app(AfdValidator::class)->validate($finalContent);
+        $structureValid = $structuralValidation['structureValid'];
+
         // Sem arquivo .p7s real gerado e validado com certificado ICP-Brasil, o arquivo permanece não homologado
         $homologationReason = null;
-        if ($isPendingInpi) {
+        if (! $structureValid) {
+            $homologationReason = 'structural_error';
+        } elseif ($isPendingInpi) {
             $homologationReason = 'pending_inpi';
         } elseif ($isMissingDeveloper) {
             $homologationReason = 'missing_developer_data';
@@ -325,7 +331,7 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
             isHomologated: false,
             signatureStatus: 'pending_certificate',
             homologationReason: $homologationReason,
-            structureValid: true,
+            structureValid: $structureValid,
             signatureValid: false
         );
     }

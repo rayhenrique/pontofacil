@@ -123,7 +123,7 @@ class FiscalPackageTest extends TestCase
         $this->assertTrue($zip->open($result['zip_path']));
 
         $expectedFiles = [
-            'AFD_12345678000199_20260101_20260131.txt',
+            'AFD_DEV_12345678000199_20260101_20260131.txt',
             'AEJ_12345678000199_202601.txt',
             'ESPELHO_PONTO_RESUMO_12345678000199_202601.txt',
             'EXTRATO_BANCO_HORAS_12345678000199_202601.txt',

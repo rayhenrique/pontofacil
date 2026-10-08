@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Domain\Compliance\Signing\CadesSignatureVerifierInterface;
 use App\Domain\Compliance\Signing\DevSigningService;
+use App\Domain\Compliance\Signing\PendingCadesSignatureVerifier;
 use App\Domain\Compliance\Signing\SigningServiceInterface;
 use App\Models\Company;
 use App\Models\Employee;
@@ -25,6 +27,11 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(
             SigningServiceInterface::class,
             DevSigningService::class
+        );
+
+        $this->app->bind(
+            CadesSignatureVerifierInterface::class,
+            PendingCadesSignatureVerifier::class
         );
     }
 

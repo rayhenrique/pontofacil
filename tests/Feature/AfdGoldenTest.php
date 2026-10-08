@@ -7,6 +7,7 @@ use App\Domain\Compliance\AFD\AfdGenerator_2026_07_31;
 use App\Domain\Compliance\AFD\AfdValidator;
 use App\Domain\Compliance\ARP\Actions\RecordArpEventAction;
 use App\Domain\Compliance\Fiscal\Services\FiscalHashService;
+use App\Domain\Compliance\Signing\CadesSignatureVerifierInterface;
 use App\Domain\TimeClock\Actions\RecordPunchEventAction;
 use App\Enums\UserRole;
 use App\Models\ArpEvent;
@@ -499,7 +500,7 @@ class AfdGoldenTest extends TestCase
 
     /**
      * Teste de INPI pendente:
-     * Mantém nomenclatura de prévia/desenvolvimento e não bloqueia o sistema (isHomologated = false).
+     * Mantém nomenclatura explícita de desenvolvimento/prévia (AFD_DEV_...) e não bloqueia o sistema (isHomologated = false).
      */
     public function test_afd_inpi_pending_generates_dev_filename_and_not_homologated(): void
     {
@@ -510,7 +511,7 @@ class AfdGoldenTest extends TestCase
 
         $this->assertFalse($result->isHomologated);
         $this->assertSame('pending_inpi', $result->homologationReason);
-        $this->assertStringStartsWith('AFD_12345678000199_', $result->filename);
+        $this->assertStringStartsWith('AFD_DEV_12345678000199_', $result->filename);
 
         $validator = new AfdValidator;
         $val = $validator->validate($result->content);
@@ -541,7 +542,7 @@ class AfdGoldenTest extends TestCase
 
     /**
      * Teste de Certificado Pendente:
-     * Estrutura 100% válida, INPI e desenvolvedor configurados, mas sem .p7s real.
+     * Estrutura 100% válida, INPI e desenvolvedor configurados, mas sem verifier real.
      */
     public function test_afd_pending_certificate_is_structurally_valid_but_not_homologated(): void
     {
@@ -593,13 +594,82 @@ class AfdGoldenTest extends TestCase
 
         $this->assertTrue($val['structureValid']);
         $this->assertFalse($val['signatureValid']);
+        $this->assertSame('pending_certificate', $val['signatureStatus']);
         $this->assertFalse($val['isHomologated']);
     }
 
     /**
-     * Teste de Assinatura Futura Válida:
-     * Quando fornecida uma assinatura CAdES destacada (.p7s) com INPI e desenvolvedor preenchidos,
-     * torna-se homologado (isHomologated = true, signatureValid = true).
+     * Teste de Rejeição de Heurísticas Falsas de Assinatura:
+     * Strings mágicas, cabeçalhos DER 0x30 ou PEM PKCS7 qualquer NUNCA validam assinatura em produção.
+     */
+    public function test_afd_heuristic_strings_and_bytes_never_validate_signature(): void
+    {
+        config([
+            'compliance.developer.document' => '12345678000199',
+            'compliance.developer.name' => 'Desenvolvedor PontoFacil',
+        ]);
+
+        $establishment = $this->createDeterministicTestData();
+        $establishment->company->update([
+            'inpi_registration_status' => 'registered',
+            'inpi_registration_number' => 'BR5120260000000',
+        ]);
+
+        $generator = new AfdGenerator_2026_07_31;
+        $result = $generator->generate($establishment, Carbon::parse('2026-10-01'), Carbon::parse('2026-10-31'));
+
+        $validator = new AfdValidator;
+
+        // 1. String mágica antiga
+        $val1 = $validator->validate($result->content, 'VALID_CADES_P7S_SIGNATURE_BINARY_MOCK_ICP_BRASIL');
+        $this->assertFalse($val1['signatureValid']);
+        $this->assertSame('pending_certificate', $val1['signatureStatus']);
+        $this->assertFalse($val1['isHomologated']);
+
+        // 2. Bytes iniciando com DER 0x30
+        $val2 = $validator->validate($result->content, "\x30\x82\x01\x00arbitrary_der_bytes");
+        $this->assertFalse($val2['signatureValid']);
+        $this->assertSame('pending_certificate', $val2['signatureStatus']);
+        $this->assertFalse($val2['isHomologated']);
+
+        // 3. PEM PKCS7 genérico sem validação ICP-Brasil
+        $val3 = $validator->validate($result->content, "-----BEGIN PKCS7-----\nMIIB...fake...data\n-----END PKCS7-----");
+        $this->assertFalse($val3['signatureValid']);
+        $this->assertSame('pending_certificate', $val3['signatureStatus']);
+        $this->assertFalse($val3['isHomologated']);
+
+        // 4. Marcador isolado
+        $val4 = $validator->validate($result->content, 'ASSINATURA_DIGITAL_EM_ARQUIVO_P7S');
+        $this->assertFalse($val4['signatureValid']);
+        $this->assertSame('pending_certificate', $val4['signatureStatus']);
+        $this->assertFalse($val4['isHomologated']);
+    }
+
+    /**
+     * Teste de Validação Estrutural Real no Generator:
+     * O generator NUNCA declara structureValid = true sem validação real.
+     */
+    public function test_afd_generator_never_reports_structure_valid_without_actual_validation(): void
+    {
+        $establishment = $this->createDeterministicTestData();
+        $generator = new AfdGenerator_2026_07_31;
+        $result = $generator->generate($establishment, Carbon::parse('2026-10-01'), Carbon::parse('2026-10-31'));
+
+        // Validação formal executada pelo generator bate com a do validador
+        $this->assertTrue($result->structureValid);
+
+        // Se o validador reprovar a estrutura, structureValid no validador é false
+        $validator = new AfdValidator;
+        $corruptedContent = "INVALID_AFD_HEADER\r\n".$result->content;
+        $corruptedVal = $validator->validate($corruptedContent);
+        $this->assertFalse($corruptedVal['structureValid']);
+        $this->assertFalse($corruptedVal['isHomologated']);
+    }
+
+    /**
+     * Teste de Assinatura Futura Válida via Mock de Injeção de Dependência:
+     * Quando fornecida uma implementação de CadesSignatureVerifierInterface que retorna true,
+     * o arquivo torna-se formalmente homologado (isHomologated = true, signatureValid = true).
      */
     public function test_afd_future_valid_cades_signature_becomes_homologated(): void
     {
@@ -617,10 +687,14 @@ class AfdGoldenTest extends TestCase
         $generator = new AfdGenerator_2026_07_31;
         $result = $generator->generate($establishment, Carbon::parse('2026-10-01'), Carbon::parse('2026-10-31'));
 
-        $validator = new AfdValidator;
-        // Simulação de assinatura destacada CAdES (.p7s) futura válida emitida por ICP-Brasil
-        $mockP7s = 'VALID_CADES_P7S_SIGNATURE_BINARY_MOCK_ICP_BRASIL';
-        $val = $validator->validate($result->content, $mockP7s);
+        // Injeção de mock da interface para simular verificação criptográfica real bem-sucedida
+        $mockVerifier = $this->createMock(CadesSignatureVerifierInterface::class);
+        $mockVerifier->expects($this->once())
+            ->method('verify')
+            ->willReturn(true);
+
+        $validator = new AfdValidator(signatureVerifier: $mockVerifier);
+        $val = $validator->validate($result->content, 'binary_cades_signature_data');
 
         $this->assertTrue($val['structureValid']);
         $this->assertTrue($val['signatureValid']);

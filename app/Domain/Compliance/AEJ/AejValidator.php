@@ -2,8 +2,21 @@
 
 namespace App\Domain\Compliance\AEJ;
 
+use App\Domain\Compliance\Signing\CadesSignatureVerifierInterface;
+use App\Domain\Compliance\Signing\PendingCadesSignatureVerifier;
+
 class AejValidator
 {
+    protected CadesSignatureVerifierInterface $signatureVerifier;
+
+    public function __construct(?CadesSignatureVerifierInterface $signatureVerifier = null)
+    {
+        $this->signatureVerifier = $signatureVerifier
+            ?? (function_exists('app') && app()->bound(CadesSignatureVerifierInterface::class)
+                ? app(CadesSignatureVerifierInterface::class)
+                : new PendingCadesSignatureVerifier);
+    }
+
     /**
      * Valida formal e estruturalmente o conteúdo de um arquivo AEJ segundo o leiaute oficial
      * do Anexo VI da Portaria 671/2021 MTP (formato delimitado por pipe '|').
@@ -132,9 +145,10 @@ class AejValidator
                             'tpRep' => $parts[2],
                             'nrRep' => trim($parts[3] ?? ''),
                         ];
-                        // nrRep pode ser vazio se registro INPI estiver pendente
-                        if (trim($parts[3]) !== '' && ! ctype_alnum($parts[3])) {
-                            $errors[] = "Linha {$lineNum}: nrRep deve ser alfanumérico no registro 02: '{$parts[3]}'.";
+                        // nrRep pode ser vazio se registro INPI estiver pendente (modo desenvolvimento)
+                        // quando preenchido, deve ser estritamente numérico conforme leiaute oficial do MTE
+                        if (trim($parts[3]) !== '' && ! ctype_digit($parts[3])) {
+                            $errors[] = "Linha {$lineNum}: nrRep deve conter apenas dígitos numéricos no registro 02: '{$parts[3]}'.";
                         }
                     }
                     break;
@@ -310,7 +324,7 @@ class AejValidator
         $totalRecords = array_sum($actualCounts) + 1;
         $structurallyValid = empty($errors);
 
-        $signatureValid = $this->isDetachedSignatureValid($content, $detachedSignature);
+        $signatureValid = $this->signatureVerifier->verify($content, $detachedSignature);
         $signatureStatus = $signatureValid ? 'signed' : 'pending_certificate';
 
         $isHomologated = $structurallyValid && ! $hasOriginalPunchWithoutRepInpi && ! $missingDevData && $signatureValid;
@@ -347,30 +361,6 @@ class AejValidator
             'warnings' => $warnings,
             'total_records' => $totalRecords,
         ];
-    }
-
-    /**
-     * Valida se a assinatura destacada CAdES (.p7s) é válida.
-     * O marcador textual "ASSINATURA_DIGITAL_EM_ARQUIVO_P7S" NÃO é uma assinatura digital.
-     */
-    public function isDetachedSignatureValid(string $content, ?string $detachedSignature): bool
-    {
-        if ($detachedSignature === null || trim($detachedSignature) === '') {
-            return false;
-        }
-
-        if (trim($detachedSignature) === 'ASSINATURA_DIGITAL_EM_ARQUIVO_P7S') {
-            return false;
-        }
-
-        if (str_starts_with($detachedSignature, '-----BEGIN PKCS7-----')
-            || (strlen($detachedSignature) >= 16 && ord($detachedSignature[0]) === 0x30)
-            || str_starts_with($detachedSignature, 'VALID_CADES_P7S_SIGNATURE')
-        ) {
-            return true;
-        }
-
-        return false;
     }
 
     protected function isValidIsoDate(string $d): bool

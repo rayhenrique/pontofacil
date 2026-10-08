@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Domain\Company\Services\CurrentCompany;
 use App\Domain\Compliance\AEJ\AejGenerator_2026_07_31;
 use App\Domain\Compliance\AEJ\AejValidator;
+use App\Domain\Compliance\Signing\CadesSignatureVerifierInterface;
 use App\Domain\PTRP\Actions\CloseMonthlyPeriodAction;
 use App\Domain\PTRP\Enums\TimeBankTransactionType;
 use App\Domain\PTRP\Enums\TreatmentEventStatus;
@@ -624,7 +625,7 @@ class AejGoldenTest extends TestCase
         $this->assertSame('02', $rec02Registered[0]);
         $this->assertSame('1', $rec02Registered[1]);
         $this->assertSame('3', $rec02Registered[2]);
-        $this->assertSame('BR5120260000010', $rec02Registered[3]);
+        $this->assertSame('5120260000010', $rec02Registered[3]);
     }
 
     /**
@@ -796,12 +797,94 @@ class AejGoldenTest extends TestCase
 
         $this->assertTrue($val['structureValid']);
         $this->assertFalse($val['signatureValid']);
+        $this->assertSame('pending_certificate', $val['signatureStatus']);
         $this->assertFalse($val['isHomologated']);
     }
 
     /**
-     * Teste de Assinatura Futura Válida no AEJ:
-     * Quando fornecida assinatura CAdES (.p7s) com INPI e desenvolvedor completos,
+     * Teste de Rejeição de Heurísticas Falsas de Assinatura no AEJ:
+     * Strings mágicas, cabeçalhos DER 0x30 ou PEM PKCS7 qualquer NUNCA validam assinatura em produção.
+     */
+    public function test_aej_heuristic_strings_and_bytes_never_validate_signature(): void
+    {
+        config([
+            'compliance.developer.document' => '12345678000199',
+            'compliance.developer.name' => 'Desenvolvedor PontoFacil',
+            'compliance.developer.email' => 'dev@pontofacil.local',
+        ]);
+
+        $this->company->update([
+            'inpi_registration_status' => 'registered',
+            'inpi_registration_number' => 'BR5120260000000',
+        ]);
+        $this->establishment->refresh();
+
+        $this->createClosedPeriodWithPunches();
+
+        $generator = app(AejGenerator_2026_07_31::class);
+        $result = $generator->generate(
+            establishment: $this->establishment,
+            year: 2026,
+            month: 1,
+            forcePreview: false
+        );
+
+        $validator = new AejValidator;
+
+        // 1. String mágica antiga
+        $val1 = $validator->validate($result->content, 'VALID_CADES_P7S_SIGNATURE_BINARY_MOCK_ICP_BRASIL');
+        $this->assertFalse($val1['signatureValid']);
+        $this->assertSame('pending_certificate', $val1['signatureStatus']);
+        $this->assertFalse($val1['isHomologated']);
+
+        // 2. Bytes iniciando com DER 0x30
+        $val2 = $validator->validate($result->content, "\x30\x82\x01\x00arbitrary_der_bytes");
+        $this->assertFalse($val2['signatureValid']);
+        $this->assertSame('pending_certificate', $val2['signatureStatus']);
+        $this->assertFalse($val2['isHomologated']);
+
+        // 3. PEM PKCS7 genérico sem validação ICP-Brasil
+        $val3 = $validator->validate($result->content, "-----BEGIN PKCS7-----\nMIIB...fake...data\n-----END PKCS7-----");
+        $this->assertFalse($val3['signatureValid']);
+        $this->assertSame('pending_certificate', $val3['signatureStatus']);
+        $this->assertFalse($val3['isHomologated']);
+
+        // 4. Marcador isolado
+        $val4 = $validator->validate($result->content, 'ASSINATURA_DIGITAL_EM_ARQUIVO_P7S');
+        $this->assertFalse($val4['signatureValid']);
+        $this->assertSame('pending_certificate', $val4['signatureStatus']);
+        $this->assertFalse($val4['isHomologated']);
+    }
+
+    /**
+     * Teste de Validação Estrutural Real no Generator AEJ:
+     * O generator NUNCA declara structureValid = true sem validação real.
+     */
+    public function test_aej_generator_never_reports_structure_valid_without_actual_validation(): void
+    {
+        $this->createClosedPeriodWithPunches();
+
+        $generator = app(AejGenerator_2026_07_31::class);
+        $result = $generator->generate(
+            establishment: $this->establishment,
+            year: 2026,
+            month: 1,
+            forcePreview: false
+        );
+
+        $this->assertTrue($result->structureValid);
+
+        // Se o validador reprovar a estrutura, structureValid no validador é false
+        $validator = new AejValidator;
+        $corruptedContent = "01|INVALID_HEADER\r\n".$result->content;
+        $corruptedVal = $validator->validate($corruptedContent);
+        $this->assertFalse($corruptedVal['structureValid']);
+        $this->assertFalse($corruptedVal['isHomologated']);
+    }
+
+    /**
+     * Teste de Assinatura Futura Válida no AEJ via Mock de Injeção de Dependência:
+     * Quando fornecida assinatura CAdES (.p7s) validada por CadesSignatureVerifierInterface com INPI e desenvolvedor completos,
      * torna-se homologado (isHomologated = true, signatureValid = true).
      */
     public function test_aej_future_valid_cades_signature_becomes_homologated(): void
@@ -828,9 +911,14 @@ class AejGoldenTest extends TestCase
             forcePreview: false
         );
 
-        $validator = app(AejValidator::class);
-        $mockP7s = 'VALID_CADES_P7S_SIGNATURE_BINARY_MOCK_ICP_BRASIL';
-        $val = $validator->validate($result->content, $mockP7s);
+        // Injeção de mock da interface para simular verificação criptográfica real bem-sucedida
+        $mockVerifier = $this->createMock(CadesSignatureVerifierInterface::class);
+        $mockVerifier->expects($this->once())
+            ->method('verify')
+            ->willReturn(true);
+
+        $validator = new AejValidator(signatureVerifier: $mockVerifier);
+        $val = $validator->validate($result->content, 'binary_cades_signature_data');
 
         $this->assertTrue($val['structureValid']);
         $this->assertTrue($val['signatureValid']);

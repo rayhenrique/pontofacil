@@ -25,6 +25,12 @@
     - **Registro 08 (PTRP / Desenvolvedor):** `08|nomePrograma|versaoPrograma|tpIdDev|numIdDev|razaoSocialDev|emailDev` sem dados fictícios em `config/compliance.php`.
     - **Registro 99 (Trailer):** Contadores formais de registros 01 a 08.
     - **Linha de Assinatura CAdES:** Marcador preparado ao final do arquivo.
+  - **Saneamento e Integridade Criptográfica Real (CAdES / ICP-Brasil):**
+    - **Remoção de Validação Falsa:** Eliminadas todas as heurísticas por strings de mock (`VALID_CADES...`), prefixo DER `0x30` ou formato PEM sem validação criptográfica.
+    - **Arquitetura Desacoplada de Assinatura:** Introduzida a interface `CadesSignatureVerifierInterface` com implementação segura de produção `PendingCadesSignatureVerifier` (retornando `false` até haver emissão e validação ICP-Brasil de cadeia completa) e stub `IcpBrasilCadesSignatureVerifier` preparado para integração futura.
+    - **Normalização Oficial do INPI no AEJ:** O campo `nrRep` do Registro 02 exporta estritamente dígitos numéricos oficiais (`preg_replace('/\D/', '', ...)`), removendo prefixos textuais (como `BR`) e aceitando vazio quando pendente.
+    - **Validação Estrutural Real no Generator:** `AfdGenerator_2026_07_31` e `AejGenerator_2026_07_31` executam os respectivos validadores estruturais no conteúdo gerado, atribuindo `structureValid` com base no resultado formal da auditoria.
+    - **Nomenclatura AFD em Desenvolvimento:** Adotada a convenção explícita `AFD_DEV_{CNPJ}_{DATA_INICIO}_{DATA_FIM}.txt` quando sem INPI cadastrado, e `AFD_{inpi}_{cnpj}_REP_P.txt` (item 10.3 Portaria 671 MTE) com INPI registrado.
   - **Separação de Estados de Validação e Homologação:**
     - Estados claramente distintos: `structureValid` (conformidade do layout), `signatureValid` (assinatura CAdES .p7s real validada), `isHomologated` e `homologationReason`.
     - Inconsistência do AEJ corrigida: certificado pendente nunca resulta em `isHomologated = true`.
@@ -34,7 +40,7 @@
     - O sistema continua 100% operacional sem bloquear registros de ponto, ARP, PTRP, fechamento mensal, banco de horas, espelhos ou exportações de desenvolvimento.
   - **Golden Tests Read-Only:**
     - Fixtures `golden_afd_mte_2026.txt` (versão `004`) e `golden_aej_mte_2026.txt` (versão `001`) congeladas e validadas byte a byte em formato Windows CRLF.
-  - **Suíte de Testes Expandida:** `157 testes e 826 asserções 100% aprovados`.
+  - **Suíte de Testes Expandida:** `169 testes e 906 asserções 100% aprovados`.
 
 ## v2.4.0
 - **Compliance Portaria MTP 671/2021, ARP Completa e Integridade Criptográfica:**
