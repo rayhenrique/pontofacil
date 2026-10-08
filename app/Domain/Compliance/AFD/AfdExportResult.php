@@ -18,5 +18,7 @@ class AfdExportResult
         public bool $isHomologated = false,
         public string $signatureStatus = 'pending_certificate',
         public ?string $homologationReason = null,
+        public bool $structureValid = true,
+        public bool $signatureValid = false,
     ) {}
 }

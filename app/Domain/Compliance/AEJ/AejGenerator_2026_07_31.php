@@ -15,7 +15,7 @@ use Carbon\Carbon;
 
 class AejGenerator_2026_07_31 implements AejGeneratorInterface
 {
-    public const LAYOUT_VERSION = '002';
+    public const LAYOUT_VERSION = '001';
 
     protected FiscalHashService $fiscalHashService;
 
@@ -400,16 +400,14 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
 
         $totalRecords = $count01 + $count02 + $count03 + $count04 + $count05 + $count06 + $count07 + $count08 + 1;
 
-        // Determinação de homologação fiscal
-        $isHomologated = true;
+        // Sem arquivo .p7s real gerado e validado com certificado ICP-Brasil, o arquivo permanece não homologado
         $homologationReason = null;
-
         if (! $company->isRegisteredInpi() && $hasFonteMarcOriginal) {
-            $isHomologated = false;
             $homologationReason = 'pending_inpi';
         } elseif (empty($idtDesenv) || empty($nomeDesenv) || empty($emailDesenv)) {
-            $isHomologated = false;
             $homologationReason = 'missing_developer_data';
+        } else {
+            $homologationReason = 'pending_certificate';
         }
 
         return new AejExportResult(
@@ -424,8 +422,10 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
             isPreview: $isPreview,
             snapshotHash: $closedPeriod?->snapshot_hash,
             signatureStatus: 'pending_certificate',
-            isHomologated: $isHomologated,
+            isHomologated: false,
             homologationReason: $homologationReason,
+            structureValid: true,
+            signatureValid: false,
         );
     }
 

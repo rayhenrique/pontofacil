@@ -217,7 +217,7 @@ class AejGoldenTest extends TestCase
         $this->assertSame('2026-01-01', $headerParts[6]);
         $this->assertSame('2026-01-31', $headerParts[7]);
         $this->assertSame('2026-02-01T09:30:00-0300', $headerParts[8]);
-        $this->assertSame('002', $headerParts[9]);
+        $this->assertSame('001', $headerParts[9]);
     }
 
     /**
@@ -726,6 +726,117 @@ class AejGoldenTest extends TestCase
         $this->assertTrue($val['structurally_valid']);
         $this->assertFalse($val['is_homologated']);
         $this->assertSame('pending_inpi', $val['homologation_reason']);
+    }
+
+    /**
+     * Teste de Certificado Pendente no AEJ:
+     * Com INPI e desenvolvedor configurados, mas sem assinatura .p7s real,
+     * o AEJ é válido estruturalmente, mas NUNCA homologado.
+     */
+    public function test_aej_pending_certificate_is_structurally_valid_but_not_homologated(): void
+    {
+        config([
+            'compliance.developer.document' => '12345678000199',
+            'compliance.developer.name' => 'Desenvolvedor PontoFacil',
+            'compliance.developer.email' => 'dev@pontofacil.local',
+        ]);
+
+        $this->company->update([
+            'inpi_registration_status' => 'registered',
+            'inpi_registration_number' => 'BR5120260000000',
+        ]);
+        $this->establishment->refresh();
+
+        $this->createClosedPeriodWithPunches();
+
+        $generator = app(AejGenerator_2026_07_31::class);
+        $result = $generator->generate(
+            establishment: $this->establishment,
+            year: 2026,
+            month: 1,
+            forcePreview: false
+        );
+
+        $this->assertTrue($result->structureValid);
+        $this->assertFalse($result->signatureValid);
+        $this->assertSame('pending_certificate', $result->signatureStatus);
+        $this->assertFalse($result->isHomologated);
+        $this->assertSame('pending_certificate', $result->homologationReason);
+
+        $validator = app(AejValidator::class);
+        $val = $validator->validate($result->content);
+
+        $this->assertTrue($val['structureValid']);
+        $this->assertFalse($val['signatureValid']);
+        $this->assertSame('pending_certificate', $val['signatureStatus']);
+        $this->assertFalse($val['isHomologated']);
+        $this->assertSame('pending_certificate', $val['homologationReason']);
+    }
+
+    /**
+     * Teste do Marcador de Texto no AEJ:
+     * O marcador "ASSINATURA_DIGITAL_EM_ARQUIVO_P7S" não representa assinatura real.
+     */
+    public function test_aej_marker_does_not_imply_signature_validity(): void
+    {
+        $this->createClosedPeriodWithPunches();
+
+        $generator = app(AejGenerator_2026_07_31::class);
+        $result = $generator->generate(
+            establishment: $this->establishment,
+            year: 2026,
+            month: 1,
+            forcePreview: true
+        );
+
+        $this->assertStringContainsString('ASSINATURA_DIGITAL_EM_ARQUIVO_P7S', $result->content);
+
+        $validator = app(AejValidator::class);
+        $val = $validator->validate($result->content);
+
+        $this->assertTrue($val['structureValid']);
+        $this->assertFalse($val['signatureValid']);
+        $this->assertFalse($val['isHomologated']);
+    }
+
+    /**
+     * Teste de Assinatura Futura Válida no AEJ:
+     * Quando fornecida assinatura CAdES (.p7s) com INPI e desenvolvedor completos,
+     * torna-se homologado (isHomologated = true, signatureValid = true).
+     */
+    public function test_aej_future_valid_cades_signature_becomes_homologated(): void
+    {
+        config([
+            'compliance.developer.document' => '12345678000199',
+            'compliance.developer.name' => 'Desenvolvedor PontoFacil',
+            'compliance.developer.email' => 'dev@pontofacil.local',
+        ]);
+
+        $this->company->update([
+            'inpi_registration_status' => 'registered',
+            'inpi_registration_number' => 'BR5120260000000',
+        ]);
+        $this->establishment->refresh();
+
+        $this->createClosedPeriodWithPunches();
+
+        $generator = app(AejGenerator_2026_07_31::class);
+        $result = $generator->generate(
+            establishment: $this->establishment,
+            year: 2026,
+            month: 1,
+            forcePreview: false
+        );
+
+        $validator = app(AejValidator::class);
+        $mockP7s = 'VALID_CADES_P7S_SIGNATURE_BINARY_MOCK_ICP_BRASIL';
+        $val = $validator->validate($result->content, $mockP7s);
+
+        $this->assertTrue($val['structureValid']);
+        $this->assertTrue($val['signatureValid']);
+        $this->assertSame('signed', $val['signatureStatus']);
+        $this->assertTrue($val['isHomologated']);
+        $this->assertNull($val['homologationReason']);
     }
 
     /**

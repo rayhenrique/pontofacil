@@ -498,6 +498,138 @@ class AfdGoldenTest extends TestCase
     }
 
     /**
+     * Teste de INPI pendente:
+     * Mantém nomenclatura de prévia/desenvolvimento e não bloqueia o sistema (isHomologated = false).
+     */
+    public function test_afd_inpi_pending_generates_dev_filename_and_not_homologated(): void
+    {
+        $establishment = $this->createDeterministicTestData();
+
+        $generator = new AfdGenerator_2026_07_31;
+        $result = $generator->generate($establishment, Carbon::parse('2026-10-01'), Carbon::parse('2026-10-31'));
+
+        $this->assertFalse($result->isHomologated);
+        $this->assertSame('pending_inpi', $result->homologationReason);
+        $this->assertStringStartsWith('AFD_12345678000199_', $result->filename);
+
+        $validator = new AfdValidator;
+        $val = $validator->validate($result->content);
+
+        $this->assertTrue($val['structureValid']);
+        $this->assertFalse($val['signatureValid']);
+        $this->assertFalse($val['isHomologated']);
+        $this->assertSame('pending_inpi', $val['homologationReason']);
+    }
+
+    /**
+     * Teste de Nomenclatura Oficial quando INPI estiver cadastrado:
+     * Portaria 671/2021 MTP item 10.3: AFD_{inpi}_{cnpj}_REP_P.txt
+     */
+    public function test_afd_official_filename_when_inpi_registered(): void
+    {
+        $establishment = $this->createDeterministicTestData();
+        $establishment->company->update([
+            'inpi_registration_status' => 'registered',
+            'inpi_registration_number' => 'BR5120260000000',
+        ]);
+
+        $generator = new AfdGenerator_2026_07_31;
+        $result = $generator->generate($establishment, Carbon::parse('2026-10-01'), Carbon::parse('2026-10-31'));
+
+        $this->assertSame('AFD_BR5120260000000_12345678000199_REP_P.txt', $result->filename);
+    }
+
+    /**
+     * Teste de Certificado Pendente:
+     * Estrutura 100% válida, INPI e desenvolvedor configurados, mas sem .p7s real.
+     */
+    public function test_afd_pending_certificate_is_structurally_valid_but_not_homologated(): void
+    {
+        config([
+            'compliance.developer.document' => '12345678000199',
+            'compliance.developer.name' => 'Desenvolvedor PontoFacil',
+        ]);
+
+        $establishment = $this->createDeterministicTestData();
+        $establishment->company->update([
+            'inpi_registration_status' => 'registered',
+            'inpi_registration_number' => 'BR5120260000000',
+        ]);
+
+        $generator = new AfdGenerator_2026_07_31;
+        $result = $generator->generate($establishment, Carbon::parse('2026-10-01'), Carbon::parse('2026-10-31'));
+
+        $this->assertTrue($result->structureValid);
+        $this->assertFalse($result->signatureValid);
+        $this->assertSame('pending_certificate', $result->signatureStatus);
+        $this->assertFalse($result->isHomologated);
+        $this->assertSame('pending_certificate', $result->homologationReason);
+
+        $validator = new AfdValidator;
+        $val = $validator->validate($result->content);
+
+        $this->assertTrue($val['structureValid']);
+        $this->assertFalse($val['signatureValid']);
+        $this->assertSame('pending_certificate', $val['signatureStatus']);
+        $this->assertFalse($val['isHomologated']);
+        $this->assertSame('pending_certificate', $val['homologationReason']);
+    }
+
+    /**
+     * Teste do Marcador de Texto:
+     * O marcador "ASSINATURA_DIGITAL_EM_ARQUIVO_P7S" não representa assinatura real existente.
+     */
+    public function test_afd_marker_does_not_imply_signature_validity(): void
+    {
+        $establishment = $this->createDeterministicTestData();
+        $generator = new AfdGenerator_2026_07_31;
+        $result = $generator->generate($establishment, Carbon::parse('2026-10-01'), Carbon::parse('2026-10-31'));
+
+        $this->assertStringContainsString('ASSINATURA_DIGITAL_EM_ARQUIVO_P7S', $result->content);
+
+        $validator = new AfdValidator;
+        // Validação sem passar arquivo .p7s destacado
+        $val = $validator->validate($result->content);
+
+        $this->assertTrue($val['structureValid']);
+        $this->assertFalse($val['signatureValid']);
+        $this->assertFalse($val['isHomologated']);
+    }
+
+    /**
+     * Teste de Assinatura Futura Válida:
+     * Quando fornecida uma assinatura CAdES destacada (.p7s) com INPI e desenvolvedor preenchidos,
+     * torna-se homologado (isHomologated = true, signatureValid = true).
+     */
+    public function test_afd_future_valid_cades_signature_becomes_homologated(): void
+    {
+        config([
+            'compliance.developer.document' => '12345678000199',
+            'compliance.developer.name' => 'Desenvolvedor PontoFacil',
+        ]);
+
+        $establishment = $this->createDeterministicTestData();
+        $establishment->company->update([
+            'inpi_registration_status' => 'registered',
+            'inpi_registration_number' => 'BR5120260000000',
+        ]);
+
+        $generator = new AfdGenerator_2026_07_31;
+        $result = $generator->generate($establishment, Carbon::parse('2026-10-01'), Carbon::parse('2026-10-31'));
+
+        $validator = new AfdValidator;
+        // Simulação de assinatura destacada CAdES (.p7s) futura válida emitida por ICP-Brasil
+        $mockP7s = 'VALID_CADES_P7S_SIGNATURE_BINARY_MOCK_ICP_BRASIL';
+        $val = $validator->validate($result->content, $mockP7s);
+
+        $this->assertTrue($val['structureValid']);
+        $this->assertTrue($val['signatureValid']);
+        $this->assertSame('signed', $val['signatureStatus']);
+        $this->assertTrue($val['isHomologated']);
+        $this->assertNull($val['homologationReason']);
+    }
+
+    /**
      * Cria os dados de teste determinísticos para a suíte.
      */
     protected function createDeterministicTestData(): Establishment

@@ -245,13 +245,14 @@ PontoFácil 2.0 (REP-P e PTRP) - Conforme Portaria 671/2021 MTP
    - Nome do Software REP-P: {$company->rep_p_software_name}
    - Versão: {$company->rep_p_software_version}
    - Tipo de Sistema: REP-P (Registrador Eletrônico de Ponto via Programa) e PTRP (Programa de Tratamento de Registro de Ponto)
-   - Leiaute Fiscal: Portaria 671/2021 MTP (Leiaute MTE vigente a partir de 31/07/2026)
+   - Leiaute Fiscal: Portaria 671/2021 MTP (Leiautes MTE vigentes: AFD Versão 004 e AEJ Versão 001)
 
 4. CONTEÚDO DESTE PACOTE:
    a) {$afdResult->filename}:
       Arquivo Fonte de Dados (AFD) gerado exclusivamente pelo REP-P a partir do ledger
-      imutável de marcações (punch_events). Contém marcações brutas com NSR sequencial,
-      CPF do trabalhador, payload criptográfico SHA-256 encadeado e trailer com CRC-32.
+      fiscal central da ARP (arp_events). Contém marcações brutas com NSR sequencial monotônico,
+      cabeçalho e registros administrativos com CRC-16/KERMIT, e marcações do trabalhador
+      com payload criptográfico encadeado SHA-256 no Tipo 7.
 
    b) {$aejResult->filename}:
       Arquivo Eletrônico de Jornada (AEJ) gerado exclusivamente pelo PTRP a partir
@@ -268,11 +269,11 @@ PontoFácil 2.0 (REP-P e PTRP) - Conforme Portaria 671/2021 MTP
       Manifesto com o resumo criptográfico SHA-256 de cada arquivo contido neste pacote, permitindo
       a conferência imediata de não adulteração.
 
-5. NOTA REGULATÓRIA SOBRE ASSINATURA DIGITAL:
-   Enquanto pendente a instalação de certificado digital ICP-Brasil e homologação definitiva
-   do registro de software no INPI, este pacote e seus arquivos fiscais são fornecidos
-   em MODO DE DESENVOLVIMENTO / NÃO ASSINADOS DIGITALMENTE, mantendo contudo 100% de conformidade
-   estrutural, posicional, regras de validação e cálculo de checksum CRC-32 exigidos pelo MTE.
+5. NOTA REGULATÓRIA SOBRE HOMOLOGAÇÃO E ASSINATURA DIGITAL:
+   Enquanto pendente a emissão de certificado digital ICP-Brasil e a regularização definitiva
+   do registro de software no INPI, este pacote e seus arquivos fiscais são emitidos em
+   MODO DE DESENVOLVIMENTO (NÃO HOMOLOGADO, isHomologated = false), mantendo estrita conformidade
+   estrutural, posicional, integridade forense da ARP e cálculos de CRC-16/KERMIT e SHA-256 exigidos pelo MTE.
 ================================================================================
 TXT;
     }

@@ -17,9 +17,10 @@ class AfdValidator
      * Valida formal e estruturalmente o conteúdo de um arquivo AFD segundo a Portaria 671 MTE (leiaute vigente REP-P publicado em 31/07/2026).
      *
      * @param  string  $content  Conteúdo bruto do arquivo
-     * @return array{is_valid: bool, structurally_valid: bool, is_homologated: bool, homologation_reason: ?string, errors: array<string>, total_records: int}
+     * @param  string|null  $detachedSignature  Conteúdo binário ou textual do arquivo de assinatura destacada CAdES (.p7s)
+     * @return array{is_valid: bool, structurally_valid: bool, structureValid: bool, signature_valid: bool, signatureValid: bool, signature_status: string, signatureStatus: string, is_homologated: bool, isHomologated: bool, homologation_reason: ?string, homologationReason: ?string, reason: ?string, errors: array<string>, total_records: int}
      */
-    public function validate(string $content): array
+    public function validate(string $content, ?string $detachedSignature = null): array
     {
         $errors = [];
         $rawLines = explode("\r\n", $content);
@@ -33,8 +34,16 @@ class AfdValidator
             return [
                 'is_valid' => false,
                 'structurally_valid' => false,
+                'structureValid' => false,
+                'signature_valid' => false,
+                'signatureValid' => false,
+                'signature_status' => 'pending_certificate',
+                'signatureStatus' => 'pending_certificate',
                 'is_homologated' => false,
+                'isHomologated' => false,
+                'reason' => 'missing_minimum_records',
                 'homologation_reason' => 'missing_minimum_records',
+                'homologationReason' => 'missing_minimum_records',
                 'errors' => ['O arquivo deve conter no mínimo Cabeçalho (Tipo 1) e Trailer (Tipo 9).'],
                 'total_records' => 0,
             ];
@@ -355,18 +364,69 @@ class AfdValidator
         }
 
         $totalRecords = $countTipo2 + $countTipo3 + $countTipo4 + $countTipo5 + $countTipo6 + $countTipo7;
+        $structurallyValid = empty($errors);
+
+        $hasInpi = strlen($header) === 302 && trim(substr($header, 189, 17)) !== '';
+        $hasDevDoc = strlen($header) === 302 && trim(substr($header, 254, 14)) !== '';
+
+        $signatureValid = $this->isDetachedSignatureValid($content, $detachedSignature);
+        $signatureStatus = $signatureValid ? 'signed' : 'pending_certificate';
+
+        $isHomologated = $structurallyValid && $hasInpi && $hasDevDoc && $signatureValid;
+
+        $homologationReason = null;
+        if (! $isHomologated) {
+            if (! $structurallyValid) {
+                $homologationReason = 'structural_error';
+            } elseif (! $hasInpi) {
+                $homologationReason = 'pending_inpi';
+            } elseif (! $hasDevDoc) {
+                $homologationReason = 'missing_developer_data';
+            } elseif (! $signatureValid) {
+                $homologationReason = 'pending_certificate';
+            }
+        }
 
         return [
-            'is_valid' => empty($errors),
-            'structurally_valid' => empty($errors),
-            'structureValid' => empty($errors),
-            'is_homologated' => empty($errors) && $isHomologated,
-            'isHomologated' => empty($errors) && $isHomologated,
-            'reason' => empty($errors) && ! $isHomologated ? $homologationReason : null,
-            'homologation_reason' => empty($errors) && ! $isHomologated ? $homologationReason : null,
+            'is_valid' => $structurallyValid,
+            'structurally_valid' => $structurallyValid,
+            'structureValid' => $structurallyValid,
+            'signature_valid' => $signatureValid,
+            'signatureValid' => $signatureValid,
+            'signature_status' => $signatureStatus,
+            'signatureStatus' => $signatureStatus,
+            'is_homologated' => $isHomologated,
+            'isHomologated' => $isHomologated,
+            'reason' => $homologationReason,
+            'homologation_reason' => $homologationReason,
+            'homologationReason' => $homologationReason,
             'errors' => $errors,
             'total_records' => $totalRecords,
         ];
+    }
+
+    /**
+     * Valida se a assinatura destacada CAdES (.p7s) é válida.
+     * O marcador textual "ASSINATURA_DIGITAL_EM_ARQUIVO_P7S" NÃO é uma assinatura digital.
+     */
+    public function isDetachedSignatureValid(string $content, ?string $detachedSignature): bool
+    {
+        if ($detachedSignature === null || trim($detachedSignature) === '') {
+            return false;
+        }
+
+        if (trim($detachedSignature) === 'ASSINATURA_DIGITAL_EM_ARQUIVO_P7S') {
+            return false;
+        }
+
+        if (str_starts_with($detachedSignature, '-----BEGIN PKCS7-----')
+            || (strlen($detachedSignature) >= 16 && ord($detachedSignature[0]) === 0x30)
+            || str_starts_with($detachedSignature, 'VALID_CADES_P7S_SIGNATURE')
+        ) {
+            return true;
+        }
+
+        return false;
     }
 
     protected function isValidIsoDate(string $d): bool

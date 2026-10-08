@@ -288,22 +288,30 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
 
         $finalContent = implode("\r\n", $lines)."\r\n";
 
-        $cnpjClean = preg_replace('/\D/', '', (string) $establishment->identifier_number);
-        $prefixFile = $forcePreview ? 'AFD_PREVIA' : 'AFD';
-        $filename = sprintf('%s_%s_%s_%s.txt', $prefixFile, $cnpjClean, $startDate->format('Ymd'), $endDate->format('Ymd'));
+        $idClean = preg_replace('/\D/', '', (string) $establishment->identifier_number);
+        $inpiClean = preg_replace('/[^A-Za-z0-9]/', '', (string) ($company->isRegisteredInpi() ? ($company->inpi_registration_number ?? '') : ''));
+
+        if ($forcePreview) {
+            $filename = sprintf('AFD_PREVIA_%s_%s_%s.txt', $idClean, $startDate->format('Ymd'), $endDate->format('Ymd'));
+        } elseif ($isPendingInpi) {
+            // Enquanto o registro no INPI estiver pendente, mantém nomenclatura de prévia/desenvolvimento
+            $filename = sprintf('AFD_%s_%s_%s.txt', $idClean, $startDate->format('Ymd'), $endDate->format('Ymd'));
+        } else {
+            // Nomenclatura oficial MTE quando houver registro no INPI (Portaria 671/2021 MTP, item 10.3):
+            // Junção da palavra "AFD" com número de registro no INPI, CNPJ/CPF do empregador e "REP_P"
+            $filename = sprintf('AFD_%s_%s_REP_P.txt', $inpiClean, $idClean);
+        }
 
         $totalRecords = $countTipo2 + $countTipo3 + $countTipo4 + $countTipo5 + $countTipo6 + $countTipo7;
 
-        $isHomologated = ! ($isPendingInpi || $isMissingDeveloper || $isPendingCertificate);
+        // Sem arquivo .p7s real gerado e validado com certificado ICP-Brasil, o arquivo permanece não homologado
         $homologationReason = null;
-        if (! $isHomologated) {
-            if ($isPendingInpi) {
-                $homologationReason = 'pending_inpi';
-            } elseif ($isMissingDeveloper) {
-                $homologationReason = 'missing_developer_data';
-            } elseif ($isPendingCertificate) {
-                $homologationReason = 'pending_certificate';
-            }
+        if ($isPendingInpi) {
+            $homologationReason = 'pending_inpi';
+        } elseif ($isMissingDeveloper) {
+            $homologationReason = 'missing_developer_data';
+        } else {
+            $homologationReason = 'pending_certificate';
         }
 
         return new AfdExportResult(
@@ -314,9 +322,11 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
             endDate: $endDate,
             totalRecords: $totalRecords,
             crcChecksum: $headerCrc,
-            isHomologated: $isHomologated,
-            signatureStatus: $isPendingCertificate ? 'pending_certificate' : 'unsigned',
-            homologationReason: $homologationReason
+            isHomologated: false,
+            signatureStatus: 'pending_certificate',
+            homologationReason: $homologationReason,
+            structureValid: true,
+            signatureValid: false
         );
     }
 

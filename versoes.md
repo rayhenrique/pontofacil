@@ -3,6 +3,7 @@
 ## v2.5.0 (Atual)
 - **Conformidade MTE 31/07/2026: AFD REP-P Oficial & AEJ do PTRP (Portaria 671/2021 MTP):**
   - **AFD REP-P Oficial (Leiaute MTE 31/07/2026):**
+    - **Nomenclatura Oficial:** Implementada a regra do item 10.3 do MTE (`AFD_{inpi}_{cnpj}_REP_P.txt`) quando houver registro no INPI; mantém nomenclatura de prévia/desenvolvimento (`AFD_{cnpj}_{inicio}_{fim}.txt`) enquanto o INPI estiver pendente, sem bloquear a geração.
     - **Geração Direta da ARP:** Gerado estritamente a partir do ledger `arp_events`, preservando NSR original contíguo, ordem cronológica e tipos fiscais sem renumerar eventos.
     - **Registro Tipo 1 (Cabeçalho - 302 caracteres):** Refeito exatamente no leiaute oficial versão `004`, identificação do empregador, 17 espaços para INPI pendente (sem strings fictícias nem zeros inventados), datas ISO (`AAAA-MM-dd`), data/hora de geração ISO (24 posições), identificador e documento do desenvolvedor, modelo do software com 30 espaços para REP-P e CRC-16 Kermit CCITT-TRUE (`123456789 -> 2189`).
     - **Registro Tipo 2 (Empregador/Estabelecimento - 331 caracteres):** NSR (9), tipo (1), gravação ISO (24), CPF do responsável (14 car. pela esquerda), identificador do empregador, razão social (150), local da prestação de serviços (100) e CRC-16 Kermit.
@@ -11,11 +12,11 @@
     - **Registro Tipo 6 (Eventos Sensíveis REP-P - 36 caracteres):** Gravação ISO (24) e códigos oficiais do REP-P (`07` = disponibilidade de serviço, `08` = indisponibilidade de serviço, `02` = retorno de energia), sem descrição textual no AFD.
     - **Registro Tipo 7 (Marcações REP-P - 137 caracteres):** Separação de ocorrência e gravação para marcações offline, coletor oficial (`01` = mobile, `02` = web, `03` = desktop, `04`/`05` = dispositivo), tipo de marcação (`0`/`1`), CPF (12) e hash fiscal SHA-256 (64 car.) encadeado com o Tipo 7 anterior a partir do `fiscal_hash` imutável da ARP (sem reiniciar cadeia em exportações parciais).
     - **Registro Tipo 9 (Trailer - 64 caracteres):** Posição oficial do identificador final `9` na posição 64, contadores estritos dos tipos 2 a 7 (6 campos de 9 dígitos), sem campos de total de linhas inventados.
-    - **Linha de Assinatura CAdES:** Marcador oficial de 100 caracteres `ASSINATURA_DIGITAL_EM_ARQUIVO_P7S` preenchido com espaços à direita.
+    - **Linha de Assinatura CAdES:** Marcador oficial de 100 caracteres `ASSINATURA_DIGITAL_EM_ARQUIVO_P7S` preenchido com espaços à direita. O marcador é requisito posicional da norma e não substitui a validação de assinatura real externa (.p7s).
     - **CRC-16 Kermit:** Validação determinística estrita no padrão CCITT-TRUE (`123456789 -> 2189`), calculada e validada nos registros Tipo 1, 2, 4 e 5.
-  - **AEJ Oficial do PTRP (Leiaute MTE 31/07/2026):**
-    - **Registro 01 (Cabeçalho):** Formato delimitado por pipes `|`, versão oficial `002`, com identificação completa do empregador, período e carimbo ISO-8601.
-    - **Registro 02 (REPs Utilizados):** Identificador `02|idRepAej|tpRep|numRegRep`. Em status de INPI pendente com fonte `O`, gera arquivo para desenvolvimento com status não homologado (`structurally_valid = true`, `is_homologated = false`).
+  - **AEJ Oficial do PTRP (Anexo VI Portaria 671/2021 MTP):**
+    - **Registro 01 (Cabeçalho):** Formato delimitado por pipes `|`, versão oficial vigente `001` conforme o Anexo VI da Portaria 671/2021 MTP, com identificação completa do empregador, período e carimbo ISO-8601.
+    - **Registro 02 (REPs Utilizados):** Identificador `02|idRepAej|tpRep|numRegRep`. Em status de INPI pendente com fonte `O`, gera arquivo para desenvolvimento com status não homologado (`structureValid = true`, `isHomologated = false`).
     - **Registro 03 (Vínculos):** Relação dos colaboradores apurados na competência.
     - **Registro 04 (Horários Contratuais):** Jornada em minutos e pares de horários contratuais planejados.
     - **Registro 05 (Marcações Tratadas Oficial):** `05|idtVinculoAej|dataHoraMarc|idRepAej|tpMarc|seqEntSaida|fonteMarc|codHorContratual|motivo`. Mapeamento das fontes oficiais (`O` = original, `I` = manual, `P` = pré-assinalada, `X` = exceção, `T` = outra). Código contratual apontado na 1ª entrada do dia e motivo obrigatório para batidas manuais e desconsideradas.
@@ -23,12 +24,16 @@
     - **Registro 07 (Ausências e Banco de Horas):** Em competência fechada, gerado 100% a partir dos snapshots congelados do `ClosedPeriod` com garantia de imutabilidade retroativa byte a byte.
     - **Registro 08 (PTRP / Desenvolvedor):** `08|nomePrograma|versaoPrograma|tpIdDev|numIdDev|razaoSocialDev|emailDev` sem dados fictícios em `config/compliance.php`.
     - **Registro 99 (Trailer):** Contadores formais de registros 01 a 08.
-    - **Linha de Assinatura CAdES:** Marcador de 100 caracteres preparado ao final do arquivo.
+    - **Linha de Assinatura CAdES:** Marcador preparado ao final do arquivo.
+  - **Separação de Estados de Validação e Homologação:**
+    - Estados claramente distintos: `structureValid` (conformidade do layout), `signatureValid` (assinatura CAdES .p7s real validada), `isHomologated` e `homologationReason`.
+    - Inconsistência do AEJ corrigida: certificado pendente nunca resulta em `isHomologated = true`.
+  - **Pacote Fiscal MTE (README e Manifesto):**
+    - README atualizado para referenciar o ledger central da ARP (`arp_events`), CRC-16/KERMIT, SHA-256 Tipo 7 e o modo não homologado de desenvolvimento.
   - **Arquitetura Não-Bloqueante (INPI & ICP-Brasil):**
-    - **INPI:** Status `pending_registration` mantido sem impedir operação diária.
-    - **ICP-Brasil:** Status `pending_certificate` mantido sem gerar assinaturas falsas.
+    - O sistema continua 100% operacional sem bloquear registros de ponto, ARP, PTRP, fechamento mensal, banco de horas, espelhos ou exportações de desenvolvimento.
   - **Golden Tests Read-Only:**
-    - Fixtures `golden_afd_mte_2026.txt` e `golden_aej_mte_2026.txt` congeladas e validadas byte a byte em formato Windows CRLF com validação posicional estrita via `substr()`.
+    - Fixtures `golden_afd_mte_2026.txt` (versão `004`) e `golden_aej_mte_2026.txt` (versão `001`) congeladas e validadas byte a byte em formato Windows CRLF.
   - **Suíte de Testes Expandida:** `157 testes e 826 asserções 100% aprovados`.
 
 ## v2.4.0

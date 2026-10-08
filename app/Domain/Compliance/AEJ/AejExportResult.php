@@ -19,8 +19,10 @@ class AejExportResult
         public string $crcChecksum,
         public bool $isPreview = false,
         public ?string $snapshotHash = null,
-        public string $signatureStatus = 'unsigned',
+        public string $signatureStatus = 'pending_certificate',
         public bool $isHomologated = false,
         public ?string $homologationReason = null,
+        public bool $structureValid = true,
+        public bool $signatureValid = false,
     ) {}
 }

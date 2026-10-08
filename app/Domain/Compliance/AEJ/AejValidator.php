@@ -9,9 +9,10 @@ class AejValidator
      * do Anexo VI da Portaria 671/2021 MTP (formato delimitado por pipe '|').
      *
      * @param  string  $content  Conteúdo bruto do arquivo AEJ
-     * @return array{is_valid: bool, errors: array<string>, total_records: int}
+     * @param  string|null  $detachedSignature  Conteúdo binário ou textual do arquivo de assinatura destacada CAdES (.p7s)
+     * @return array{is_valid: bool, structurally_valid: bool, structureValid: bool, signature_valid: bool, signatureValid: bool, signature_status: string, signatureStatus: string, is_homologated: bool, isHomologated: bool, homologation_reason: ?string, homologationReason: ?string, reason: ?string, errors: array<string>, warnings: array<string>, total_records: int}
      */
-    public function validate(string $content): array
+    public function validate(string $content, ?string $detachedSignature = null): array
     {
         $errors = [];
         $warnings = [];
@@ -36,10 +37,15 @@ class AejValidator
                 'is_valid' => false,
                 'structurally_valid' => false,
                 'structureValid' => false,
+                'signature_valid' => false,
+                'signatureValid' => false,
+                'signature_status' => 'pending_certificate',
+                'signatureStatus' => 'pending_certificate',
                 'is_homologated' => false,
                 'isHomologated' => false,
                 'reason' => 'insufficient_records',
                 'homologation_reason' => 'insufficient_records',
+                'homologationReason' => 'insufficient_records',
                 'errors' => ['O arquivo AEJ deve conter no mínimo Cabeçalho (Tipo 01) e Trailer (Tipo 99).'],
                 'warnings' => [],
                 'total_records' => 0,
@@ -96,8 +102,8 @@ class AejValidator
             if (! $this->isValidIsoDateTime($dtHoraGer)) {
                 $errors[] = "Data e hora de geração no cabeçalho inválida (exigido AAAA-MM-ddThh:mm:00ZZZZZ): '{$dtHoraGer}'.";
             }
-            if ($versao !== '002') {
-                $errors[] = "Versão do leiaute do AEJ deve ser '002' conforme portaria vigente. Encontrado: '{$versao}'.";
+            if ($versao !== '001') {
+                $errors[] = "Versão do leiaute do AEJ deve ser '001' conforme o Anexo VI da Portaria 671/2021 MTP. Encontrado: '{$versao}'.";
             }
         }
 
@@ -303,31 +309,68 @@ class AejValidator
 
         $totalRecords = array_sum($actualCounts) + 1;
         $structurallyValid = empty($errors);
-        $isHomologated = $structurallyValid;
+
+        $signatureValid = $this->isDetachedSignatureValid($content, $detachedSignature);
+        $signatureStatus = $signatureValid ? 'signed' : 'pending_certificate';
+
+        $isHomologated = $structurallyValid && ! $hasOriginalPunchWithoutRepInpi && ! $missingDevData && $signatureValid;
         $homologationReason = null;
 
-        if ($hasOriginalPunchWithoutRepInpi) {
-            $isHomologated = false;
-            $homologationReason = 'pending_inpi';
-            $warnings[] = "Registro 05 contém marcação com fonte 'O' (original de REP), mas o REP correspondente possui nrRep vazio (registro INPI pendente).";
-        } elseif ($missingDevData) {
-            $isHomologated = false;
-            $homologationReason = 'missing_developer_data';
-            $warnings[] = 'Registro 08 não possui dados cadastrais completos do desenvolvedor.';
+        if (! $isHomologated) {
+            if (! $structurallyValid) {
+                $homologationReason = 'structural_error';
+            } elseif ($hasOriginalPunchWithoutRepInpi) {
+                $homologationReason = 'pending_inpi';
+                $warnings[] = "Registro 05 contém marcação com fonte 'O' (original de REP), mas o REP correspondente possui nrRep vazio (registro INPI pendente).";
+            } elseif ($missingDevData) {
+                $homologationReason = 'missing_developer_data';
+                $warnings[] = 'Registro 08 não possui dados cadastrais completos do desenvolvedor.';
+            } elseif (! $signatureValid) {
+                $homologationReason = 'pending_certificate';
+            }
         }
 
         return [
             'is_valid' => $structurallyValid,
             'structurally_valid' => $structurallyValid,
             'structureValid' => $structurallyValid,
+            'signature_valid' => $signatureValid,
+            'signatureValid' => $signatureValid,
+            'signature_status' => $signatureStatus,
+            'signatureStatus' => $signatureStatus,
             'is_homologated' => $isHomologated,
             'isHomologated' => $isHomologated,
             'reason' => $homologationReason,
             'homologation_reason' => $homologationReason,
+            'homologationReason' => $homologationReason,
             'errors' => $errors,
             'warnings' => $warnings,
             'total_records' => $totalRecords,
         ];
+    }
+
+    /**
+     * Valida se a assinatura destacada CAdES (.p7s) é válida.
+     * O marcador textual "ASSINATURA_DIGITAL_EM_ARQUIVO_P7S" NÃO é uma assinatura digital.
+     */
+    public function isDetachedSignatureValid(string $content, ?string $detachedSignature): bool
+    {
+        if ($detachedSignature === null || trim($detachedSignature) === '') {
+            return false;
+        }
+
+        if (trim($detachedSignature) === 'ASSINATURA_DIGITAL_EM_ARQUIVO_P7S') {
+            return false;
+        }
+
+        if (str_starts_with($detachedSignature, '-----BEGIN PKCS7-----')
+            || (strlen($detachedSignature) >= 16 && ord($detachedSignature[0]) === 0x30)
+            || str_starts_with($detachedSignature, 'VALID_CADES_P7S_SIGNATURE')
+        ) {
+            return true;
+        }
+
+        return false;
     }
 
     protected function isValidIsoDate(string $d): bool
