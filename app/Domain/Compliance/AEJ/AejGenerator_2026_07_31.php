@@ -51,94 +51,15 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
         $isPreview = ! $isClosed;
 
         // 1. Obter snapshots: ou congelados do ClosedPeriod, ou calculados transientes em modo prévia
-        $employeeDataList = [];
-        if ($isClosed) {
-            $snapshots = $closedPeriod->currentSnapshots()->get();
-            foreach ($snapshots as $snap) {
-                $employeeDataList[] = [
-                    'employee' => $snap->employee_snapshot,
-                    'schedule' => $snap->schedule_snapshot,
-                    'journeys' => $snap->journey_snapshot,
-                    'treatments' => $snap->treatment_snapshot,
-                    'time_bank' => $snap->time_bank_snapshot,
-                ];
-            }
-        } else {
-            // Modo Prévia: apuração em tempo real
-            $employees = Employee::with(['user', 'sector.establishment', 'workSchedule'])->get();
-            $calcAction = app(CalculateDailyJourneyAction::class);
-            $policy = TimeBankPolicy::forDate($endDate);
-
-            foreach ($employees as $emp) {
-                $empEstablishment = $emp->sector?->establishment ?? $establishment;
-                $employeeSnapshot = [
-                    'id' => $emp->id,
-                    'name' => $emp->user?->name ?? 'Colaborador '.$emp->id,
-                    'cpf' => $emp->cpf,
-                    'registration_number' => $emp->registration_number,
-                    'job_title' => $emp->job_title,
-                    'department' => $emp->sector?->name,
-                    'establishment_id' => $empEstablishment?->id,
-                    'establishment_name' => $empEstablishment?->name,
-                    'establishment_identifier' => $empEstablishment?->identifier_number,
-                ];
-
-                $schedule = $emp->workSchedule ?? WorkSchedule::first() ?? WorkSchedule::createDefault40h();
-                $scheduleSnapshot = [
-                    'id' => $schedule->id,
-                    'name' => $schedule->name,
-                    'type' => $schedule->type,
-                    'weekly_hours' => $schedule->weekly_hours,
-                    'tolerance_minutes' => $schedule->tolerance_minutes,
-                    'daily_tolerance_minutes' => $schedule->daily_tolerance_minutes,
-                    'days_config' => $schedule->days_config,
-                ];
-
-                $journeysData = [];
-                for ($d = 1; $d <= $endDate->day; $d++) {
-                    $dayDate = Carbon::createFromDate($year, $month, $d);
-                    $journeysData[] = $calcAction->execute($emp, $dayDate, $schedule)->toArray();
-                }
-
-                $account = TimeBankAccount::getOrCreateForEmployee($emp);
-                $transactions = TimeBankTransaction::where('time_bank_account_id', $account->id)
-                    ->whereBetween('reference_date', [$startDate->toDateString(), $endDate->toDateString()])
-                    ->orderBy('reference_date', 'asc')
-                    ->orderBy('created_at', 'asc')
-                    ->get();
-
-                $frozenTransactions = [];
-                foreach ($transactions as $tx) {
-                    $qtMinutos = abs((int) $tx->minutes);
-                    if ($qtMinutos === 0) {
-                        continue;
-                    }
-                    $tipoMovBH = ($tx->minutes > 0) ? '1' : '2';
-                    $frozenTransactions[] = [
-                        'reference_date' => Carbon::parse($tx->reference_date)->format('Y-m-d'),
-                        'minutes' => $qtMinutos,
-                        'tipo_mov_bh' => $tipoMovBH,
-                    ];
-                }
-
-                $timeBankSnapshot = [
-                    'policy_mode' => $policy?->enabled ? $policy->closing_mode->value : 'DISABLED',
-                    'balance_before' => $account->balanceUntil($startDate->copy()->subSecond()),
-                    'balance_at_closing' => $account->balanceUntil($endDate),
-                    'reset_applied' => 0,
-                    'final_balance' => $account->balanceUntil($endDate),
-                    'transactions' => $frozenTransactions,
-                ];
-
-                $employeeDataList[] = [
-                    'employee' => $employeeSnapshot,
-                    'schedule' => $scheduleSnapshot,
-                    'journeys' => $journeysData,
-                    'treatments' => [],
-                    'time_bank' => $timeBankSnapshot,
-                ];
-            }
-        }
+        $employeeDataList = $this->resolveEmployeeDataList(
+            $establishment,
+            $year,
+            $month,
+            $startDate,
+            $endDate,
+            $isClosed,
+            $closedPeriod
+        );
 
         $lines = [];
 
@@ -447,5 +368,115 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
         $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $str);
 
         return trim($ascii !== false ? $ascii : $str);
+    }
+
+    /**
+     * Resolve os dados de empregados e jornadas: via snapshots congelados da competência fechada
+     * ou por apuração transiente calculada para modo prévia.
+     *
+     * @return array<int, array{employee: array<string, mixed>, schedule: array<string, mixed>, journeys: array<int, mixed>, treatments: array<int, mixed>, time_bank: array<string, mixed>}>
+     */
+    protected function resolveEmployeeDataList(
+        Establishment $establishment,
+        int $year,
+        int $month,
+        Carbon $startDate,
+        Carbon $endDate,
+        bool $isClosed,
+        ?ClosedPeriod $closedPeriod,
+    ): array {
+        if ($isClosed && $closedPeriod) {
+            $snapshots = $closedPeriod->currentSnapshots()->get();
+            $employeeDataList = [];
+            foreach ($snapshots as $snap) {
+                $employeeDataList[] = [
+                    'employee' => $snap->employee_snapshot,
+                    'schedule' => $snap->schedule_snapshot,
+                    'journeys' => $snap->journey_snapshot,
+                    'treatments' => $snap->treatment_snapshot,
+                    'time_bank' => $snap->time_bank_snapshot,
+                ];
+            }
+
+            return $employeeDataList;
+        }
+
+        // Modo Prévia: apuração em tempo real
+        $employees = Employee::with(['user', 'sector.establishment', 'workSchedule'])->get();
+        $calcAction = app(CalculateDailyJourneyAction::class);
+        $policy = TimeBankPolicy::forDate($endDate);
+        $employeeDataList = [];
+
+        foreach ($employees as $emp) {
+            $empEstablishment = $emp->sector?->establishment ?? $establishment;
+            $employeeSnapshot = [
+                'id' => $emp->id,
+                'name' => $emp->user?->name ?? 'Colaborador '.$emp->id,
+                'cpf' => $emp->cpf,
+                'registration_number' => $emp->registration_number,
+                'job_title' => $emp->job_title,
+                'department' => $emp->sector?->name,
+                'establishment_id' => $empEstablishment?->id,
+                'establishment_name' => $empEstablishment?->name,
+                'establishment_identifier' => $empEstablishment?->identifier_number,
+            ];
+
+            $schedule = $emp->workSchedule ?? WorkSchedule::first() ?? WorkSchedule::createDefault40h();
+            $scheduleSnapshot = [
+                'id' => $schedule->id,
+                'name' => $schedule->name,
+                'type' => $schedule->type,
+                'weekly_hours' => $schedule->weekly_hours,
+                'tolerance_minutes' => $schedule->tolerance_minutes,
+                'daily_tolerance_minutes' => $schedule->daily_tolerance_minutes,
+                'days_config' => $schedule->days_config,
+            ];
+
+            $journeysData = [];
+            for ($d = 1; $d <= $endDate->day; $d++) {
+                $dayDate = Carbon::createFromDate($year, $month, $d);
+                $journeysData[] = $calcAction->execute($emp, $dayDate, $schedule)->toArray();
+            }
+
+            $account = TimeBankAccount::getOrCreateForEmployee($emp);
+            $transactions = TimeBankTransaction::where('time_bank_account_id', $account->id)
+                ->whereBetween('reference_date', [$startDate->toDateString(), $endDate->toDateString()])
+                ->orderBy('reference_date', 'asc')
+                ->orderBy('created_at', 'asc')
+                ->get();
+
+            $frozenTransactions = [];
+            foreach ($transactions as $tx) {
+                $qtMinutos = abs((int) $tx->minutes);
+                if ($qtMinutos === 0) {
+                    continue;
+                }
+                $tipoMovBH = ($tx->minutes > 0) ? '1' : '2';
+                $frozenTransactions[] = [
+                    'reference_date' => Carbon::parse($tx->reference_date)->format('Y-m-d'),
+                    'minutes' => $qtMinutos,
+                    'tipo_mov_bh' => $tipoMovBH,
+                ];
+            }
+
+            $timeBankSnapshot = [
+                'policy_mode' => $policy?->enabled ? $policy->closing_mode->value : 'DISABLED',
+                'balance_before' => $account->balanceUntil($startDate->copy()->subSecond()),
+                'balance_at_closing' => $account->balanceUntil($endDate),
+                'reset_applied' => 0,
+                'final_balance' => $account->balanceUntil($endDate),
+                'transactions' => $frozenTransactions,
+            ];
+
+            $employeeDataList[] = [
+                'employee' => $employeeSnapshot,
+                'schedule' => $scheduleSnapshot,
+                'journeys' => $journeysData,
+                'treatments' => [],
+                'time_bank' => $timeBankSnapshot,
+            ];
+        }
+
+        return $employeeDataList;
     }
 }
