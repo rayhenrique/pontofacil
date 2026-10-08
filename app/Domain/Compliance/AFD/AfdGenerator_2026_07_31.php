@@ -12,9 +12,9 @@ use Carbon\Carbon;
 class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
 {
     /**
-     * Versão oficial vigente do leiaute do AFD conforme a Portaria 671/2021 MTE.
+     * Versão oficial vigente do leiaute do AFD conforme a Portaria 671/2021 MTE (publicado 31/07/2026).
      */
-    public const LAYOUT_VERSION = '003';
+    public const LAYOUT_VERSION = '004';
 
     public function __construct(
         protected ?FiscalHashService $fiscalHashService = null
@@ -32,7 +32,8 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
         $company = $establishment->company;
         $genTime = $generationTime ?: Carbon::now($establishment->timezone ?: 'America/Maceio');
 
-        $isPendingInpi = ! $company->isRegisteredInpi();
+        $isPendingInpi = ! $company->isRegisteredInpi() || empty($company->inpi_registration_number);
+        $isMissingDeveloper = empty(config('compliance.developer.document')) || empty(config('compliance.developer.name'));
         $isPendingCertificate = config('compliance.icp_brasil.status', 'pending_certificate') === 'pending_certificate';
 
         // Extrai os eventos do ledger fiscal central da ARP (arp_events)
@@ -61,29 +62,40 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
 
         $lines = [];
 
-        // 1. Cabeçalho (Registro Tipo 1) - exatamente 290 caracteres (com CRC-16 Kermit)
+        // 1. Cabeçalho (Registro Tipo 1) - exatamente 302 caracteres (com CRC-16 Kermit)
         $headerNsr = '000000000';
         $headerTipo = '1';
         $idType = ($establishment->identifier_type === 'cpf') ? '2' : '1';
-        $idNumber = str_pad(preg_replace('/\D/', '', (string) $establishment->identifier_number), 14, '0', STR_PAD_LEFT);
-        $caepfCno = str_pad('', 12, '0', STR_PAD_LEFT);
+        $idNumberRaw = preg_replace('/\D/', '', (string) $establishment->identifier_number);
+        $idNumber = str_pad(substr($idNumberRaw, 0, 14), 14, ' ', STR_PAD_RIGHT);
+        $caepfCno = str_repeat(' ', 14);
         $legalName = mb_str_pad(mb_substr($this->sanitize($company->legal_name), 0, 150), 150, ' ', STR_PAD_RIGHT);
 
-        // Registro INPI (17 dígitos numéricos). Se pendente, preenche com 17 zeros sem texto fictício.
-        $inpiRaw = preg_replace('/\D/', '', (string) ($company->inpi_registration_number ?? config('compliance.inpi.number', '')));
-        $inpiRegistration = str_pad(substr($inpiRaw, 0, 17), 17, '0', STR_PAD_LEFT);
+        // Registro INPI (17 dígitos numéricos). Se pendente, preenche com 17 espaços sem texto fictício nem zeros fictícios.
+        $inpiRaw = preg_replace('/\D/', '', (string) ($company->isRegisteredInpi() ? ($company->inpi_registration_number ?? '') : ''));
+        $inpiRegistration = ($company->isRegisteredInpi() && $inpiRaw !== '')
+            ? str_pad(substr($inpiRaw, 0, 17), 17, ' ', STR_PAD_RIGHT)
+            : str_repeat(' ', 17);
 
-        $dtInicio = $startDate->format('dmY');
-        $dtFim = $endDate->format('dmY');
-        $dtGeracao = $genTime->format('dmY');
-        $hrGeracao = $genTime->format('Hi');
+        $dtInicio = $startDate->format('Y-m-d');
+        $dtFim = $endDate->format('Y-m-d');
+        $dtGeracao = $this->fiscalHashService->formatDateTimeIso($genTime);
         $versao = self::LAYOUT_VERSION;
 
-        $devIdType = (string) config('compliance.developer.document_type', '1');
-        $devIdNumber = str_pad(preg_replace('/\D/', '', (string) config('compliance.developer.document', '12345678000199')), 14, '0', STR_PAD_LEFT);
-        $softwareModel = mb_str_pad(mb_substr($this->sanitize((string) config('compliance.software.name', 'PontoFacil')), 0, 30), 30, ' ', STR_PAD_RIGHT);
+        $devDocRaw = config('compliance.developer.document');
+        $devDocClean = ! empty($devDocRaw) ? preg_replace('/\D/', '', (string) $devDocRaw) : '';
+        $devIdTypeRaw = config('compliance.developer.document_type');
+        $devIdType = $devDocClean !== ''
+            ? (in_array((string) $devIdTypeRaw, ['1', '2'], true) ? (string) $devIdTypeRaw : (strlen($devDocClean) === 11 ? '2' : '1'))
+            : ' ';
+        $devIdNumber = $devDocClean !== ''
+            ? str_pad(substr($devDocClean, 0, 14), 14, ' ', STR_PAD_RIGHT)
+            : str_repeat(' ', 14);
 
-        $headerPrefix = $headerNsr.$headerTipo.$idType.$idNumber.$caepfCno.$legalName.$inpiRegistration.$dtInicio.$dtFim.$dtGeracao.$hrGeracao.$versao.$devIdType.$devIdNumber.$softwareModel;
+        // Modelo, no caso de REP-C (para REP-P, preencher com 30 espaços)
+        $softwareModel = str_repeat(' ', 30);
+
+        $headerPrefix = $headerNsr.$headerTipo.$idType.$idNumber.$caepfCno.$legalName.$inpiRegistration.$dtInicio.$dtFim.$dtGeracao.$versao.$devIdType.$devIdNumber.$softwareModel;
         $headerCrc = $this->fiscalHashService->calculateCrc16($headerPrefix);
         $lines[] = $headerPrefix.$headerCrc;
 
@@ -106,12 +118,14 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
                     case ArpEventType::EmployerEstablishmentMutation:
                         $countTipo2++;
                         $tipo = '2';
-                        $dtGravacao = $event->occurred_at_local->format('dmYHi');
-                        $cpfRespRaw = preg_replace('/\D/', '', (string) ($event->payload['responsible_cpf'] ?? $event->user?->cpf ?? '00000000000'));
-                        $cpfResp = str_pad(substr($cpfRespRaw, 0, 11), 11, '0', STR_PAD_LEFT);
+                        $dtGravacao = $this->fiscalHashService->formatDateTimeIso($event->occurred_at_local, $event->utc_offset);
+                        $cpfRespRaw = preg_replace('/\D/', '', (string) ($event->payload['responsible_cpf'] ?? $event->user?->cpf ?? ''));
+                        $cpfResp = str_pad(substr($cpfRespRaw, 0, 11), 14, ' ', STR_PAD_RIGHT);
                         $empIdType = ($event->payload['identifier_type'] ?? $establishment->identifier_type) === 'cpf' ? '2' : '1';
-                        $empIdNumber = str_pad(preg_replace('/\D/', '', (string) ($event->payload['identifier_number'] ?? $establishment->identifier_number)), 14, '0', STR_PAD_LEFT);
-                        $cei = str_pad(substr(preg_replace('/\D/', '', (string) ($event->payload['cei_caepf'] ?? '')), 0, 12), 12, '0', STR_PAD_LEFT);
+                        $empIdNumRaw = preg_replace('/\D/', '', (string) ($event->payload['identifier_number'] ?? $establishment->identifier_number));
+                        $empIdNumber = str_pad(substr($empIdNumRaw, 0, 14), 14, ' ', STR_PAD_RIGHT);
+                        $cnoCaepfRaw = preg_replace('/\D/', '', (string) ($event->payload['cei_caepf'] ?? $event->payload['cno'] ?? $event->payload['caepf'] ?? ''));
+                        $cei = $cnoCaepfRaw !== '' ? str_pad(substr($cnoCaepfRaw, 0, 14), 14, ' ', STR_PAD_RIGHT) : str_repeat(' ', 14);
                         $razao = mb_str_pad(mb_substr($this->sanitize($event->payload['legal_name'] ?? $company->legal_name), 0, 150), 150, ' ', STR_PAD_RIGHT);
                         $local = mb_str_pad(mb_substr($this->sanitize($event->payload['workplace'] ?? $establishment->name ?? 'MATRIZ'), 0, 100), 100, ' ', STR_PAD_RIGHT);
 
@@ -126,9 +140,9 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
                         $dtAntesVal = isset($event->payload['before_occurred_at'])
                             ? Carbon::parse($event->payload['before_occurred_at'])
                             : $event->occurred_at_local;
-                        $dtAntes = $dtAntesVal->format('dmYHi');
-                        $dtDepois = $event->occurred_at_local->format('dmYHi');
-                        $cpfRespRaw = preg_replace('/\D/', '', (string) ($event->payload['responsible_cpf'] ?? $event->user?->cpf ?? '00000000000'));
+                        $dtAntes = $this->fiscalHashService->formatDateTimeIso($dtAntesVal, $event->utc_offset);
+                        $dtDepois = $this->fiscalHashService->formatDateTimeIso($event->occurred_at_local, $event->utc_offset);
+                        $cpfRespRaw = preg_replace('/\D/', '', (string) ($event->payload['responsible_cpf'] ?? $event->user?->cpf ?? ''));
                         $cpfResp = str_pad(substr($cpfRespRaw, 0, 11), 11, '0', STR_PAD_LEFT);
 
                         $prefix = $nsr.$tipo.$dtAntes.$dtDepois.$cpfResp;
@@ -139,18 +153,19 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
                     case ArpEventType::WorkerMutation:
                         $countTipo5++;
                         $tipo = '5';
-                        $dtGravacao = $event->occurred_at_local->format('dmYHi');
+                        $dtGravacao = $this->fiscalHashService->formatDateTimeIso($event->occurred_at_local, $event->utc_offset);
                         $operacao = strtoupper(substr((string) ($event->payload['mutation_type'] ?? 'A'), 0, 1));
                         if (! in_array($operacao, ['I', 'A', 'E'], true)) {
                             $operacao = 'A';
                         }
                         $cpfRaw = preg_replace('/\D/', '', (string) ($event->employee?->cpf ?? ($event->payload['cpf'] ?? '')));
-                        $cpfEmp = str_pad(substr($cpfRaw, 0, 11), 11, '0', STR_PAD_LEFT);
+                        $cpfEmp = str_pad(substr($cpfRaw, 0, 11), 12, '0', STR_PAD_LEFT);
                         $nomeEmp = mb_str_pad(mb_substr($this->sanitize($event->employee?->user?->name ?? ($event->payload['name'] ?? '')), 0, 52), 52, ' ', STR_PAD_RIGHT);
-                        $cpfRespRaw = preg_replace('/\D/', '', (string) ($event->payload['responsible_cpf'] ?? $event->user?->cpf ?? '00000000000'));
+                        $demaisDados = str_pad(substr((string) ($event->payload['additional_data'] ?? $event->payload['other_data'] ?? ''), 0, 4), 4, ' ', STR_PAD_RIGHT);
+                        $cpfRespRaw = preg_replace('/\D/', '', (string) ($event->payload['responsible_cpf'] ?? $event->user?->cpf ?? ''));
                         $cpfResp = str_pad(substr($cpfRespRaw, 0, 11), 11, '0', STR_PAD_LEFT);
 
-                        $prefix = $nsr.$tipo.$dtGravacao.$operacao.$cpfEmp.$nomeEmp.$cpfResp;
+                        $prefix = $nsr.$tipo.$dtGravacao.$operacao.$cpfEmp.$nomeEmp.$demaisDados.$cpfResp;
                         $crc = $this->fiscalHashService->calculateCrc16($prefix);
                         $lines[] = $prefix.$crc;
                         break;
@@ -159,9 +174,13 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
                         $countTipo6++;
                         $tipo = '6';
                         $dtHrGravacao = $this->fiscalHashService->formatDateTimeIso($event->occurred_at_local, $event->utc_offset);
-                        $eventCodeRaw = (string) ($event->payload['event_code'] ?? '01');
-                        // Códigos oficiais: '01' Disponibilidade REP-P, '02' Indisponibilidade REP-P
-                        $codEvento = in_array($eventCodeRaw, ['01', '02'], true) ? $eventCodeRaw : '01';
+                        $eventCodeRaw = (string) ($event->payload['event_code'] ?? '07');
+                        // Códigos oficiais MTE REP-P: '07' Disponibilidade de serviço, '08' Indisponibilidade de serviço, '02' Retorno de energia
+                        $codEvento = match ($eventCodeRaw) {
+                            '08', 'unavailable', 'indisponibilidade' => '08',
+                            '02', 'power_restore', 'retorno_energia' => '02',
+                            default => '07',
+                        };
 
                         $lines[] = $nsr.$tipo.$dtHrGravacao.$codEvento;
                         break;
@@ -181,16 +200,33 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
                         $collector = $this->mapCollectorType($event->payload['collector_type'] ?? $event->payload['source'] ?? 'browser');
                         $tipoMarcacao = ($event->payload['is_offline'] ?? false) ? '1' : '0';
 
-                        $hash = $this->fiscalHashService->calculateTipo7FiscalHash(
-                            nsr: (int) $event->nsr,
-                            occurredAtLocal: $event->occurred_at_local,
-                            recordedAtLocal: $recordedLocal,
-                            cpf: $event->employee?->cpf,
-                            collectorType: $collector,
-                            punchType: $tipoMarcacao,
-                            previousTipo7FiscalHash: $previousTipo7Hash
-                        );
-                        $previousTipo7Hash = $hash;
+                        // Solução Oficial: O fiscal_hash gravado na ARP no momento da batida é a fonte imutável
+                        if (! empty($event->fiscal_hash)) {
+                            $hash = $event->fiscal_hash;
+                            $previousTipo7Hash = $hash;
+                        } else {
+                            // Se precisar recalcular, busca o último evento Tipo 7 anterior ao intervalo exportado
+                            if ($previousTipo7Hash === null) {
+                                $priorPunchEvent = ArpEvent::where('establishment_id', $establishment->id)
+                                    ->where('event_type', ArpEventType::Punch)
+                                    ->where('nsr', '<', $event->nsr)
+                                    ->orderBy('nsr', 'desc')
+                                    ->first();
+                                $previousTipo7Hash = $priorPunchEvent?->fiscal_hash;
+                            }
+
+                            $hash = $this->fiscalHashService->calculateTipo7FiscalHash(
+                                nsr: (int) $event->nsr,
+                                occurredAtLocal: $event->occurred_at_local,
+                                recordedAtLocal: $recordedLocal,
+                                cpf: $event->employee?->cpf,
+                                collectorType: $collector,
+                                punchType: $tipoMarcacao,
+                                previousTipo7FiscalHash: $previousTipo7Hash
+                            );
+                            $previousTipo7Hash = $hash;
+                        }
+
                         $hashFormatted = str_pad(strtolower(substr((string) $hash, 0, 64)), 64, '0', STR_PAD_RIGHT);
 
                         $lines[] = $nsr.$tipo.$dtHrMarcacao.$cpfEmp.$dtHrGravacao.$collector.$tipoMarcacao.$hashFormatted;
@@ -211,6 +247,14 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
                 $collector = $this->mapCollectorType($punch->source ?? 'browser');
                 $tipoMarcacao = '0';
 
+                if ($previousHash === null) {
+                    $priorPunch = PunchEvent::where('establishment_id', $establishment->id)
+                        ->where('nsr', '<', $punch->nsr)
+                        ->orderBy('nsr', 'desc')
+                        ->first();
+                    // Fallback para cadeia legada
+                }
+
                 $fiscalHash = $this->fiscalHashService->calculateTipo7FiscalHash(
                     nsr: (int) $punch->nsr,
                     occurredAtLocal: $punch->occurred_at_local,
@@ -227,7 +271,7 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
             }
         }
 
-        // 3. Trailer (Registro Tipo 9) - exatamente 64 caracteres (sem totalLinhas inventado)
+        // 3. Trailer (Registro Tipo 9) - exatamente 64 caracteres com '9' no final (posição 64)
         $trailerNsr = '999999999';
         $trailerTipo = '9';
         $qtdTipo2 = str_pad((string) $countTipo2, 9, '0', STR_PAD_LEFT);
@@ -237,7 +281,7 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
         $qtdTipo6 = str_pad((string) $countTipo6, 9, '0', STR_PAD_LEFT);
         $qtdTipo7 = str_pad((string) $countTipo7, 9, '0', STR_PAD_LEFT);
 
-        $lines[] = $trailerNsr.$trailerTipo.$qtdTipo2.$qtdTipo3.$qtdTipo4.$qtdTipo5.$qtdTipo6.$qtdTipo7;
+        $lines[] = $trailerNsr.$qtdTipo2.$qtdTipo3.$qtdTipo4.$qtdTipo5.$qtdTipo6.$qtdTipo7.$trailerTipo;
 
         // 4. Marcador Oficial de Assinatura Externa CAdES (.p7s) - exatamente 100 caracteres
         $lines[] = mb_str_pad('ASSINATURA_DIGITAL_EM_ARQUIVO_P7S', 100, ' ', STR_PAD_RIGHT);
@@ -250,6 +294,18 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
 
         $totalRecords = $countTipo2 + $countTipo3 + $countTipo4 + $countTipo5 + $countTipo6 + $countTipo7;
 
+        $isHomologated = ! ($isPendingInpi || $isMissingDeveloper || $isPendingCertificate);
+        $homologationReason = null;
+        if (! $isHomologated) {
+            if ($isPendingInpi) {
+                $homologationReason = 'pending_inpi';
+            } elseif ($isMissingDeveloper) {
+                $homologationReason = 'missing_developer_data';
+            } elseif ($isPendingCertificate) {
+                $homologationReason = 'pending_certificate';
+            }
+        }
+
         return new AfdExportResult(
             content: $finalContent,
             filename: $filename,
@@ -258,8 +314,9 @@ class AfdGenerator_2026_07_31 implements AfdGeneratorInterface
             endDate: $endDate,
             totalRecords: $totalRecords,
             crcChecksum: $headerCrc,
-            isHomologated: ! ($isPendingInpi || $isPendingCertificate),
-            signatureStatus: $isPendingCertificate ? 'pending_certificate' : 'signed'
+            isHomologated: $isHomologated,
+            signatureStatus: $isPendingCertificate ? 'pending_certificate' : 'unsigned',
+            homologationReason: $homologationReason
         );
     }
 

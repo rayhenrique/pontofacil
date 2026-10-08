@@ -12,6 +12,7 @@ use App\Models\Employee;
 use App\Models\Establishment;
 use App\Models\TimeBankAccount;
 use App\Models\TimeBankPolicy;
+use App\Models\TimeBankTransaction;
 use App\Models\TreatmentEvent;
 use App\Models\User;
 use App\Models\WorkSchedule;
@@ -206,12 +207,28 @@ class CloseMonthlyPeriodAction
                     }
                 }
 
+                $periodTransactions = TimeBankTransaction::where('time_bank_account_id', $account->id)
+                    ->whereBetween('reference_date', [$periodStart->toDateString(), $periodEnd->toDateString()])
+                    ->orderBy('reference_date', 'asc')
+                    ->orderBy('created_at', 'asc')
+                    ->get()
+                    ->map(fn ($tx) => [
+                        'id' => $tx->id,
+                        'reference_date' => $tx->reference_date->toDateString(),
+                        'minutes' => (int) $tx->minutes,
+                        'type' => $tx->type->value,
+                        'tipo_mov_bh' => ($tx->minutes > 0) ? '1' : '2',
+                    ])
+                    ->values()
+                    ->all();
+
                 $timeBankSnapshot = [
                     'policy_mode' => $policy?->enabled ? $policy->closing_mode->value : 'DISABLED',
                     'balance_before' => $balanceBefore,
                     'balance_at_closing' => $balanceAtClosing,
                     'reset_applied' => $resetApplied,
                     'final_balance' => ($policy?->enabled && $policy->closing_mode === TimeBankClosingMode::MonthlyReset) ? 0 : $balanceAtClosing,
+                    'transactions' => $periodTransactions,
                 ];
 
                 // f) Snapshot do calendário laboral utilizado na competência (20.18.18)

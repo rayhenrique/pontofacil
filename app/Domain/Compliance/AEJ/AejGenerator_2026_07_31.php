@@ -15,7 +15,7 @@ use Carbon\Carbon;
 
 class AejGenerator_2026_07_31 implements AejGeneratorInterface
 {
-    public const LAYOUT_VERSION = '001';
+    public const LAYOUT_VERSION = '002';
 
     protected FiscalHashService $fiscalHashService;
 
@@ -101,12 +101,33 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
                 }
 
                 $account = TimeBankAccount::getOrCreateForEmployee($emp);
+                $transactions = TimeBankTransaction::where('time_bank_account_id', $account->id)
+                    ->whereBetween('reference_date', [$startDate->toDateString(), $endDate->toDateString()])
+                    ->orderBy('reference_date', 'asc')
+                    ->orderBy('created_at', 'asc')
+                    ->get();
+
+                $frozenTransactions = [];
+                foreach ($transactions as $tx) {
+                    $qtMinutos = abs((int) $tx->minutes);
+                    if ($qtMinutos === 0) {
+                        continue;
+                    }
+                    $tipoMovBH = ($tx->minutes > 0) ? '1' : '2';
+                    $frozenTransactions[] = [
+                        'reference_date' => Carbon::parse($tx->reference_date)->format('Y-m-d'),
+                        'minutes' => $qtMinutos,
+                        'tipo_mov_bh' => $tipoMovBH,
+                    ];
+                }
+
                 $timeBankSnapshot = [
                     'policy_mode' => $policy?->enabled ? $policy->closing_mode->value : 'DISABLED',
                     'balance_before' => $account->balanceUntil($startDate->copy()->subSecond()),
                     'balance_at_closing' => $account->balanceUntil($endDate),
                     'reset_applied' => 0,
                     'final_balance' => $account->balanceUntil($endDate),
+                    'transactions' => $frozenTransactions,
                 ];
 
                 $employeeDataList[] = [
@@ -154,6 +175,12 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
         // 3. Registro 03: Vínculos (Empregados)
         $vinculoMap = [];
         $vinculoCounter = 0;
+        $cpfCounts = [];
+        foreach ($employeeDataList as $item) {
+            $cleanCpf = str_pad(substr(preg_replace('/\D/', '', $item['employee']['cpf'] ?? ''), 0, 11), 11, '0', STR_PAD_LEFT);
+            $cpfCounts[$cleanCpf] = ($cpfCounts[$cleanCpf] ?? 0) + 1;
+        }
+
         foreach ($employeeDataList as $item) {
             $vinculoCounter++;
             $count03++;
@@ -205,6 +232,7 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
 
         // 5. Registro 05: Marcações Tratadas
         // 05|idtVinculoAej|dataHoraMarc|idRepAej|tpMarc|seqEntSaida|fonteMarc|codHorContratual|motivo
+        $hasFonteMarcOriginal = false;
         foreach ($employeeDataList as $item) {
             $empId = $item['employee']['id'] ?? 1;
             $idtVinculoAej = $vinculoMap[$empId] ?? '1';
@@ -239,6 +267,10 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
                         default => 'O',
                     };
 
+                    if ($fonteMarc === 'O') {
+                        $hasFonteMarcOriginal = true;
+                    }
+
                     // codHorContratual: '1' na primeira entrada do dia, vazio nas demais
                     $codHorContratual = ($tpMarc === 'E' && $pairSeq === 1) ? '1' : '';
 
@@ -262,14 +294,17 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
             }
         }
 
-        // 6. Registro 06: Matrícula eSocial
+        // 6. Registro 06: Matrícula eSocial (apenas para empregados com mais de um vínculo no AEJ)
         foreach ($employeeDataList as $item) {
-            $empId = $item['employee']['id'] ?? 1;
-            $idtVinculoAej = $vinculoMap[$empId] ?? '1';
-            $regNum = trim((string) ($item['employee']['registration_number'] ?? ''));
-            if ($regNum !== '') {
-                $count06++;
-                $lines[] = implode('|', ['06', $idtVinculoAej, $this->sanitize($regNum)]);
+            $cleanCpf = str_pad(substr(preg_replace('/\D/', '', $item['employee']['cpf'] ?? ''), 0, 11), 11, '0', STR_PAD_LEFT);
+            if (($cpfCounts[$cleanCpf] ?? 0) > 1) {
+                $empId = $item['employee']['id'] ?? 1;
+                $idtVinculoAej = $vinculoMap[$empId] ?? '1';
+                $regNum = trim((string) ($item['employee']['registration_number'] ?? ''));
+                if ($regNum !== '') {
+                    $count06++;
+                    $lines[] = implode('|', ['06', $idtVinculoAej, $this->sanitize($regNum)]);
+                }
             }
         }
 
@@ -290,27 +325,41 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
             }
 
             // Movimentações reais do banco de horas do PTRP (tipo 3)
-            $account = TimeBankAccount::where('employee_id', $empId)->first();
-            if ($account) {
-                $transactions = TimeBankTransaction::where('time_bank_account_id', $account->id)
-                    ->whereBetween('reference_date', [$startDate->toDateString(), $endDate->toDateString()])
-                    ->orderBy('reference_date', 'asc')
-                    ->orderBy('created_at', 'asc')
-                    ->get();
-
+            // Se o período estiver fechado, gera exclusivamente dos snapshots congelados
+            if ($isClosed) {
+                $transactions = $item['time_bank']['transactions'] ?? [];
                 foreach ($transactions as $tx) {
-                    $qtMinutos = abs((int) $tx->minutes);
+                    $qtMinutos = abs((int) ($tx['minutes'] ?? 0));
                     if ($qtMinutos === 0) {
                         continue;
                     }
 
-                    // 1 = Inclusão de horas no banco de horas (crédito)
-                    // 2 = Compensação de horas do banco de horas (débito)
-                    $tipoMovBH = ($tx->minutes > 0) ? '1' : '2';
-
                     $count07++;
-                    $dataMov = Carbon::parse($tx->reference_date)->format('Y-m-d');
+                    $dataMov = $tx['reference_date'];
+                    $tipoMovBH = (string) ($tx['tipo_mov_bh'] ?? '1');
                     $lines[] = implode('|', ['07', $idtVinculoAej, '3', $dataMov, (string) $qtMinutos, $tipoMovBH]);
+                }
+            } else {
+                $account = TimeBankAccount::where('employee_id', $empId)->first();
+                if ($account) {
+                    $transactions = TimeBankTransaction::where('time_bank_account_id', $account->id)
+                        ->whereBetween('reference_date', [$startDate->toDateString(), $endDate->toDateString()])
+                        ->orderBy('reference_date', 'asc')
+                        ->orderBy('created_at', 'asc')
+                        ->get();
+
+                    foreach ($transactions as $tx) {
+                        $qtMinutos = abs((int) $tx->minutes);
+                        if ($qtMinutos === 0) {
+                            continue;
+                        }
+
+                        $tipoMovBH = ($tx->minutes > 0) ? '1' : '2';
+
+                        $count07++;
+                        $dataMov = Carbon::parse($tx->reference_date)->format('Y-m-d');
+                        $lines[] = implode('|', ['07', $idtVinculoAej, '3', $dataMov, (string) $qtMinutos, $tipoMovBH]);
+                    }
                 }
             }
         }
@@ -320,10 +369,10 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
         $count08++;
         $nomeSoftware = $this->sanitize((string) config('compliance.software.name', 'PontoFacil'));
         $versaoSoftware = $this->sanitize((string) config('compliance.software.version', '2.5.0'));
-        $tpIdtDesenv = (string) config('compliance.developer.document_type', '1');
-        $idtDesenv = preg_replace('/\D/', '', (string) config('compliance.developer.document', '12345678000199'));
-        $nomeDesenv = $this->sanitize((string) config('compliance.developer.name', 'PontoFacil Tecnologia Ltda'));
-        $emailDesenv = $this->sanitize((string) config('compliance.developer.email', 'compliance@pontofacil.local'));
+        $tpIdtDesenv = (string) (config('compliance.developer.document_type') ?: '1');
+        $idtDesenv = preg_replace('/\D/', '', (string) (config('compliance.developer.document') ?? ''));
+        $nomeDesenv = $this->sanitize((string) (config('compliance.developer.name') ?? ''));
+        $emailDesenv = $this->sanitize((string) (config('compliance.developer.email') ?? ''));
 
         $lines[] = implode('|', ['08', $nomeSoftware, $versaoSoftware, $tpIdtDesenv, $idtDesenv, $nomeDesenv, $emailDesenv]);
 
@@ -351,6 +400,18 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
 
         $totalRecords = $count01 + $count02 + $count03 + $count04 + $count05 + $count06 + $count07 + $count08 + 1;
 
+        // Determinação de homologação fiscal
+        $isHomologated = true;
+        $homologationReason = null;
+
+        if (! $company->isRegisteredInpi() && $hasFonteMarcOriginal) {
+            $isHomologated = false;
+            $homologationReason = 'pending_inpi';
+        } elseif (empty($idtDesenv) || empty($nomeDesenv) || empty($emailDesenv)) {
+            $isHomologated = false;
+            $homologationReason = 'missing_developer_data';
+        }
+
         return new AejExportResult(
             content: $finalContent,
             filename: $filename,
@@ -361,7 +422,10 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
             totalRecords: $totalRecords,
             crcChecksum: '',
             isPreview: $isPreview,
-            snapshotHash: $closedPeriod?->snapshot_hash
+            snapshotHash: $closedPeriod?->snapshot_hash,
+            signatureStatus: 'pending_certificate',
+            isHomologated: $isHomologated,
+            homologationReason: $homologationReason,
         );
     }
 

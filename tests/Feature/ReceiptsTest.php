@@ -189,7 +189,7 @@ class ReceiptsTest extends TestCase
         $response->assertOk();
         $response->assertHeader('Content-Type', 'text/plain; charset=utf-8');
         $this->assertStringContainsString('0000000001', $response->getContent());
-        $this->assertStringContainsString('9999999999', $response->getContent());
+        $this->assertStringContainsString('999999999', $response->getContent());
     }
 
     public function test_non_admin_cannot_export_afd_file_via_route(): void

@@ -14,10 +14,10 @@ class AfdValidator
     }
 
     /**
-     * Valida formal e estruturalmente o conteúdo de um arquivo AFD segundo a Portaria 671 MTE (leiaute vigente REP-P).
+     * Valida formal e estruturalmente o conteúdo de um arquivo AFD segundo a Portaria 671 MTE (leiaute vigente REP-P publicado em 31/07/2026).
      *
      * @param  string  $content  Conteúdo bruto do arquivo
-     * @return array{is_valid: bool, errors: array<string>, total_records: int}
+     * @return array{is_valid: bool, structurally_valid: bool, is_homologated: bool, homologation_reason: ?string, errors: array<string>, total_records: int}
      */
     public function validate(string $content): array
     {
@@ -32,6 +32,9 @@ class AfdValidator
         if (count($rawLines) < 2) {
             return [
                 'is_valid' => false,
+                'structurally_valid' => false,
+                'is_homologated' => false,
+                'homologation_reason' => 'missing_minimum_records',
                 'errors' => ['O arquivo deve conter no mínimo Cabeçalho (Tipo 1) e Trailer (Tipo 9).'],
                 'total_records' => 0,
             ];
@@ -50,9 +53,12 @@ class AfdValidator
         $trailer = end($rawLines);
         $bodyLines = array_slice($rawLines, 1, -1);
 
-        // 1. Validação do Cabeçalho (Tipo 1) - exatamente 284 caracteres com CRC-16 Kermit
-        if (strlen($header) !== 284) {
-            $errors[] = sprintf('Cabeçalho (Tipo 1) possui %d caracteres; o leiaute oficial MTE (versão 003) exige exatamente 284.', strlen($header));
+        $isHomologated = true;
+        $homologationReason = null;
+
+        // 1. Validação do Cabeçalho (Tipo 1) - exatamente 302 caracteres com CRC-16 Kermit
+        if (strlen($header) !== 302) {
+            $errors[] = sprintf('Cabeçalho (Tipo 1) possui %d caracteres; o leiaute oficial MTE (versão 004) exige exatamente 302.', strlen($header));
         } else {
             if (substr($header, 0, 9) !== '000000000') {
                 $errors[] = 'NSR do Cabeçalho deve ser obrigatoriamente 000000000.';
@@ -63,35 +69,55 @@ class AfdValidator
             if (! in_array($header[10], ['1', '2'], true)) {
                 $errors[] = 'Identificador do empregador deve ser 1 (CNPJ) ou 2 (CPF).';
             }
-            if (! ctype_digit(substr($header, 11, 14))) {
-                $errors[] = 'CNPJ/CPF do empregador deve conter apenas dígitos numéricos.';
+            if (trim(substr($header, 11, 14)) === '') {
+                $errors[] = 'CNPJ/CPF do empregador não pode ser vazio.';
             }
 
-            $dtInicio = substr($header, 204, 8);
-            $dtFim = substr($header, 212, 8);
-            $dtGeracao = substr($header, 220, 8);
-            $hrGeracao = substr($header, 228, 4);
-            $versao = substr($header, 232, 3);
-
-            if (! $this->isValidDate($dtInicio)) {
-                $errors[] = "Data inicial no cabeçalho inválida: {$dtInicio}";
-            }
-            if (! $this->isValidDate($dtFim)) {
-                $errors[] = "Data final no cabeçalho inválida: {$dtFim}";
-            }
-            if (! $this->isValidDate($dtGeracao)) {
-                $errors[] = "Data de geração no cabeçalho inválida: {$dtGeracao}";
-            }
-            if (! $this->isValidTime($hrGeracao)) {
-                $errors[] = "Hora de geração no cabeçalho inválida: {$hrGeracao}";
-            }
-            if ($versao !== '003') {
-                $errors[] = "Versão do leiaute no cabeçalho deve ser 003 (encontrado: {$versao}).";
+            if (trim(substr($header, 39, 150)) === '') {
+                $errors[] = 'Razão social do empregador não pode ser vazia no cabeçalho.';
             }
 
-            $headerPrefix = substr($header, 0, 280);
+            $inpiField = substr($header, 189, 17);
+            if (trim($inpiField) === '') {
+                $isHomologated = false;
+                if (! $homologationReason) {
+                    $homologationReason = 'pending_inpi';
+                }
+            }
+
+            $dtInicio = substr($header, 206, 10);
+            $dtFim = substr($header, 216, 10);
+            $dtGeracao = substr($header, 226, 24);
+            $versao = substr($header, 250, 3);
+            $devType = substr($header, 253, 1);
+            $devDoc = substr($header, 254, 14);
+            $softwareModel = substr($header, 268, 30);
+
+            if (! $this->isValidIsoDate($dtInicio)) {
+                $errors[] = "Data inicial no cabeçalho inválida (esperado AAAA-MM-dd): {$dtInicio}";
+            }
+            if (! $this->isValidIsoDate($dtFim)) {
+                $errors[] = "Data final no cabeçalho inválida (esperado AAAA-MM-dd): {$dtFim}";
+            }
+            if (! $this->isValidIsoDateTime($dtGeracao)) {
+                $errors[] = "Data e hora de geração no cabeçalho inválida (esperado AAAA-MM-ddThh:mm:00ZZZZZ): {$dtGeracao}";
+            }
+            if ($versao !== '004') {
+                $errors[] = "Versão do leiaute no cabeçalho deve ser 004 (encontrado: {$versao}).";
+            }
+            if (trim($devDoc) === '') {
+                $isHomologated = false;
+                if (! $homologationReason) {
+                    $homologationReason = 'missing_developer_data';
+                }
+            }
+            if (trim($softwareModel) !== '') {
+                $errors[] = 'Campo reservado a modelo REP-C (posições 269-298) deve ser preenchido com espaços no caso de REP-P.';
+            }
+
+            $headerPrefix = substr($header, 0, 298);
             $expectedHeaderCrc = $this->fiscalHashService->calculateCrc16($headerPrefix);
-            $actualHeaderCrc = substr($header, 280, 4);
+            $actualHeaderCrc = substr($header, 298, 4);
             if (strtoupper($actualHeaderCrc) !== strtoupper($expectedHeaderCrc)) {
                 $errors[] = "CRC-16 divergente no cabeçalho Tipo 1 (calculado: {$expectedHeaderCrc}, arquivo: {$actualHeaderCrc}).";
             }
@@ -132,14 +158,38 @@ class AfdValidator
             $tipo = $line[9];
 
             switch ($tipo) {
-                case '2': // Identificação do Empregador - 314 caracteres com CRC-16
+                case '2': // Identificação do Empregador - 331 caracteres com CRC-16
                     $countTipo2++;
-                    if ($len !== 314) {
-                        $errors[] = "Linha {$lineNum}: Registro Tipo 2 possui {$len} caracteres; o leiaute MTE exige exatamente 314.";
+                    if ($len !== 331) {
+                        $errors[] = "Linha {$lineNum}: Registro Tipo 2 possui {$len} caracteres; o leiaute MTE exige exatamente 331.";
                     } else {
-                        $prefix = substr($line, 0, 310);
+                        $dtGravacao = substr($line, 10, 24);
+                        if (! $this->isValidIsoDateTime($dtGravacao)) {
+                            $errors[] = "Linha {$lineNum}: Data/hora de gravação inválida no registro Tipo 2: {$dtGravacao}";
+                        }
+                        $cpfResp = substr($line, 34, 14);
+                        if (trim($cpfResp) !== '' && ! ctype_digit(trim($cpfResp))) {
+                            $errors[] = "Linha {$lineNum}: CPF do responsável deve conter apenas dígitos numéricos no registro Tipo 2: '{$cpfResp}'.";
+                        }
+                        $tpId = $line[48];
+                        if (! in_array($tpId, ['1', '2'], true)) {
+                            $errors[] = "Linha {$lineNum}: Tipo de identificador do empregador deve ser 1 ou 2 no registro Tipo 2: '{$tpId}'.";
+                        }
+                        $idEmp = substr($line, 49, 14);
+                        if (trim($idEmp) === '') {
+                            $errors[] = "Linha {$lineNum}: CNPJ ou CPF do empregador não pode ser vazio no registro Tipo 2.";
+                        }
+                        $razao = substr($line, 77, 150);
+                        if (trim($razao) === '') {
+                            $errors[] = "Linha {$lineNum}: Razão social do empregador não pode ser vazia no registro Tipo 2.";
+                        }
+                        $local = substr($line, 227, 100);
+                        if (trim($local) === '') {
+                            $errors[] = "Linha {$lineNum}: Local de prestação de serviços não pode ser vazio no registro Tipo 2.";
+                        }
+                        $prefix = substr($line, 0, 327);
                         $expectedCrc = $this->fiscalHashService->calculateCrc16($prefix);
-                        $actualCrc = substr($line, 310, 4);
+                        $actualCrc = substr($line, 327, 4);
                         if (strtoupper($actualCrc) !== strtoupper($expectedCrc)) {
                             $errors[] = "Linha {$lineNum}: CRC-16 divergente no registro Tipo 2 (calculado: {$expectedCrc}, arquivo: {$actualCrc}).";
                         }
@@ -151,32 +201,60 @@ class AfdValidator
                     $errors[] = "Linha {$lineNum}: O modelo REP-P deve utilizar Registro Tipo 7 para marcações, nunca Tipo 3.";
                     break;
 
-                case '4': // Ajuste do Relógio - 49 caracteres com CRC-16
+                case '4': // Ajuste do Relógio - 73 caracteres com CRC-16
                     $countTipo4++;
-                    if ($len !== 49) {
-                        $errors[] = "Linha {$lineNum}: Registro Tipo 4 possui {$len} caracteres; o leiaute MTE exige exatamente 49.";
+                    if ($len !== 73) {
+                        $errors[] = "Linha {$lineNum}: Registro Tipo 4 possui {$len} caracteres; o leiaute MTE exige exatamente 73.";
                     } else {
-                        $prefix = substr($line, 0, 45);
+                        $dtAntes = substr($line, 10, 24);
+                        $dtDepois = substr($line, 34, 24);
+                        if (! $this->isValidIsoDateTime($dtAntes)) {
+                            $errors[] = "Linha {$lineNum}: Data/hora antes do ajuste inválida no registro Tipo 4: {$dtAntes}";
+                        }
+                        if (! $this->isValidIsoDateTime($dtDepois)) {
+                            $errors[] = "Linha {$lineNum}: Data/hora ajustada inválida no registro Tipo 4: {$dtDepois}";
+                        }
+                        $cpfResp = substr($line, 58, 11);
+                        if (! ctype_digit($cpfResp)) {
+                            $errors[] = "Linha {$lineNum}: CPF do responsável deve conter 11 dígitos numéricos no registro Tipo 4: '{$cpfResp}'.";
+                        }
+                        $prefix = substr($line, 0, 69);
                         $expectedCrc = $this->fiscalHashService->calculateCrc16($prefix);
-                        $actualCrc = substr($line, 45, 4);
+                        $actualCrc = substr($line, 69, 4);
                         if (strtoupper($actualCrc) !== strtoupper($expectedCrc)) {
                             $errors[] = "Linha {$lineNum}: CRC-16 divergente no registro Tipo 4 (calculado: {$expectedCrc}, arquivo: {$actualCrc}).";
                         }
                     }
                     break;
 
-                case '5': // Empregado - 101 caracteres com CRC-16
+                case '5': // Empregado - 118 caracteres com CRC-16
                     $countTipo5++;
-                    if ($len !== 101) {
-                        $errors[] = "Linha {$lineNum}: Registro Tipo 5 possui {$len} caracteres; o leiaute MTE exige exatamente 101.";
+                    if ($len !== 118) {
+                        $errors[] = "Linha {$lineNum}: Registro Tipo 5 possui {$len} caracteres; o leiaute MTE exige exatamente 118.";
                     } else {
-                        $operacao = $line[22];
+                        $dtGravacao = substr($line, 10, 24);
+                        if (! $this->isValidIsoDateTime($dtGravacao)) {
+                            $errors[] = "Linha {$lineNum}: Data/hora de gravação inválida no registro Tipo 5: {$dtGravacao}";
+                        }
+                        $operacao = $line[34];
                         if (! in_array($operacao, ['I', 'A', 'E'], true)) {
                             $errors[] = "Linha {$lineNum}: Operação inválida no registro Tipo 5: '{$operacao}' (esperado I, A ou E).";
                         }
-                        $prefix = substr($line, 0, 97);
+                        $cpfEmp = substr($line, 35, 12);
+                        if (! ctype_digit($cpfEmp)) {
+                            $errors[] = "Linha {$lineNum}: CPF do empregado deve conter 12 dígitos numéricos no registro Tipo 5: '{$cpfEmp}'.";
+                        }
+                        $nomeEmp = substr($line, 47, 52);
+                        if (trim($nomeEmp) === '') {
+                            $errors[] = "Linha {$lineNum}: Nome do empregado não pode ser vazio no registro Tipo 5.";
+                        }
+                        $cpfResp = substr($line, 103, 11);
+                        if (! ctype_digit($cpfResp)) {
+                            $errors[] = "Linha {$lineNum}: CPF do responsável deve conter 11 dígitos numéricos no registro Tipo 5: '{$cpfResp}'.";
+                        }
+                        $prefix = substr($line, 0, 114);
                         $expectedCrc = $this->fiscalHashService->calculateCrc16($prefix);
-                        $actualCrc = substr($line, 97, 4);
+                        $actualCrc = substr($line, 114, 4);
                         if (strtoupper($actualCrc) !== strtoupper($expectedCrc)) {
                             $errors[] = "Linha {$lineNum}: CRC-16 divergente no registro Tipo 5 (calculado: {$expectedCrc}, arquivo: {$actualCrc}).";
                         }
@@ -188,9 +266,13 @@ class AfdValidator
                     if ($len !== 36) {
                         $errors[] = "Linha {$lineNum}: Registro Tipo 6 possui {$len} caracteres; o leiaute MTE exige exatamente 36.";
                     } else {
+                        $dtGravacao = substr($line, 10, 24);
+                        if (! $this->isValidIsoDateTime($dtGravacao)) {
+                            $errors[] = "Linha {$lineNum}: Data/hora de gravação inválida no registro Tipo 6: {$dtGravacao}";
+                        }
                         $codEvento = substr($line, 34, 2);
-                        if (! in_array($codEvento, ['01', '02'], true)) {
-                            $errors[] = "Linha {$lineNum}: Código de evento sensível inválido para REP-P: '{$codEvento}'.";
+                        if (! in_array($codEvento, ['02', '07', '08'], true)) {
+                            $errors[] = "Linha {$lineNum}: Código de evento sensível inválido para REP-P: '{$codEvento}' (esperado 07 para disponibilidade ou 08 para indisponibilidade).";
                         }
                     }
                     break;
@@ -200,13 +282,21 @@ class AfdValidator
                     if ($len !== 137) {
                         $errors[] = "Linha {$lineNum}: Registro Tipo 7 possui {$len} caracteres; o leiaute MTE exige exatamente 137.";
                     } else {
+                        $dtMarc = substr($line, 10, 24);
                         $cpf = substr($line, 34, 12);
+                        $dtGrav = substr($line, 46, 24);
                         $collector = substr($line, 70, 2);
                         $punchType = $line[72];
                         $hash = substr($line, 73, 64);
 
+                        if (! $this->isValidIsoDateTime($dtMarc)) {
+                            $errors[] = "Linha {$lineNum}: Data/hora da marcação inválida no registro Tipo 7: {$dtMarc}";
+                        }
                         if (! ctype_digit($cpf)) {
-                            $errors[] = "Linha {$lineNum}: CPF deve conter dígitos numéricos no registro Tipo 7: {$cpf}";
+                            $errors[] = "Linha {$lineNum}: CPF deve conter 12 dígitos numéricos no registro Tipo 7: {$cpf}";
+                        }
+                        if (! $this->isValidIsoDateTime($dtGrav)) {
+                            $errors[] = "Linha {$lineNum}: Data/hora da gravação inválida no registro Tipo 7: {$dtGrav}";
                         }
                         if (! ctype_digit($collector)) {
                             $errors[] = "Linha {$lineNum}: Identificador do coletor deve ser numérico: {$collector}";
@@ -233,16 +323,16 @@ class AfdValidator
             if (substr($trailer, 0, 9) !== '999999999') {
                 $errors[] = 'NSR do Trailer deve ser 999999999.';
             }
-            if ($trailer[9] !== '9') {
-                $errors[] = 'Tipo de registro do trailer deve ser 9.';
+            if (substr($trailer, 63, 1) !== '9') {
+                $errors[] = sprintf("Identificador final do trailer deve ser '9' na posição 64. Encontrado: '%s'.", substr($trailer, 63, 1));
             }
 
-            $qtdTipo2Trailer = (int) substr($trailer, 10, 9);
-            $qtdTipo3Trailer = (int) substr($trailer, 19, 9);
-            $qtdTipo4Trailer = (int) substr($trailer, 28, 9);
-            $qtdTipo5Trailer = (int) substr($trailer, 37, 9);
-            $qtdTipo6Trailer = (int) substr($trailer, 46, 9);
-            $qtdTipo7Trailer = (int) substr($trailer, 55, 9);
+            $qtdTipo2Trailer = (int) substr($trailer, 9, 9);
+            $qtdTipo3Trailer = (int) substr($trailer, 18, 9);
+            $qtdTipo4Trailer = (int) substr($trailer, 27, 9);
+            $qtdTipo5Trailer = (int) substr($trailer, 36, 9);
+            $qtdTipo6Trailer = (int) substr($trailer, 45, 9);
+            $qtdTipo7Trailer = (int) substr($trailer, 54, 9);
 
             if ($qtdTipo2Trailer !== $countTipo2) {
                 $errors[] = "Trailer indica {$qtdTipo2Trailer} registros Tipo 2, mas o arquivo contém {$countTipo2}.";
@@ -268,9 +358,29 @@ class AfdValidator
 
         return [
             'is_valid' => empty($errors),
+            'structurally_valid' => empty($errors),
+            'structureValid' => empty($errors),
+            'is_homologated' => empty($errors) && $isHomologated,
+            'isHomologated' => empty($errors) && $isHomologated,
+            'reason' => empty($errors) && ! $isHomologated ? $homologationReason : null,
+            'homologation_reason' => empty($errors) && ! $isHomologated ? $homologationReason : null,
             'errors' => $errors,
             'total_records' => $totalRecords,
         ];
+    }
+
+    protected function isValidIsoDate(string $d): bool
+    {
+        if (! preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $d, $m)) {
+            return false;
+        }
+
+        return checkdate((int) $m[2], (int) $m[3], (int) $m[1]);
+    }
+
+    protected function isValidIsoDateTime(string $dt): bool
+    {
+        return (bool) preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00[+-]\d{4}$/', $dt);
     }
 
     protected function isValidDate(string $d): bool

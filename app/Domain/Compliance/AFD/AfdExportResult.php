@@ -17,5 +17,6 @@ class AfdExportResult
         public string $crcChecksum,
         public bool $isHomologated = false,
         public string $signatureStatus = 'pending_certificate',
+        public ?string $homologationReason = null,
     ) {}
 }

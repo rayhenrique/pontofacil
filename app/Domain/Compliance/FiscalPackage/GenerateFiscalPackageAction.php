@@ -166,6 +166,32 @@ class GenerateFiscalPackageAction
         $lines[] = '================================================================================';
         $lines[] = '';
 
+        if ($period && $period->status === 'closed') {
+            $snapshots = $period->currentSnapshots()->get();
+            $hasAny = false;
+            foreach ($snapshots as $snap) {
+                $empName = $snap->employee_snapshot['name'] ?? 'N/A';
+                $txs = $snap->time_bank_snapshot['transactions'] ?? [];
+                foreach ($txs as $tx) {
+                    $hasAny = true;
+                    $lines[] = sprintf(
+                        '[%s] TX #%s | EMP: %s | TIPO: %-22s | MIN: %+5d | DESC: %s',
+                        Carbon::parse($tx['reference_date'])->format('d/m/Y'),
+                        substr((string) ($tx['id'] ?? 'N/A'), -8),
+                        $empName,
+                        $tx['type'] ?? 'N/A',
+                        $tx['minutes'] ?? 0,
+                        'Registro imutável em snapshot de fechamento'
+                    );
+                }
+            }
+            if (! $hasAny) {
+                $lines[] = 'Nenhuma movimentação de banco de horas registrada no período.';
+            }
+
+            return implode("\r\n", $lines)."\r\n";
+        }
+
         $transactions = TimeBankTransaction::with('account.employee.user')
             ->whereBetween('reference_date', [$startDate->toDateString(), $endDate->toDateString()])
             ->orderBy('reference_date', 'asc')

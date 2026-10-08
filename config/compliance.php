@@ -2,10 +2,10 @@
 
 return [
     'developer' => [
-        'name' => env('PONTOFACIL_DEVELOPER_NAME', 'PontoFacil Tecnologia Ltda'),
-        'document' => env('PONTOFACIL_DEVELOPER_DOCUMENT', '12345678000199'),
-        'document_type' => env('PONTOFACIL_DEVELOPER_DOCUMENT_TYPE', '1'), // 1 = CNPJ, 2 = CPF
-        'email' => env('PONTOFACIL_DEVELOPER_EMAIL', 'compliance@pontofacil.local'),
+        'name' => env('PONTOFACIL_DEVELOPER_NAME'),
+        'document' => env('PONTOFACIL_DEVELOPER_DOCUMENT'),
+        'document_type' => env('PONTOFACIL_DEVELOPER_DOCUMENT_TYPE'),
+        'email' => env('PONTOFACIL_DEVELOPER_EMAIL'),
     ],
     'software' => [
         'name' => env('PONTOFACIL_SOFTWARE_NAME', 'PontoFacil'),

@@ -14,6 +14,11 @@ class AejValidator
     public function validate(string $content): array
     {
         $errors = [];
+        $warnings = [];
+        $reps = [];
+        $hasOriginalPunchWithoutRepInpi = false;
+        $missingDevData = false;
+
         $rawLines = explode("\r\n", $content);
 
         // Remove linha vazia residual ao final do arquivo gerado por CRLF
@@ -29,7 +34,14 @@ class AejValidator
         if (count($rawLines) < 2) {
             return [
                 'is_valid' => false,
+                'structurally_valid' => false,
+                'structureValid' => false,
+                'is_homologated' => false,
+                'isHomologated' => false,
+                'reason' => 'insufficient_records',
+                'homologation_reason' => 'insufficient_records',
                 'errors' => ['O arquivo AEJ deve conter no mínimo Cabeçalho (Tipo 01) e Trailer (Tipo 99).'],
+                'warnings' => [],
                 'total_records' => 0,
             ];
         }
@@ -84,8 +96,8 @@ class AejValidator
             if (! $this->isValidIsoDateTime($dtHoraGer)) {
                 $errors[] = "Data e hora de geração no cabeçalho inválida (exigido AAAA-MM-ddThh:mm:00ZZZZZ): '{$dtHoraGer}'.";
             }
-            if (trim($versao) === '') {
-                $errors[] = 'Versão do leiaute do AEJ não pode ser vazia no cabeçalho.';
+            if ($versao !== '002') {
+                $errors[] = "Versão do leiaute do AEJ deve ser '002' conforme portaria vigente. Encontrado: '{$versao}'.";
             }
         }
 
@@ -110,6 +122,10 @@ class AejValidator
                         if (! in_array($parts[2], ['1', '2', '3'], true)) {
                             $errors[] = "Linha {$lineNum}: tpRep deve ser 1, 2 ou 3 no registro 02: '{$parts[2]}'.";
                         }
+                        $reps[$parts[1]] = [
+                            'tpRep' => $parts[2],
+                            'nrRep' => trim($parts[3] ?? ''),
+                        ];
                         // nrRep pode ser vazio se registro INPI estiver pendente
                         if (trim($parts[3]) !== '' && ! ctype_alnum($parts[3])) {
                             $errors[] = "Linha {$lineNum}: nrRep deve ser alfanumérico no registro 02: '{$parts[3]}'.";
@@ -180,6 +196,15 @@ class AejValidator
                         if (($parts[4] === 'D' || $parts[6] === 'I') && trim($parts[8]) === '') {
                             $errors[] = "Linha {$lineNum}: motivo é obrigatório para marcação desconsiderada ou incluída manualmente no registro 05.";
                         }
+
+                        // Verificação de conformidade fiscal para fonte 'O'
+                        if ($parts[6] === 'O') {
+                            $repId = $parts[3];
+                            $repNr = $reps[$repId]['nrRep'] ?? '';
+                            if ($repNr === '') {
+                                $hasOriginalPunchWithoutRepInpi = true;
+                            }
+                        }
                     }
                     break;
 
@@ -231,17 +256,24 @@ class AejValidator
                         if (trim($parts[2]) === '') {
                             $errors[] = "Linha {$lineNum}: versaoPrograma não pode ser vazia no registro 08.";
                         }
-                        if (! in_array($parts[3], ['1', '2'], true)) {
-                            $errors[] = "Linha {$lineNum}: tpIdDev deve ser 1 ou 2 no registro 08: '{$parts[3]}'.";
-                        }
-                        if (! ctype_digit($parts[4])) {
-                            $errors[] = "Linha {$lineNum}: numIdDev deve ser numérico no registro 08: '{$parts[4]}'.";
-                        }
-                        if (trim($parts[5]) === '') {
-                            $errors[] = "Linha {$lineNum}: razaoSocialDev não pode ser vazia no registro 08.";
-                        }
-                        if (trim($parts[6]) === '' || ! filter_var($parts[6], FILTER_VALIDATE_EMAIL)) {
-                            $errors[] = "Linha {$lineNum}: emailDev deve ser um e-mail válido no registro 08: '{$parts[6]}'.";
+
+                        $numIdDev = trim($parts[4] ?? '');
+                        $nomeDev = trim($parts[5] ?? '');
+                        $emailDev = trim($parts[6] ?? '');
+
+                        if ($numIdDev === '' || $nomeDev === '' || $emailDev === '') {
+                            $missingDevData = true;
+                            $warnings[] = "Linha {$lineNum}: Registro 08 não possui dados cadastrais completos do desenvolvedor.";
+                        } else {
+                            if (! in_array($parts[3], ['1', '2'], true)) {
+                                $errors[] = "Linha {$lineNum}: tpIdDev deve ser 1 ou 2 no registro 08: '{$parts[3]}'.";
+                            }
+                            if (! ctype_digit($numIdDev)) {
+                                $errors[] = "Linha {$lineNum}: numIdDev deve ser numérico no registro 08: '{$numIdDev}'.";
+                            }
+                            if (! filter_var($emailDev, FILTER_VALIDATE_EMAIL)) {
+                                $errors[] = "Linha {$lineNum}: emailDev deve ser um e-mail válido no registro 08: '{$emailDev}'.";
+                            }
                         }
                     }
                     break;
@@ -270,10 +302,30 @@ class AejValidator
         }
 
         $totalRecords = array_sum($actualCounts) + 1;
+        $structurallyValid = empty($errors);
+        $isHomologated = $structurallyValid;
+        $homologationReason = null;
+
+        if ($hasOriginalPunchWithoutRepInpi) {
+            $isHomologated = false;
+            $homologationReason = 'pending_inpi';
+            $warnings[] = "Registro 05 contém marcação com fonte 'O' (original de REP), mas o REP correspondente possui nrRep vazio (registro INPI pendente).";
+        } elseif ($missingDevData) {
+            $isHomologated = false;
+            $homologationReason = 'missing_developer_data';
+            $warnings[] = 'Registro 08 não possui dados cadastrais completos do desenvolvedor.';
+        }
 
         return [
-            'is_valid' => empty($errors),
+            'is_valid' => $structurallyValid,
+            'structurally_valid' => $structurallyValid,
+            'structureValid' => $structurallyValid,
+            'is_homologated' => $isHomologated,
+            'isHomologated' => $isHomologated,
+            'reason' => $homologationReason,
+            'homologation_reason' => $homologationReason,
             'errors' => $errors,
+            'warnings' => $warnings,
             'total_records' => $totalRecords,
         ];
     }

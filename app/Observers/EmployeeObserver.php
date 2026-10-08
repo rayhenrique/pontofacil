@@ -5,6 +5,7 @@ namespace App\Observers;
 use App\Domain\Company\Services\CurrentCompany;
 use App\Domain\Compliance\ARP\Actions\RecordArpEventAction;
 use App\Models\Employee;
+use App\Models\Establishment;
 use Illuminate\Support\Facades\Auth;
 
 class EmployeeObserver

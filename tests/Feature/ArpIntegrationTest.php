@@ -112,7 +112,7 @@ class ArpIntegrationTest extends TestCase
         $event6 = $arpAction->recordRepSensitiveEvent(
             establishment: $establishment,
             eventDescription: 'Verificacao de disponibilidade e integridade do REP-P',
-            metadata: ['event_code' => '01']
+            metadata: ['event_code' => '07']
         );
         $this->assertSame(6, $event6->nsr);
 

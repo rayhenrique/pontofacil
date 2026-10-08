@@ -217,7 +217,7 @@ class AejGoldenTest extends TestCase
         $this->assertSame('2026-01-01', $headerParts[6]);
         $this->assertSame('2026-01-31', $headerParts[7]);
         $this->assertSame('2026-02-01T09:30:00-0300', $headerParts[8]);
-        $this->assertSame('001', $headerParts[9]);
+        $this->assertSame('002', $headerParts[9]);
     }
 
     /**
@@ -345,6 +345,13 @@ class AejGoldenTest extends TestCase
      */
     public function test_aej_developer_record_08_structure(): void
     {
+        config([
+            'compliance.developer.document_type' => '1',
+            'compliance.developer.document' => '12345678000199',
+            'compliance.developer.name' => 'PontoFacil Tecnologia Ltda',
+            'compliance.developer.email' => 'compliance@pontofacil.local',
+        ]);
+
         $this->createClosedPeriodWithPunches();
 
         $generator = app(AejGenerator_2026_07_31::class);
@@ -397,7 +404,7 @@ class AejGoldenTest extends TestCase
         $this->assertSame('1', $trailerParts[3]); // qt03
         $this->assertSame('1', $trailerParts[4]); // qt04
         $this->assertSame('4', $trailerParts[5]); // qt05
-        $this->assertSame('1', $trailerParts[6]); // qt06 (matrícula)
+        $this->assertSame('0', $trailerParts[6]); // qt06 (0 para vínculo único)
         $this->assertSame('21', $trailerParts[7]); // qt07 (21 ausências apuradas nos dias úteis sem batida)
         $this->assertSame('1', $trailerParts[8]); // qt08 (PTRP)
 
@@ -442,20 +449,40 @@ class AejGoldenTest extends TestCase
     public function test_aej_record_06_esocial_registration(): void
     {
         $generator = app(AejGenerator_2026_07_31::class);
-        $result = $generator->generate(
+
+        // 1. Empregado com vínculo único no AEJ NÃO deve gerar Registro 06
+        $resultSingle = $generator->generate(
             establishment: $this->establishment,
             year: 2026,
             month: 1,
             forcePreview: true
         );
+        $linesSingle = explode("\r\n", rtrim($resultSingle->content, "\r\n"));
+        $rec06Single = array_values(array_filter($linesSingle, fn ($l) => str_starts_with($l, '06|')));
+        $this->assertEmpty($rec06Single, 'Empregado com vínculo único não deve gerar Registro 06.');
 
-        $lines = explode("\r\n", rtrim($result->content, "\r\n"));
-        $rec06 = array_values(array_filter($lines, fn ($l) => str_starts_with($l, '06|')))[0] ?? '';
-        $parts06 = explode('|', $rec06);
+        // 2. Empregado com mais de um vínculo (mesmo CPF, dois vínculos/matrículas)
+        Employee::create([
+            'user_id' => $this->worker->id,
+            'sector_id' => $this->employee->sector_id,
+            'cpf' => $this->employee->cpf,
+            'registration_number' => 'MAT-999',
+            'job_title' => 'Instrutora Técnica',
+            'work_schedule_id' => $this->employee->work_schedule_id,
+        ]);
 
-        $this->assertSame('06', $parts06[0]);
-        $this->assertSame('1', $parts06[1]); // idtVinculoAej
-        $this->assertSame('MAT-202', $parts06[2]); // matrícula eSocial
+        $resultMulti = $generator->generate(
+            establishment: $this->establishment,
+            year: 2026,
+            month: 1,
+            forcePreview: true
+        );
+        $linesMulti = explode("\r\n", rtrim($resultMulti->content, "\r\n"));
+        $rec06Multi = array_values(array_filter($linesMulti, fn ($l) => str_starts_with($l, '06|')));
+
+        $this->assertCount(2, $rec06Multi, 'Empregado com dois vínculos deve gerar dois Registros 06.');
+        $this->assertSame('06|1|MAT-202', $rec06Multi[0]);
+        $this->assertSame('06|2|MAT-999', $rec06Multi[1]);
     }
 
     /**
@@ -617,9 +644,88 @@ class AejGoldenTest extends TestCase
         $this->assertStringContainsString('Tipo 01', $resNoHeader['errors'][0]);
 
         // Arquivo com trailer com contadores divergentes
-        $resBadTrailer = $validator->validate("01|1|12345678000199|||EMPRESA|2026-01-01|2026-01-31|2026-02-01T09:30:00-0300|001\r\n99|1|5|0|0|0|0|0|0");
+        $resBadTrailer = $validator->validate("01|1|12345678000199|||EMPRESA|2026-01-01|2026-01-31|2026-02-01T09:30:00-0300|002\r\n99|1|5|0|0|0|0|0|0");
         $this->assertFalse($resBadTrailer['is_valid']);
         $this->assertStringContainsString('Trailer indica 5 registros Tipo 02', implode('; ', $resBadTrailer['errors']));
+    }
+
+    /**
+     * Teste Crítico: Período fechado deve ser 100% imutável no Registro 07.
+     * Alterações ou inserções posteriores em TimeBankTransaction não afetam o AEJ do período já fechado.
+     */
+    public function test_closed_period_time_bank_record_07_is_strictly_immutable_after_closing(): void
+    {
+        // 1. Fechar Janeiro
+        $this->createClosedPeriodWithPunches();
+
+        $generator = app(AejGenerator_2026_07_31::class);
+        $fixedGenTime = Carbon::parse('2026-02-01 09:30:00', 'America/Maceio');
+
+        // 2. Gerar AEJ A
+        $resultA = $generator->generate(
+            establishment: $this->establishment,
+            year: 2026,
+            month: 1,
+            generationTime: $fixedGenTime,
+            forcePreview: false
+        );
+
+        // 3. Alterar / criar transação de banco depois do fechamento
+        $account = TimeBankAccount::getOrCreateForEmployee($this->employee);
+        TimeBankTransaction::create([
+            'time_bank_account_id' => $account->id,
+            'type' => TimeBankTransactionType::ManualCredit,
+            'minutes' => 999, // Inserção espúria posterior
+            'balance_after' => 999,
+            'reference_date' => '2026-01-15',
+            'description' => 'Lancamento indevido pos fechamento',
+            'created_by' => $this->admin->id,
+        ]);
+
+        // 4. Gerar novamente Janeiro
+        $resultB = $generator->generate(
+            establishment: $this->establishment,
+            year: 2026,
+            month: 1,
+            generationTime: $fixedGenTime,
+            forcePreview: false
+        );
+
+        // 5. Conteúdo deve ser byte a byte idêntico ao AEJ A
+        $this->assertSame(
+            $resultA->content,
+            $resultB->content,
+            'O AEJ de competência fechada deve ser 100% imutável, gerado exclusivamente a partir dos snapshots congelados.'
+        );
+        $this->assertStringNotContainsString('999', $resultB->content);
+    }
+
+    /**
+     * Teste de INPI pendente com fonteMarc = 'O':
+     * O arquivo deve ser gerado sem bloquear (structurally_valid = true),
+     * mas não é homologado fiscalmente (is_homologated = false, reason = pending_inpi).
+     */
+    public function test_aej_inpi_pending_is_structurally_valid_but_not_homologated(): void
+    {
+        $this->createClosedPeriodWithPunches();
+
+        $generator = app(AejGenerator_2026_07_31::class);
+        $result = $generator->generate(
+            establishment: $this->establishment,
+            year: 2026,
+            month: 1,
+            forcePreview: true
+        );
+
+        $this->assertFalse($result->isHomologated);
+        $this->assertSame('pending_inpi', $result->homologationReason);
+
+        $validator = app(AejValidator::class);
+        $val = $validator->validate($result->content);
+
+        $this->assertTrue($val['structurally_valid']);
+        $this->assertFalse($val['is_homologated']);
+        $this->assertSame('pending_inpi', $val['homologation_reason']);
     }
 
     /**

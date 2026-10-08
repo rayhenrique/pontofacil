@@ -20,5 +20,7 @@ class AejExportResult
         public bool $isPreview = false,
         public ?string $snapshotHash = null,
         public string $signatureStatus = 'unsigned',
+        public bool $isHomologated = false,
+        public ?string $homologationReason = null,
     ) {}
 }

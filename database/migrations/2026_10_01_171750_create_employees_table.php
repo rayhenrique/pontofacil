@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             $table->foreignId('sector_id')->nullable()->constrained('sectors')->onDelete('set null');
             $table->string('registration_number')->unique()->nullable();
-            $table->string('cpf')->unique()->nullable();
+            $table->string('cpf')->nullable();
             $table->timestamps();
         });
     }
