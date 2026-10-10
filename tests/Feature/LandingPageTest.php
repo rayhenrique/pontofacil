@@ -46,11 +46,12 @@ class LandingPageTest extends TestCase
         $response->assertDontSee('somente dentro do raio');
         $response->assertDontSee('GPS obrigatório');
 
-        // 2. Como Funciona (Passo a passo)
+        // 2. Como Funciona (Fluxo em 4 etapas)
         $response->assertSee('Como funciona o PontoFácil');
-        $response->assertSee('Aponte a câmera para o QR Code');
-        $response->assertSee('Confirme a jornada em 1 toque');
-        $response->assertSee('Comprovante imediato e espelho em dia');
+        $response->assertSee('Colaborador registra o ponto');
+        $response->assertSee('O sistema gera o registro e o comprovante');
+        $response->assertSee('Gestores acompanham jornadas e ocorrências');
+        $response->assertSee('RH trata ajustes, banco de horas e fechamento');
 
         // 3. Para o colaborador / Para a empresa
         $response->assertSee('Para o Colaborador');

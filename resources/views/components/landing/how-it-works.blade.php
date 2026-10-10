@@ -2,106 +2,134 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         <!-- Cabeçalho da Seção -->
-        <div class="text-center max-w-3xl mx-auto mb-10 sm:mb-14 space-y-3 sm:space-y-4">
+        <div class="text-center max-w-3xl mx-auto mb-8 sm:mb-12 space-y-2.5 sm:space-y-3">
             <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold uppercase tracking-wider">
-                <span>Passo a Passo Simples</span>
+                <span>Passo a Passo</span>
             </div>
             <h2 class="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
                 Como funciona o PontoFácil
             </h2>
             <p class="text-sm sm:text-base md:text-lg text-slate-600 font-normal leading-relaxed">
-                Do celular do colaborador ao fechamento do RH em 3 etapas descomplicadas, sem necessidade de aparelhos físicos.
+                Do registro no celular ao fechamento da folha em 4 etapas simples e transparentes.
             </p>
         </div>
 
-        <!-- Grid dos 3 Passos -->
-        <div class="grid md:grid-cols-3 gap-6 sm:gap-8 max-w-6xl mx-auto">
+        <!-- Fluxo em 4 Etapas: Cards verticais no mobile e 4 colunas no desktop -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 lg:gap-6 max-w-7xl mx-auto">
             
-            <!-- Passo 1 -->
-            <div class="gsap-step-card relative bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-2xl sm:rounded-3xl p-6 sm:p-7 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all duration-200 flex flex-col justify-between group">
-                <div class="space-y-4">
+            <!-- Etapa 1: Colaborador registra o ponto -->
+            <div class="gsap-step-card bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-xs hover:shadow-md hover:border-indigo-200 transition-all duration-200 flex flex-col justify-between group">
+                <div class="space-y-3.5">
                     <div class="flex items-center justify-between">
-                        <span class="text-3xl sm:text-4xl font-black text-indigo-600/20 font-mono-numbers group-hover:text-indigo-600/40 transition-colors">
+                        <span class="text-2xl sm:text-3xl font-black text-indigo-600/25 font-mono-numbers group-hover:text-indigo-600/40 transition-colors">
                             01
                         </span>
-                        <div class="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm shadow-2xs">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm shadow-2xs">
                             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
                             </svg>
                         </div>
                     </div>
 
-                    <h3 class="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
-                        Aponte a câmera para o QR Code
+                    <h3 class="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+                        Colaborador registra o ponto
                     </h3>
 
                     <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                        O colaborador abre o PontoFácil no smartphone e lê o código dinâmico exclusivo do setor ou filial. Sem instalar aplicativos pesados da loja.
+                        Abre o sistema no celular pelo navegador, lê o QR Code do setor ou matriz e confirma a jornada em um único toque.
                     </p>
                 </div>
 
-                <div class="pt-4 mt-4 border-t border-slate-100 flex items-center gap-2 text-xs font-semibold text-indigo-600">
+                <div class="pt-3 mt-4 border-t border-slate-100 flex items-center gap-1.5 text-[11px] sm:text-xs font-semibold text-indigo-600">
                     <span class="inline-block w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
-                    <span>Acesso imediato via navegador</span>
+                    <span>Sem instalar aplicativos pesados</span>
                 </div>
             </div>
 
-            <!-- Passo 2 -->
-            <div class="gsap-step-card relative bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-2xl sm:rounded-3xl p-6 sm:p-7 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all duration-200 flex flex-col justify-between group">
-                <div class="space-y-4">
+            <!-- Etapa 2: O sistema gera o registro e o comprovante -->
+            <div class="gsap-step-card bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-xs hover:shadow-md hover:border-indigo-200 transition-all duration-200 flex flex-col justify-between group">
+                <div class="space-y-3.5">
                     <div class="flex items-center justify-between">
-                        <span class="text-3xl sm:text-4xl font-black text-indigo-600/20 font-mono-numbers group-hover:text-indigo-600/40 transition-colors">
+                        <span class="text-2xl sm:text-3xl font-black text-indigo-600/25 font-mono-numbers group-hover:text-indigo-600/40 transition-colors">
                             02
                         </span>
-                        <div class="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm shadow-2xs">
+                        <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm shadow-2xs">
                             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                             </svg>
                         </div>
                     </div>
 
-                    <h3 class="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
-                        Confirme a jornada em 1 toque
+                    <h3 class="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+                        O sistema gera o registro e o comprovante
                     </h3>
 
                     <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                        O relógio oficial (GMT-3) registra o instante preciso da batida e captura as coordenadas geográficas como evidência documental para auditoria.
+                        A marcação é gravada com horário preciso e assinatura de segurança, disponibilizando o recibo digital na hora.
                     </p>
                 </div>
 
-                <div class="pt-4 mt-4 border-t border-slate-100 flex items-center gap-2 text-xs font-semibold text-emerald-600">
+                <div class="pt-3 mt-4 border-t border-slate-100 flex items-center gap-1.5 text-[11px] sm:text-xs font-semibold text-emerald-600">
                     <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    <span>Localização registrada como prova</span>
+                    <span>Comprovante digital imediato</span>
                 </div>
             </div>
 
-            <!-- Passo 3 -->
-            <div class="gsap-step-card relative bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-2xl sm:rounded-3xl p-6 sm:p-7 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all duration-200 flex flex-col justify-between group">
-                <div class="space-y-4">
+            <!-- Etapa 3: Gestores acompanham jornadas e ocorrências -->
+            <div class="gsap-step-card bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-xs hover:shadow-md hover:border-indigo-200 transition-all duration-200 flex flex-col justify-between group">
+                <div class="space-y-3.5">
                     <div class="flex items-center justify-between">
-                        <span class="text-3xl sm:text-4xl font-black text-indigo-600/20 font-mono-numbers group-hover:text-indigo-600/40 transition-colors">
+                        <span class="text-2xl sm:text-3xl font-black text-indigo-600/25 font-mono-numbers group-hover:text-indigo-600/40 transition-colors">
                             03
                         </span>
-                        <div class="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm shadow-2xs">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm shadow-2xs">
                             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.143 2.143L15.75 6" />
                             </svg>
                         </div>
                     </div>
 
-                    <h3 class="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
-                        Comprovante imediato e espelho em dia
+                    <h3 class="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+                        Gestores acompanham jornadas e ocorrências
                     </h3>
 
                     <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                        O trabalhador visualiza o comprovante eletrônico com identificador único, e o espelho de ponto do RH é atualizado e recalculado na hora.
+                        A liderança acompanha em tempo real quem iniciou a jornada, intervalos e eventuais atrasos ou ausências da equipe.
                     </p>
                 </div>
 
-                <div class="pt-4 mt-4 border-t border-slate-100 flex items-center gap-2 text-xs font-semibold text-indigo-600">
+                <div class="pt-3 mt-4 border-t border-slate-100 flex items-center gap-1.5 text-[11px] sm:text-xs font-semibold text-indigo-600">
                     <span class="inline-block w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
-                    <span>Conformidade fiscal instantânea</span>
+                    <span>Visão de equipe em tempo real</span>
+                </div>
+            </div>
+
+            <!-- Etapa 4: RH trata ajustes, banco de horas e fechamento -->
+            <div class="gsap-step-card bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-xs hover:shadow-md hover:border-indigo-200 transition-all duration-200 flex flex-col justify-between group">
+                <div class="space-y-3.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-2xl sm:text-3xl font-black text-indigo-600/25 font-mono-numbers group-hover:text-indigo-600/40 transition-colors">
+                            04
+                        </span>
+                        <div class="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-sm shadow-2xs">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <h3 class="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+                        RH trata ajustes, banco de horas e fechamento
+                    </h3>
+
+                    <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                        Avalia justificativas, confere espelhos calculados automaticamente e conclui o fechamento do mês com rapidez.
+                    </p>
+                </div>
+
+                <div class="pt-3 mt-4 border-t border-slate-100 flex items-center gap-1.5 text-[11px] sm:text-xs font-semibold text-purple-700">
+                    <span class="inline-block w-1.5 h-1.5 rounded-full bg-purple-600"></span>
+                    <span>Fechamento ágil sem retrabalho</span>
                 </div>
             </div>
 
