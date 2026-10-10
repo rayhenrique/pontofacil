@@ -60,6 +60,7 @@
     - **Acesso ao Sistema em Destaque:** Ações primárias e secundárias com largura total no mobile (`w-full sm:w-auto`), facilitando o toque com transição dinâmica de "Entrar no PontoFácil" / "Ir para o Sistema" e "Conhecer os recursos".
     - **Fluxo Visual Otimizado:** Posicionamento imediato do mockup interativo de registro de ponto logo após os botões de ação no mobile, eliminação de vácuos verticais desnecessários e paddings compactados (`pt-6 pb-12 sm:pt-10 sm:pb-16`).
     - **Compatibilidade Extensiva:** Excelente leitura e fluidez em larguras estritas (320px, 360px, 390px, 430px e superiores), preservando rigorosamente a identidade visual branco + slate + índigo.
+    - **Mockup Autêntico da Tela Real do PontoFácil:** Substituição do card genérico de marketing por uma réplica fiel da interface do colaborador: saudação personalizada ("Olá, Carlos"), relógio digital com precisão ao segundo em fuso oficial GMT-3, indicador situacional da jornada ("Você ainda não registrou a saída"), botão de ação principal proeminente ("Registrar ponto"), exibição do último registro ("18:02 • Entrada"), localização registrada como evidência documental (sem mensagens punitivas de raio ou bloqueios falsos por GPS) e garantia de comprovante disponível após a marcação. Interatividade demonstrativa fluida com feedback visual temporário e zero persistência no banco.
   - **Suíte de Testes Expandida:** `172 testes e 923 asserções 100% aprovados`.
 
 ## v2.4.0

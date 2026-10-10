@@ -79,12 +79,14 @@
                     <!-- Brilho Traseiro Suave -->
                     <div class="absolute -inset-1 bg-gradient-to-tr from-indigo-500/25 to-purple-500/15 rounded-3xl blur-lg opacity-70"></div>
 
-                    <!-- Card Glassmorphism Compacto -->
+                    <!-- Mockup de Tela Real do PontoFácil -->
                     <div x-data="{
                             time: '',
                             date: '',
                             registered: false,
-                            feedbackMessage: '',
+                            lastPunch: '18:02 • Entrada',
+                            journeyStatus: 'Você ainda não registrou a saída',
+                            feedbackReceipt: false,
                             updateClock() {
                                 const now = new Date();
                                 this.time = now.toLocaleTimeString('pt-BR', { hour12: false });
@@ -92,35 +94,58 @@
                                 this.date = now.toLocaleDateString('pt-BR', options);
                             },
                             simulatePunch() {
+                                if (this.registered) return;
                                 this.registered = true;
-                                this.feedbackMessage = '✓ Ponto registrado às ' + this.time + '! Hash SHA-256 gerado.';
-                                setTimeout(() => { this.registered = false; }, 4000);
+                                const punchTime = this.time || '22:41:08';
+                                this.lastPunch = punchTime + ' • Saída';
+                                this.journeyStatus = 'Saída registrada com sucesso';
+                                this.feedbackReceipt = true;
+                                setTimeout(() => {
+                                    this.registered = false;
+                                    this.lastPunch = '18:02 • Entrada';
+                                    this.journeyStatus = 'Você ainda não registrou a saída';
+                                    this.feedbackReceipt = false;
+                                }, 4000);
                             }
                          }"
                          x-init="updateClock(); setInterval(() => updateClock(), 1000)"
-                         class="relative bg-white/95 backdrop-blur-xl border border-white/80 p-4 min-[360px]:p-5 sm:p-7 rounded-2xl sm:rounded-3xl shadow-xl shadow-indigo-950/5 space-y-4 sm:space-y-5">
+                         class="relative bg-white/95 backdrop-blur-xl border border-slate-200/80 p-4 min-[360px]:p-5 sm:p-6 rounded-2xl sm:rounded-3xl shadow-xl shadow-indigo-950/5 space-y-3.5 sm:space-y-4">
                         
-                        <!-- Header do Mockup -->
+                        <!-- Barra de Status do Sistema / App -->
                         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
                             <div class="flex items-center gap-2">
-                                <span class="relative flex h-2.5 w-2.5">
-                                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                                </span>
-                                <span class="text-[11px] sm:text-xs font-bold text-slate-800 uppercase tracking-wider">
-                                    Sincronizado • GMT-3
-                                </span>
+                                <div class="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-black text-xs shadow-xs">
+                                    P
+                                </div>
+                                <span class="text-xs font-bold text-slate-800">PontoFácil</span>
                             </div>
-                            <span class="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-[10px] sm:text-[11px] font-bold">
-                                REP-P + PTRP
+                            <div class="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+                                <span class="relative flex h-2 w-2">
+                                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                </span>
+                                <span>Horário Oficial • GMT-3</span>
+                            </div>
+                        </div>
+
+                        <!-- Saudação do Colaborador -->
+                        <div class="flex items-center justify-between pt-0.5">
+                            <div>
+                                <h3 class="text-base min-[360px]:text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
+                                    Olá, Carlos
+                                </h3>
+                                <p class="text-[11px] sm:text-xs text-slate-500 font-medium">Jornada de Trabalho • CLT</p>
+                            </div>
+                            <span class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100/80">
+                                Em jornada
                             </span>
                         </div>
 
-                        <!-- Display do Relógio Digital -->
-                        <div class="text-center py-2 px-3 bg-gradient-to-b from-slate-50 to-white rounded-xl sm:rounded-2xl border border-slate-100 shadow-2xs">
+                        <!-- Display do Relógio Digital Atual -->
+                        <div class="text-center py-2.5 sm:py-3 px-3 bg-slate-50/80 rounded-xl sm:rounded-2xl border border-slate-100">
                             <div class="text-4xl min-[360px]:text-5xl sm:text-6xl font-black text-slate-900 tracking-tight font-mono-numbers py-0.5"
-                                 x-text="time || '14:28:45'">
-                                14:28:45
+                                 x-text="time || '22:41:08'">
+                                22:41:08
                             </div>
                             <div class="text-[11px] sm:text-xs font-semibold text-slate-500 capitalize" 
                                  x-text="date || 'segunda-feira, 01 de outubro de 2026'">
@@ -128,64 +153,66 @@
                             </div>
                         </div>
 
-                        <!-- Informações do Colaborador Simulado -->
-                        <div class="bg-indigo-50/60 border border-indigo-100/80 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center gap-3">
-                            <div class="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-xs sm:text-sm shadow-xs shrink-0">
-                                CM
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <div class="text-xs sm:text-sm font-bold text-slate-900 truncate">Carlos Eduardo Mendes</div>
-                                <div class="text-[11px] sm:text-xs text-slate-500 flex items-center gap-1.5 truncate">
-                                    <span>Matrícula #0412</span>
-                                    <span>•</span>
-                                    <span class="text-indigo-600 font-medium">Recursos Humanos</span>
-                                </div>
-                            </div>
-                            <span class="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                                Ativo
-                            </span>
+                        <!-- Situação da Jornada -->
+                        <div class="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-xs sm:text-sm font-semibold transition-colors duration-200"
+                             :class="registered ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50/90 border-amber-200/80 text-amber-900'">
+                            <svg x-show="!registered" class="w-4 h-4 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                            </svg>
+                            <svg x-show="registered" x-cloak class="w-4 h-4 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                            </svg>
+                            <span x-text="journeyStatus">Você ainda não registrou a saída</span>
                         </div>
 
-                        <!-- Cerca Virtual & Status do GPS -->
-                        <div class="space-y-1.5 text-xs">
-                            <div class="flex items-center justify-between text-slate-600 font-medium text-[11px] sm:text-xs">
-                                <span class="flex items-center gap-1.5">
-                                    <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
-                                    </svg>
-                                    Cerca Virtual (GPS Validado)
-                                </span>
-                                <span class="font-bold text-emerald-600">8m / 100m raio</span>
-                            </div>
-                            <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                                <div class="bg-emerald-500 h-1.5 rounded-full" style="width: 12%"></div>
-                            </div>
-                        </div>
-
-                        <!-- Botão de Simulação Interativo -->
+                        <!-- Botão Grande: Registrar ponto -->
                         <div class="pt-0.5">
                             <button @click="simulatePunch()" 
                                     :disabled="registered"
                                     type="button" 
-                                    class="w-full py-3 sm:py-3.5 px-4 rounded-xl font-bold text-xs sm:text-sm text-white shadow-md transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
+                                    class="w-full py-3.5 sm:py-4 px-5 rounded-xl sm:rounded-2xl font-bold text-sm sm:text-base text-white shadow-lg transition-all duration-200 flex items-center justify-center gap-2.5 cursor-pointer touch-manipulation"
                                     :class="registered ? 'bg-emerald-600 shadow-emerald-600/30' : 'bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 shadow-indigo-600/25 active:scale-98'">
-                                <svg x-show="!registered" class="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
+                                <svg x-show="!registered" class="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                                 </svg>
-                                <svg x-show="registered" x-cloak class="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                                <svg x-show="registered" x-cloak class="w-5 h-5 shrink-0 text-white" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                                 </svg>
-                                <span x-text="registered ? 'Ponto Confirmado!' : 'Simular Batida de Ponto'"></span>
+                                <span x-text="registered ? 'Ponto Confirmado!' : 'Registrar ponto'"></span>
                             </button>
+                        </div>
 
-                            <!-- Toast / Mensagem de Feedback -->
-                            <div x-show="registered" 
+                        <!-- Rodapé com Evidências e Informações Reais -->
+                        <div class="pt-2.5 border-t border-slate-100 space-y-2 text-xs">
+                            <!-- Último Registro -->
+                            <div class="flex items-center justify-between text-slate-600">
+                                <span class="font-medium text-slate-500">Último registro:</span>
+                                <span class="font-bold text-slate-900" x-text="lastPunch">18:02 • Entrada</span>
+                            </div>
+
+                            <!-- Localização como Evidência -->
+                            <div class="flex items-center gap-2 text-slate-600 text-[11px] sm:text-xs">
+                                <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                                </svg>
+                                <span class="font-medium">Localização registrada</span>
+                            </div>
+
+                            <!-- Comprovante Disponível -->
+                            <div class="flex items-center gap-2 text-slate-500 text-[11px] sm:text-xs">
+                                <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                                </svg>
+                                <span>Comprovante disponível após a marcação</span>
+                            </div>
+
+                            <!-- Toast / Confirmação da Demonstração -->
+                            <div x-show="feedbackReceipt" 
                                  x-cloak
                                  x-transition
-                                 class="mt-2 p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs text-center font-medium"
-                                 x-text="feedbackMessage">
+                                 class="mt-2 p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] sm:text-xs text-center font-medium">
+                                ✓ Comprovante gerado com sucesso • Demonstração interativa
                             </div>
                         </div>
 

@@ -31,10 +31,19 @@ class LandingPageTest extends TestCase
         $response = $this->get(route('landing'));
 
         $response->assertOk();
-        // Hero Section
+        // Hero Section & Mockup da Tela Real do PontoFácil
         $response->assertSee('Ponto eletrônico simples para o colaborador');
         $response->assertSee('Gestão completa para a empresa');
         $response->assertSee('Controle de jornada digital • REP-P + PTRP');
+        $response->assertSee('Olá, Carlos');
+        $response->assertSee('Você ainda não registrou a saída');
+        $response->assertSee('Registrar ponto');
+        $response->assertSee('Último registro:');
+        $response->assertSee('Localização registrada');
+        $response->assertSee('Comprovante disponível após a marcação');
+        $response->assertDontSee('ponto bloqueado por GPS');
+        $response->assertDontSee('somente dentro do raio');
+        $response->assertDontSee('GPS obrigatório');
 
         // Comparativo
         $response->assertSee('O Jeito Antigo');
