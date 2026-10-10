@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -37,14 +38,13 @@ class PunchEvent extends Model
         'audit_chain_hash',
         'previous_audit_hash',
         'payload_hash',
+        'idempotency_key',
         'previous_event_hash',
         'created_at',
     ];
 
     protected $casts = [
         'nsr' => 'integer',
-        'occurred_at_utc' => 'datetime',
-        'occurred_at_local' => 'datetime',
         'created_at' => 'datetime',
         'latitude' => 'float',
         'longitude' => 'float',
@@ -53,6 +53,18 @@ class PunchEvent extends Model
         'qr_location_valid' => 'boolean',
         'location_valid' => 'boolean',
     ];
+
+    public function getOccurredAtUtcAttribute($value): ?Carbon
+    {
+        return $value ? Carbon::parse($value, 'UTC') : null;
+    }
+
+    public function getOccurredAtLocalAttribute($value): ?Carbon
+    {
+        $tz = $this->timezone ?: config('app.timezone', 'America/Maceio');
+
+        return $value ? Carbon::parse($value, $tz) : null;
+    }
 
     /**
      * Trava de Imutabilidade Estrita sob a Portaria 671/2021 MTP:

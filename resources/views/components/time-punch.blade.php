@@ -5,18 +5,78 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use App\Models\SystemSetting;
 use App\Models\TimeEntry;
+use App\Models\PunchEvent;
+use App\Domain\Company\Services\CurrentCompany;
+use App\Domain\TimeClock\Actions\DetermineNextPunchDirectionAction;
+use App\Domain\TimeClock\Actions\RecordPunchEventAction;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 
 new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Component
 {
     public $message = '';
     public $status = '';
+    public string $establishmentTimezone = '';
+    public string $timezoneLabel = '';
 
-    public function registerPunch($qrCodeHash, $latitude = null, $longitude = null, $accuracy = null)
+    public function mount()
     {
         $user = Auth::user();
         $employee = $user ? $user->employee : null;
         $sector = $employee ? $employee->sector : null;
+        $establishment = $sector?->establishment ?? CurrentCompany::defaultEstablishment();
+
+        $this->establishmentTimezone = $establishment?->resolvedTimezone() ?? config('app.timezone', 'America/Maceio');
+        $offset = Carbon::now($this->establishmentTimezone)->format('P');
+        $this->timezoneLabel = "Horário Oficial ({$this->establishmentTimezone}, GMT{$offset})";
+    }
+
+    /**
+     * Consulta o status de uma tentativa de marcação para reconciliação pós-falha de rede.
+     */
+    public function checkPunchStatus(?string $idempotencyKey = null): ?array
+    {
+        if (! $idempotencyKey) {
+            return null;
+        }
+
+        $punch = PunchEvent::with('receipt')
+            ->where('user_id', Auth::id())
+            ->where('idempotency_key', $idempotencyKey)
+            ->first();
+
+        if (! $punch) {
+            return null;
+        }
+
+        $tz = $punch->timezone ?: $this->establishmentTimezone;
+        $tipoStr = $punch->direction === 'in' ? 'Entrada' : 'Saída';
+        $nsrFormatted = str_pad((string) $punch->nsr, 9, '0', STR_PAD_LEFT);
+
+        $this->status = 'success';
+        $this->message = "Ponto confirmado via reconciliação! ({$tipoStr} às " . $punch->occurred_at_local->format('H:i:s') . " - NSR #{$nsrFormatted})";
+
+        $this->dispatch('app-modal-alert', [
+            'type' => 'success',
+            'title' => 'Ponto Reconciliado com Sucesso!',
+            'message' => "Sua {$tipoStr} foi confirmada às " . $punch->occurred_at_local->format('H:i:s') . " (NSR #{$nsrFormatted}) no fuso horário {$tz}.",
+            'buttonText' => 'Concluir'
+        ]);
+
+        return [
+            'id' => $punch->id,
+            'nsr' => $punch->nsr,
+            'direction' => $punch->direction,
+            'occurred_at_local' => $punch->occurred_at_local->toIso8601String(),
+        ];
+    }
+
+    public function registerPunch($qrCodeHash, $latitude = null, $longitude = null, $accuracy = null, ?string $idempotencyKey = null)
+    {
+        $user = Auth::user();
+        $employee = $user ? $user->employee : null;
+        $sector = $employee ? $employee->sector : null;
+        $establishment = $sector?->establishment ?? CurrentCompany::defaultEstablishment();
 
         $settings = SystemSetting::whereIn('key', [
             'qr_code_hash', 'company_latitude', 'company_longitude', 'allowed_radius_meters'
@@ -39,50 +99,63 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
             return;
         }
 
-        // 2. Resolução das Coordenadas e Raio esperados (Regra Híbrida: Setor -> Global)
-        $hasCustomLocation = $sector && $sector->latitude !== null && $sector->longitude !== null;
+        // 2. Resolução das Coordenadas e Raio esperados (Sem inventar coordenadas de Maceió quando não configuradas)
+        $hasSectorLocation = $sector && $sector->latitude !== null && $sector->longitude !== null;
+        $hasCompanyLocation = !empty($settings['company_latitude']) && !empty($settings['company_longitude']);
 
-        $targetLatitude = $hasCustomLocation
-            ? (float) $sector->latitude
-            : (float) ($settings['company_latitude'] ?? -9.6658);
+        $targetLatitude = null;
+        $targetLongitude = null;
+        $allowedRadius = null;
+        $hasReferenceLocation = false;
+        $locationName = '';
 
-        $targetLongitude = $hasCustomLocation
-            ? (float) $sector->longitude
-            : (float) ($settings['company_longitude'] ?? -35.7350);
-
-        $allowedRadius = ($sector && $sector->allowed_radius_meters !== null)
-            ? (float) $sector->allowed_radius_meters
-            : (float) ($settings['allowed_radius_meters'] ?? 100);
-
-        $locationName = $hasCustomLocation ? "do seu setor ({$sector->name})" : "da empresa";
+        if ($hasSectorLocation) {
+            $targetLatitude = (float) $sector->latitude;
+            $targetLongitude = (float) $sector->longitude;
+            $allowedRadius = ($sector->allowed_radius_meters !== null)
+                ? (float) $sector->allowed_radius_meters
+                : (!empty($settings['allowed_radius_meters']) ? (float) $settings['allowed_radius_meters'] : 100.0);
+            $hasReferenceLocation = true;
+            $locationName = "do seu setor ({$sector->name})";
+        } elseif ($hasCompanyLocation) {
+            $targetLatitude = (float) $settings['company_latitude'];
+            $targetLongitude = (float) $settings['company_longitude'];
+            $allowedRadius = !empty($settings['allowed_radius_meters']) ? (float) $settings['allowed_radius_meters'] : 100.0;
+            $hasReferenceLocation = true;
+            $locationName = "da empresa";
+        }
 
         $distance = null;
         $locationValid = null;
         if ($latitude !== null && $longitude !== null) {
-            $distance = $this->calculateDistance(
-                (float) $latitude,
-                (float) $longitude,
-                $targetLatitude,
-                $targetLongitude
-            );
-            $locationValid = ($distance <= $allowedRadius);
+            if ($hasReferenceLocation) {
+                $distance = $this->calculateDistance(
+                    (float) $latitude,
+                    (float) $longitude,
+                    $targetLatitude,
+                    $targetLongitude
+                );
+                $locationValid = ($distance <= $allowedRadius);
+            } else {
+                // Perímetro não configurado: registra evidência física sem calcular distância contra localização fictícia
+                $distance = null;
+                $locationValid = null;
+            }
         }
 
-        // 3. Determinação da direção com base no ledger oficial REP-P (PunchEvent como fonte de verdade)
-        $tz = $sector?->establishment?->timezone ?? 'America/Maceio';
-        $lastPunch = \App\Models\PunchEvent::where('user_id', Auth::id())
-            ->whereDate('occurred_at_local', now($tz)->toDateString())
-            ->orderBy('occurred_at_utc', 'desc')
-            ->first();
+        // 3. Determinação robusta da direção de batida baseada na sequência persistida do colaborador (PunchEvent)
+        $type = app(DetermineNextPunchDirectionAction::class)->execute($user);
 
-        $type = ($lastPunch && $lastPunch->direction === 'in') ? 'out' : 'in';
+        // 4. Fuso horário do estabelecimento ou fallback oficial da aplicação
+        $tz = $establishment?->resolvedTimezone() ?? config('app.timezone', 'America/Maceio');
 
-        // 4. Gravação atômica única através do RecordPunchEventAction (REP-P -> ARP -> Projeção TimeEntry)
+        // 5. Gravação atômica única através do RecordPunchEventAction (REP-P -> ARP -> Projeção TimeEntry)
         $nsrFormatted = null;
+        $nowInTz = Carbon::now($tz);
         try {
-            $recordPunchAction = app(\App\Domain\TimeClock\Actions\RecordPunchEventAction::class);
+            $recordPunchAction = app(RecordPunchEventAction::class);
             $punchEvent = $recordPunchAction->execute(
-                user: Auth::user(),
+                user: $user,
                 direction: $type,
                 latitude: $latitude !== null ? (float) $latitude : null,
                 longitude: $longitude !== null ? (float) $longitude : null,
@@ -90,10 +163,12 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                 qrLocationValid: true,
                 locationValid: $locationValid,
                 source: 'web_pwa',
-                establishment: $sector?->establishment,
-                locationDistanceMeters: $distance !== null ? (float) round($distance, 2) : null
+                establishment: $establishment,
+                locationDistanceMeters: $distance !== null ? (float) round($distance, 2) : null,
+                idempotencyKey: $idempotencyKey
             );
             $nsrFormatted = str_pad((string) $punchEvent->nsr, 9, '0', STR_PAD_LEFT);
+            $nowInTz = $punchEvent->occurred_at_local;
         } catch (\Throwable $e) {
             report($e);
             $this->status = 'error';
@@ -110,25 +185,25 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
         $tipoStr = $type === 'in' ? 'Entrada' : 'Saída';
         $nsrInfo = $nsrFormatted ? " (NSR #{$nsrFormatted})" : '';
 
-        // 5. Exibição de Alerta de Auditoria se fora do raio (não impede o registro nem altera horário)
+        // 6. Exibição de Alerta de Auditoria se fora do raio (não impede o registro nem altera horário oficial)
         if ($locationValid === false) {
             $distRounded = round($distance);
             $radiusRounded = round($allowedRadius);
-            $this->message = "Ponto registrado com aviso! ({$tipoStr} às " . now($tz)->format('H:i:s') . "{$nsrInfo} - Fora do raio permitido)";
+            $this->message = "Ponto registrado com aviso! ({$tipoStr} às " . $nowInTz->format('H:i:s') . "{$nsrInfo} - Fora do raio permitido)";
             $this->status = 'warning';
             $this->dispatch('app-modal-alert', [
                 'type' => 'warning',
                 'title' => 'Ponto Registrado (Fora da Área Permitida)',
-                'message' => "Sua {$tipoStr} foi confirmada com sucesso às " . now($tz)->format('H:i:s') . "{$nsrInfo}, porém o GPS indicou que você estava a {$distRounded}m {$locationName} (raio autorizado: {$radiusRounded}m). Esta evidência foi registrada para fins de auditoria.",
+                'message' => "Sua {$tipoStr} foi confirmada com sucesso às " . $nowInTz->format('H:i:s') . "{$nsrInfo}, porém o GPS indicou que você estava a {$distRounded}m {$locationName} (raio autorizado: {$radiusRounded}m). Esta evidência foi registrada para fins de auditoria.",
                 'buttonText' => 'Concluir'
             ]);
         } else {
-            $this->message = "Ponto registrado com sucesso! ({$tipoStr} às " . now($tz)->format('H:i:s') . "{$nsrInfo})";
+            $this->message = "Ponto registrado com sucesso! ({$tipoStr} às " . $nowInTz->format('H:i:s') . "{$nsrInfo})";
             $this->status = 'success';
             $this->dispatch('app-modal-alert', [
                 'type' => 'success',
                 'title' => 'Ponto Registrado com Sucesso!',
-                'message' => "Sua {$tipoStr} foi confirmada às " . now($tz)->format('H:i:s') . "{$nsrInfo} no Horário Oficial de Maceió (GMT-3).",
+                'message' => "Sua {$tipoStr} foi confirmada às " . $nowInTz->format('H:i:s') . "{$nsrInfo} no fuso horário {$tz} (GMT" . $nowInTz->format('P') . ").",
                 'buttonText' => 'Concluir'
             ]);
         }
@@ -234,7 +309,7 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
     }
     @media (max-height: 500px) {
         .time-punch-clock-card {
-            display: none !important; /* Somente em landscape extremamente achatado */
+            display: none !important;
         }
         .time-punch-reader-box {
             max-width: 130px !important;
@@ -242,16 +317,20 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
     }
 </style>
 
-<div class="time-punch-container w-full max-w-md sm:max-w-lg mx-auto py-1 sm:py-3 px-2 sm:px-4" x-data="timePunchComponent()">
-    <!-- Digital Clock Card (Mobile First) -->
+<div class="time-punch-container w-full max-w-md sm:max-w-lg mx-auto py-1 sm:py-3 px-2 sm:px-4" 
+     x-data="timePunchComponent({ 
+         timezone: '{{ $establishmentTimezone }}', 
+         timezoneLabel: '{{ $timezoneLabel }}' 
+     })">
+    <!-- Digital Clock Card (Reflete Timezone Real do Estabelecimento) -->
     <div class="time-punch-clock-card mb-2 sm:mb-3 bg-gradient-to-r from-indigo-700 via-indigo-800 to-indigo-900 rounded-2xl shadow-sm px-4 py-2.5 sm:px-6 sm:py-3.5 text-white text-center">
         <p class="text-[10px] sm:text-xs uppercase tracking-widest text-indigo-200 font-semibold mb-0.5" x-text="currentDate"></p>
         <div class="time-punch-clock-text text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight font-mono text-white leading-tight" x-text="currentTime">
-            {{ now()->format('H:i:s') }}
+            {{ Carbon::now($establishmentTimezone)->format('H:i:s') }}
         </div>
         <div class="time-punch-clock-info mt-1 flex items-center justify-center gap-1.5 text-[11px] sm:text-xs text-indigo-200">
             <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            Horário Oficial de Maceió (GMT-3)
+            <span x-text="timezoneLabel">{{ $timezoneLabel }}</span>
         </div>
     </div>
 
@@ -301,14 +380,24 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
             </div>
             
             <div class="mt-3 sm:mt-4 flex flex-col sm:flex-row justify-center items-center gap-2">
-                <button @click="startScanner()" x-show="!isScanning" type="button" class="time-punch-btn w-full sm:w-auto min-w-[220px] inline-flex items-center justify-center px-6 py-3 sm:py-3.5 border border-transparent text-sm sm:text-base font-bold rounded-xl shadow-lg shadow-indigo-600/20 text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 active:scale-[0.98] transition-all touch-manipulation cursor-pointer">
+                <button @click="startScanner()" 
+                        x-show="!isScanning" 
+                        :disabled="isProcessing"
+                        :class="{ 'opacity-60 cursor-not-allowed': isProcessing }"
+                        type="button" 
+                        class="time-punch-btn w-full sm:w-auto min-w-[220px] inline-flex items-center justify-center px-6 py-3 sm:py-3.5 border border-transparent text-sm sm:text-base font-bold rounded-xl shadow-lg shadow-indigo-600/20 text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 active:scale-[0.98] transition-all touch-manipulation cursor-pointer">
                     <svg class="w-5 h-5 mr-2 -ml-1" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
                         <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
                     </svg>
                     Escanear QR Code
                 </button>
-                <button @click="stopScanner()" x-show="isScanning" style="display: none;" type="button" class="time-punch-btn w-full sm:w-auto min-w-[200px] inline-flex items-center justify-center px-6 py-3 sm:py-3.5 border border-transparent text-sm sm:text-base font-bold rounded-xl shadow-lg shadow-rose-600/20 text-white bg-rose-600 hover:bg-rose-700 active:bg-rose-800 active:scale-[0.98] transition-all touch-manipulation cursor-pointer">
+                <button @click="stopScanner()" 
+                        x-show="isScanning" 
+                        style="display: none;" 
+                        :disabled="isProcessing"
+                        type="button" 
+                        class="time-punch-btn w-full sm:w-auto min-w-[200px] inline-flex items-center justify-center px-6 py-3 sm:py-3.5 border border-transparent text-sm sm:text-base font-bold rounded-xl shadow-lg shadow-rose-600/20 text-white bg-rose-600 hover:bg-rose-700 active:bg-rose-800 active:scale-[0.98] transition-all touch-manipulation cursor-pointer">
                     <svg class="w-5 h-5 mr-2 -ml-1" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -317,7 +406,7 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
             </div>
         </div>
 
-        <!-- Processing State (Clean mobile spinner) -->
+        <!-- Processing State -->
         <div x-show="isProcessing" style="display: none;" class="text-center py-6 sm:py-8">
             <div class="inline-flex p-3 sm:p-4 rounded-full bg-indigo-50 mb-2 sm:mb-3 animate-pulse">
                 <svg class="animate-spin h-8 w-8 sm:h-10 sm:w-10 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -325,12 +414,55 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
             </div>
-            <p class="text-sm sm:text-base font-semibold text-gray-900">Validando QR Code e GPS...</p>
-            <p class="text-[11px] sm:text-xs text-gray-500 mt-1">Garantindo registro inviolável do ponto</p>
+            <p class="text-sm sm:text-base font-semibold text-gray-900">Validando QR Code e registrando ponto...</p>
+            <p class="text-[11px] sm:text-xs text-gray-500 mt-1">Garantindo integridade e conformidade REP-P</p>
         </div>
     </div>
 
-    <!-- Modal de Reativação de Permissões (Câmera & GPS) -->
+    <!-- Modal de Reconciliação e Resiliência de Rede -->
+    <div x-show="networkErrorModal" 
+         x-cloak 
+         class="fixed inset-0 z-50 overflow-y-auto" 
+         role="dialog" 
+         aria-modal="true">
+        <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-xs transition-opacity" @click="cancelAttempt()"></div>
+
+        <div class="flex min-h-screen items-center justify-center p-4 text-center sm:p-0">
+            <div class="relative z-10 w-full max-w-lg transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-2xl transition-all sm:my-8 border border-gray-100">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-amber-100 text-amber-600 shadow-xs">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                        </svg>
+                    </div>
+
+                    <div class="flex-1">
+                        <h3 class="text-base font-bold text-gray-900">Falha de Comunicação com o Servidor</h3>
+                        <p class="text-xs text-gray-600 mt-1.5" x-text="networkErrorMsg"></p>
+                    </div>
+                </div>
+
+                <div class="mt-5 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-600">
+                    <p class="font-semibold text-slate-800">Proteção contra duplicidade ativa:</p>
+                    <p class="mt-1">Sua solicitação possui uma chave única identificadora. O sistema verificará se o registro já foi gravado antes de enviar uma nova batida, garantindo que nenhum ponto seja duplicado.</p>
+                </div>
+
+                <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-end">
+                    <button type="button" @click="cancelAttempt()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition">
+                        Cancelar e Voltar
+                    </button>
+                    <button type="button" @click="retrySameAttempt()" class="inline-flex items-center justify-center px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition">
+                        <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                        </svg>
+                        Verificar / Reenviar Registro
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Reativação de Câmera -->
     <div x-show="permissionModal" 
          x-cloak 
          class="fixed inset-0 z-50 overflow-y-auto" 
@@ -341,61 +473,32 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
         <div class="flex min-h-screen items-center justify-center p-4 text-center sm:p-0">
             <div class="relative z-10 w-full max-w-lg transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-2xl transition-all sm:my-8 border border-gray-100">
                 <div class="flex items-start gap-4">
-                    <div class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-xs"
-                         :class="permissionType === 'camera' ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600'">
-                        <template x-if="permissionType === 'camera'">
-                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
-                            </svg>
-                        </template>
-                        <template x-if="permissionType === 'gps'">
-                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
-                            </svg>
-                        </template>
+                    <div class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-xs bg-amber-100 text-amber-600">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+                        </svg>
                     </div>
 
                     <div class="flex-1">
-                        <h3 class="text-base font-bold text-gray-900" x-text="permissionType === 'camera' ? 'Permissão de Câmera Bloqueada' : 'Permissão de Localização (GPS) Bloqueada'"></h3>
+                        <h3 class="text-base font-bold text-gray-900">Permissão de Câmera Necessária</h3>
                         <p class="text-xs text-gray-500 mt-1" x-text="permissionErrorMsg"></p>
                     </div>
                 </div>
 
-                <!-- Guia Passo a Passo -->
-                <div class="mt-5 p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3 text-xs text-slate-700">
-                    <p class="font-bold text-slate-900 text-xs flex items-center gap-1.5">
-                        <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" /></svg>
-                        Como reativar a permissão no seu navegador:
-                    </p>
-                    
-                    <ol class="list-decimal pl-4 space-y-2 text-slate-600">
-                        <li>
-                            <strong>Ícone de Cadeado / Ajustes:</strong> No topo da tela, clique no ícone de <strong>cadeado</strong> ou <strong>ajustes de site</strong> que fica no início da barra de endereço (ao lado de <em>pontofacil...</em>).
-                        </li>
-                        <li>
-                            <strong>Permitir Acesso:</strong> Localize as opções <span class="text-indigo-700 font-semibold" x-text="permissionType === 'camera' ? 'Câmera' : 'Localização / GPS'"></span> e mude para <strong>"Permitir"</strong> (ou toque em <em>"Redefinir permissões"</em>).
-                        </li>
-                        <li>
-                            <strong>No iPhone / iPad (Safari):</strong> Toque no botão <strong>aA</strong> na barra de endereço &rarr; <em>Ajustes do Site</em> &rarr; <em>Câmera / Localização</em> &rarr; <strong>Permitir</strong>.
-                        </li>
-                        <li>
-                            <strong>Tentar Novamente:</strong> Após alterar, clique no botão azul abaixo para que o navegador peça novamente ou inicie o scanner.
-                        </li>
+                <div class="mt-5 p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2 text-xs text-slate-700">
+                    <p class="font-bold text-slate-900 text-xs">Como liberar a câmera no navegador:</p>
+                    <ol class="list-decimal pl-4 space-y-1.5 text-slate-600">
+                        <li>No topo da tela, clique no ícone de <strong>cadeado</strong> ou <strong>ajustes de site</strong> ao lado do endereço.</li>
+                        <li>Localize a permissão de <strong>Câmera</strong> e marque <strong>"Permitir"</strong>.</li>
+                        <li>Clique no botão abaixo para tentar abrir a câmera novamente.</li>
                     </ol>
                 </div>
 
-                <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-end">
+                <div class="mt-6 flex gap-3 justify-end">
                     <button type="button" @click="permissionModal = false" class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition">
                         Fechar
                     </button>
-                    <template x-if="permissionType === 'gps' && lastDecodedText">
-                        <button type="button" @click="proceedWithoutGps()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-xs font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 transition">
-                            Registrar sem GPS
-                        </button>
-                    </template>
-                    <button type="button" @click="retryPermission()" class="inline-flex items-center justify-center px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition">
-                        <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+                    <button type="button" @click="permissionModal = false; startScanner();" class="inline-flex items-center justify-center px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition">
                         Tentar Novamente
                     </button>
                 </div>
@@ -405,16 +508,21 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
 
     <script>
         document.addEventListener('alpine:init', () => {
-            Alpine.data('timePunchComponent', () => ({
+            Alpine.data('timePunchComponent', (config = {}) => ({
                 html5QrcodeScanner: null,
                 isScanning: false,
                 isProcessing: false,
+                timezone: config.timezone || '{{ $establishmentTimezone }}',
+                timezoneLabel: config.timezoneLabel || '{{ $timezoneLabel }}',
                 currentTime: '',
                 currentDate: '',
                 permissionModal: false,
-                permissionType: 'camera',
                 permissionErrorMsg: '',
+                currentAttemptId: null,
                 lastDecodedText: null,
+                lastCoords: null,
+                networkErrorModal: false,
+                networkErrorMsg: '',
 
                 init() {
                     this.updateClock();
@@ -423,17 +531,37 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
 
                 updateClock() {
                     const now = new Date();
-                    this.currentTime = now.toLocaleTimeString('pt-BR', { timeZone: 'America/Maceio' });
-                    this.currentDate = now.toLocaleDateString('pt-BR', { 
-                        timeZone: 'America/Maceio',
-                        weekday: 'long', 
-                        day: '2-digit', 
-                        month: 'long', 
-                        year: 'numeric' 
-                    });
+                    try {
+                        this.currentTime = now.toLocaleTimeString('pt-BR', { timeZone: this.timezone });
+                        this.currentDate = now.toLocaleDateString('pt-BR', { 
+                            timeZone: this.timezone,
+                            weekday: 'long', 
+                            day: '2-digit', 
+                            month: 'long', 
+                            year: 'numeric' 
+                        });
+                    } catch (e) {
+                        // Fallback defensivo caso o timezone local do browser falhe
+                        this.currentTime = now.toLocaleTimeString('pt-BR');
+                        this.currentDate = now.toLocaleDateString('pt-BR', { 
+                            weekday: 'long', 
+                            day: '2-digit', 
+                            month: 'long', 
+                            year: 'numeric' 
+                        });
+                    }
+                },
+
+                generateIdempotencyKey() {
+                    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+                        return crypto.randomUUID();
+                    }
+                    return 'pf_' + Date.now() + '_' + Math.random().toString(36).substring(2, 12);
                 },
 
                 startScanner() {
+                    if (this.isProcessing) return;
+
                     if (!this.html5QrcodeScanner) {
                         this.html5QrcodeScanner = new Html5Qrcode("qr-reader");
                     }
@@ -446,19 +574,18 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                             height: Math.max(120, Math.min(qrboxSize, 220))
                         };
                     };
-                    const config = { fps: 15, qrbox: qrboxFunction };
+                    const scanConfig = { fps: 15, qrbox: qrboxFunction };
                     
                     this.html5QrcodeScanner.start(
                         { facingMode: "environment" },
-                        config,
+                        scanConfig,
                         (decodedText) => this.onScanSuccess(decodedText),
-                        () => { /* silent frame errors */ }
+                        () => { /* frames intermediários silenciosos */ }
                     ).then(() => {
                         this.isScanning = true;
                     }).catch((err) => {
                         console.error("Scanner start error:", err);
-                        this.permissionType = 'camera';
-                        this.permissionErrorMsg = 'Acesso à câmera foi recusado ou não está disponível. Siga as instruções abaixo para liberar o uso da câmera.';
+                        this.permissionErrorMsg = 'Acesso à câmera foi recusado ou não está disponível. Por favor, libere a câmera nas permissões do navegador.';
                         this.permissionModal = true;
                     });
                 },
@@ -474,58 +601,131 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                 },
 
                 onScanSuccess(decodedText) {
-                    this.stopScanner();
-                    this.isProcessing = true;
-                    this.lastDecodedText = decodedText;
-                    
-                    if (navigator.geolocation) {
-                        navigator.geolocation.getCurrentPosition(
-                            (position) => {
-                                @this.call('registerPunch', decodedText, position.coords.latitude, position.coords.longitude, position.coords.accuracy)
-                                    .then(() => {
-                                        this.isProcessing = false;
-                                        this.lastDecodedText = null;
-                                    });
-                            },
-                            (error) => {
-                                this.isProcessing = false;
-                                this.permissionType = 'gps';
-                                this.permissionErrorMsg = error.code === 1 
-                                    ? 'A permissão de localização (GPS) não foi concedida no navegador. A geolocalização é utilizada como evidência de conformidade do registro de ponto.'
-                                    : 'Não foi possível capturar a localização GPS (' + error.message + '). Verifique se o GPS do aparelho está ativado.';
-                                this.permissionModal = true;
-                            },
-                            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-                        );
-                    } else {
-                        // Dispositivo sem suporte a GPS: registra normalmente sem coordenadas
-                        @this.call('registerPunch', decodedText, null, null, null)
-                            .then(() => {
-                                this.isProcessing = false;
-                                this.lastDecodedText = null;
-                            });
+                    // 1. Bloqueio imediato de callbacks concorrentes ou repetidos do scanner
+                    if (this.isProcessing) {
+                        return;
                     }
+                    this.isProcessing = true;
+
+                    // 2. Desativação imediata do scanner após leitura bem-sucedida
+                    this.stopScanner();
+
+                    // 3. Chave de idempotência única vinculada a esta tentativa de batida
+                    if (!this.currentAttemptId) {
+                        this.currentAttemptId = this.generateIdempotencyKey();
+                    }
+                    const attemptKey = this.currentAttemptId;
+                    this.lastDecodedText = decodedText;
+
+                    // 4. Coleta de GPS não-bloqueante com timeout de 5 segundos
+                    this.getCoordinates().then((coords) => {
+                        this.lastCoords = coords;
+                        this.sendPunchRequest(attemptKey, decodedText, coords);
+                    });
                 },
 
-                proceedWithoutGps() {
-                    this.permissionModal = false;
-                    this.isProcessing = true;
-                    @this.call('registerPunch', this.lastDecodedText, null, null, null)
+                getCoordinates() {
+                    return new Promise((resolve) => {
+                        if (!navigator.geolocation) {
+                            return resolve(null);
+                        }
+
+                        let resolved = false;
+                        // Timeout rígido de 5 segundos para não reter o trabalhador indefinidamente
+                        const timeoutId = setTimeout(() => {
+                            if (!resolved) {
+                                resolved = true;
+                                console.warn("GPS request timed out (5s); registrando batida sem coordenadas.");
+                                resolve(null);
+                            }
+                        }, 5000);
+
+                        navigator.geolocation.getCurrentPosition(
+                            (position) => {
+                                if (!resolved) {
+                                    resolved = true;
+                                    clearTimeout(timeoutId);
+                                    resolve({
+                                        latitude: position.coords.latitude,
+                                        longitude: position.coords.longitude,
+                                        accuracy: position.coords.accuracy
+                                    });
+                                }
+                            },
+                            (error) => {
+                                if (!resolved) {
+                                    resolved = true;
+                                    clearTimeout(timeoutId);
+                                    console.warn("GPS indisponível ou negado (" + error.message + "); registrando batida sem coordenadas.");
+                                    resolve(null);
+                                }
+                            },
+                            { enableHighAccuracy: true, timeout: 4500, maximumAge: 10000 }
+                        );
+                    });
+                },
+
+                sendPunchRequest(attemptKey, decodedText, coords) {
+                    const lat = coords ? coords.latitude : null;
+                    const lon = coords ? coords.longitude : null;
+                    const acc = coords ? coords.accuracy : null;
+
+                    @this.call('registerPunch', decodedText, lat, lon, acc, attemptKey)
                         .then(() => {
                             this.isProcessing = false;
+                            this.currentAttemptId = null;
                             this.lastDecodedText = null;
+                            this.lastCoords = null;
+                            this.networkErrorModal = false;
+                        })
+                        .catch((error) => {
+                            console.error("Erro na comunicação com o servidor:", error);
+                            this.handleNetworkFailure(attemptKey, decodedText, coords, error);
                         });
                 },
 
-                retryPermission() {
-                    this.permissionModal = false;
-                    if (this.permissionType === 'camera') {
-                        this.startScanner();
-                    } else if (this.lastDecodedText) {
-                        this.onScanSuccess(this.lastDecodedText);
-                    } else {
-                        this.startScanner();
+                handleNetworkFailure(attemptKey, decodedText, coords, error) {
+                    this.networkErrorModal = true;
+                    this.networkErrorMsg = "A conexão com a rede oscilou. Verificando junto ao servidor se a batida foi confirmada...";
+
+                    // Reconciliação imediata consultando o status da tentativa pela chave de idempotência
+                    @this.call('checkPunchStatus', attemptKey)
+                        .then((existing) => {
+                            if (existing) {
+                                // O servidor recebeu e gravou com sucesso
+                                this.networkErrorModal = false;
+                                this.isProcessing = false;
+                                this.currentAttemptId = null;
+                                this.lastDecodedText = null;
+                                this.lastCoords = null;
+                            } else {
+                                // Servidor confirma que a requisição não chegou
+                                this.networkErrorMsg = "A conexão caiu antes do registro alcançar o servidor. Você pode reenviar com segurança agora.";
+                                this.isProcessing = false;
+                            }
+                        })
+                        .catch(() => {
+                            // Conexão continua indisponível
+                            this.networkErrorMsg = "Não foi possível confirmar o status do registro devido à instabilidade de rede. Clique em Reenviar para tentar novamente.";
+                            this.isProcessing = false;
+                        });
+                },
+
+                retrySameAttempt() {
+                    if (!this.lastDecodedText || !this.currentAttemptId) {
+                        this.cancelAttempt();
+                        return;
                     }
+                    this.isProcessing = true;
+                    this.sendPunchRequest(this.currentAttemptId, this.lastDecodedText, this.lastCoords);
+                },
+
+                cancelAttempt() {
+                    this.networkErrorModal = false;
+                    this.isProcessing = false;
+                    this.currentAttemptId = null;
+                    this.lastDecodedText = null;
+                    this.lastCoords = null;
                 }
             }));
         });

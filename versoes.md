@@ -1,6 +1,32 @@
 # Histórico de Versões (Changelog)
 
-## v2.5.2 (Atual)
+## v2.5.3 (Atual)
+- **Segurança, Idempotência e Resiliência do Módulo Bater Ponto (`/ponto`):**
+  - **Prevenção de Duplicidade e Idempotência:**
+    - Bloqueio imediato e síncrono de callbacks concorrentes no scanner durante a mesma leitura de QR Code.
+    - Desativação imediata da câmera e proteção contra cliques repetidos nos botões de registro.
+    - Implementação de chave de idempotência única por tentativa (`idempotency_key`), persistida com restrição `unique` no banco de dados e serializada via lock distribuído (`Cache::lock`).
+    - Retentativas ou chamadas concorrentes com a mesma chave retornam a batida já gravada sem consumir novo NSR e sem duplicar registros.
+    - Marcações legítimas subsequentes não sofrem bloqueio arbitrário por tempo.
+  - **Determinação de Entrada e Saída Imune a Jornadas Noturnas:**
+    - Eliminação do filtro limitador de dia civil (`whereDate`).
+    - Criação da Action `DetermineNextPunchDirectionAction`, resolvendo a direção a partir da sequência cronológica real ininterrupta (`occurred_at_utc desc`).
+    - Suporte robusto a plantões noturnos (22h -> 06h), intervalos que cruzam meia-noite (23h30 -> 00h30), dias consecutivos, viradas de mês/ano e trocas de fuso horário.
+  - **Padronização de Timezone Dinâmico e Servidor como Referência:**
+    - Relógio da interface e mensagens refletem o fuso horário oficial do estabelecimento (`$establishment->resolvedTimezone()`) com fallback oficial (`config('app.timezone')`).
+    - Todos os timestamps da mesma batida (`occurred_at_utc`, `occurred_at_local`, hashes fiscais e de auditoria) são gerados a partir de um instante físico único congelado no servidor (`Carbon::now('UTC')`).
+  - **Remoção de Coordenadas Fictícias e Resiliência de GPS:**
+    - Eliminação de coordenadas fixas de Maceió (-9.6658 / -35.7350).
+    - Quando o perímetro não está configurado, o sistema registra as coordenadas reais disponíveis sem calcular distância fictícia e define o perímetro como não verificado (`location_valid = null`), sem recusar a marcação.
+    - Timeout de 5 segundos na coleta de GPS: permissão negada, GPS desativado ou timeout não impedem nem prendem a marcação (Art. 74/78 Portaria 671 MTP), preservando a validação estrita do QR Code.
+  - **Resiliência e Reconciliação em Falhas de Rede:**
+    - Tratamento completo com `catch`, `finally` e modal de instabilidade que não presume falso descarte.
+    - Reconciliação assíncrona por identificador da tentativa (`checkPunchStatus`) antes de oferecer reenvio seguro com a mesma chave.
+  - **Conformidade Fiscal e Comprovantes:**
+    - Preservação estrita do ledger ARP, NSR monotônico por estabelecimento, cadeia de hashes fiscais Tipo 7 e integridade dos eventos de domínio.
+    - Resiliência na emissão de comprovantes PAdES com recuperação sob demanda.
+
+## v2.5.2
 - **Redefinição do Design System Oficial e Diretrizes UX/UI (`DESIGN.md`):**
   - **Fonte Única da Verdade para UX e UI:**
     - Substituição integral do documento `DESIGN.md` na raiz do projeto por uma nova especificação normativa que reflete a interface real do sistema.

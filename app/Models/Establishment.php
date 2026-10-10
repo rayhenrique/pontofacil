@@ -26,6 +26,14 @@ class Establishment extends Model
         'nsr_next' => 'integer',
     ];
 
+    /**
+     * Retorna o fuso horário oficial do estabelecimento ou o fallback configurado na aplicação.
+     */
+    public function resolvedTimezone(): string
+    {
+        return ! empty($this->timezone) ? $this->timezone : config('app.timezone', 'America/Maceio');
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);

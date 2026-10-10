@@ -218,6 +218,16 @@
   - [x] Acessibilidade WCAG 2.1 AA (skip link, `prefers-reduced-motion`, semântica ARIA e touch targets de 44px+).
   - [x] Remoção da timeline técnica da página pública e centralização do changelog em `versoes.md`.
 
+- [x] **Fase 23: Endurecimento de Segurança e Resiliência do Módulo Bater Ponto (v2.5.3)**
+  - [x] Bloqueio imediato e síncrono de callbacks repetidos do scanner de QR Code.
+  - [x] Idempotência com chave única (`idempotency_key`) persistida com restrição `unique` e lock distribuído (`Cache::lock`).
+  - [x] Determinação robusta de direção via `DetermineNextPunchDirectionAction` (suporte a jornadas noturnas 22h -> 06h, intervalos e viradas de ano/mês).
+  - [x] Padronização de timezone dinâmico por estabelecimento e timestamps derivados de instante único no servidor.
+  - [x] Remoção de coordenadas fictícias de Maceió e não cálculo de distância quando o perímetro não está configurado.
+  - [x] Resiliência de GPS com timeout de 5s: ausência de GPS não bloqueia a marcação (Art. 74/78 Portaria 671 MTP).
+  - [x] Tratamento completo de falhas de rede com reconciliação assíncrona (`checkPunchStatus`) e retentativa segura.
+  - [x] Suíte de 13 testes automatizados de hardening (`TimePunchHardeningTest`).
+
 - [ ] **Fase 21B: Compliance Externo & Assinatura Digital Oficial — Dependências Externas**
   - [ ] Configurar certificado digital válido ICP-Brasil em storage seguro.
   - [ ] Implementar `IcpBrasilSigningService`.

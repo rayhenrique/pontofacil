@@ -18,8 +18,9 @@ class GeneratePunchReceiptAction
      */
     public function execute(PunchEvent $punchEvent): PunchReceipt
     {
-        if ($punchEvent->receipt) {
-            return $punchEvent->receipt;
+        $existing = $punchEvent->receipt ?? PunchReceipt::where('punch_event_id', $punchEvent->id)->first();
+        if ($existing) {
+            return $existing;
         }
 
         $code = 'PF-'.strtoupper(Str::random(4)).'-'.strtoupper(Str::random(4)).'-'.strtoupper(Str::random(4));
