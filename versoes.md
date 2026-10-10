@@ -62,6 +62,17 @@
       4. *Registro bruto separado do tratamento de jornada:* modelo REP-P (dado original bruto na ARP) desacoplado do PTRP (cálculos, espelho e ajustes sem sobrescrever batidas);
       5. *Comprovantes e histórico de marcações:* recibo digital instantâneo com identificador e carimbo de tempo, com portal de conferência pública acessível a auditores e trabalhadores.
     - **Testes Automatizados:** Atualização de `LandingPageTest` com asserções estritas (`assertSee` para os novos pilares e `assertDontSee` para expressões exageradas e garantias jurídicas absolutas).
+  - **Refatoração Sóbria da Seção 'Estrutura preparada para a Portaria 671':**
+    - **Comunicação Clara e Sóbria:** Seção técnica sem apelo de marketing ou promessas regulatórias antecipadas, focada em transmitir seriedade e clareza aos gestores e trabalhadores.
+    - **6 Pilares da Arquitetura:**
+      1. *REP-P registra os eventos brutos:* gravação original e fidedigna no ledger imutável da ARP sem adulteração;
+      2. *PTRP trata jornadas, ocorrências e fechamento:* apuração de regras, tolerâncias, banco de horas e espelho formal;
+      3. *Registros de ponto não são alterados pelo tratamento:* desacoplamento funcional com preservação da batida original e geração de ocorrências complementares auditadas;
+      4. *Comprovantes são gerados após a marcação:* emissão instantânea com carimbo de tempo e identificador de validação pública;
+      5. *Trilhas de auditoria são preservadas:* histórico cronológico contínuo e NSR sequencial por estabelecimento para relatórios fiscais (AFD e AEJ);
+      6. *INPI e ICP-Brasil como etapas complementares:* registro de programa e certificados ICP-Brasil tratados com total transparência como etapas normativas complementares quando aplicáveis.
+    - **Prevenção de Alegações Indevidas:** Garantia de não declaração de homologação prévia do MTE, INPI concluído, assinatura ICP-Brasil ativa ou conformidade definitiva enquanto tais processos estiverem em trâmite regulatório.
+    - **Cobertura de Testes:** Atualização de `LandingPageTest` com verificação dos 6 pilares e ausência de declarações regulatórias indevidas.
   - **Adequação da Landing Page e Metadados SEO para REP-P + PTRP (Portaria 671):**
     - Revisão institucional de todo o conteúdo da Landing Page e metadados Open Graph/SEO, apresentando o sistema sob a arquitetura de controle de jornada digital REP-P + PTRP.
     - Remoção de terminologias de REP-A e promessas absolutas ("inviolável", "blindada", "100% aderente"), adotando linguagem de conformidade técnica, chave de integridade SHA-256 e trilha de auditoria para fins fiscais.

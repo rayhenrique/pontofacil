@@ -100,12 +100,23 @@ class LandingPageTest extends TestCase
         $response->assertDontSee('ponto bloqueado fora do raio');
         $response->assertDontSee('Bloqueia registros fora da filial');
 
-        // 6. Portaria 671 / REP-P + PTRP
+        // 6. Portaria 671 (Estrutura clara, sóbria e sem promessas regulatórias indevidas)
+        $response->assertSee('Estrutura preparada para a Portaria 671');
+        $response->assertSee('REP-P registra os eventos brutos');
+        $response->assertSee('PTRP trata jornadas, ocorrências e fechamento');
+        $response->assertSee('Registros de ponto não são alterados pelo tratamento');
+        $response->assertSee('Comprovantes são gerados após a marcação');
+        $response->assertSee('Trilhas de auditoria são preservadas');
+        $response->assertSee('INPI e ICP-Brasil como etapas complementares');
         $response->assertSee('Portaria 671 / MTP');
-        $response->assertSee('Registrador Eletrônico por Programa');
-        $response->assertSee('Tratamento do Registro de Ponto');
-        $response->assertSee('Leiautes Oficiais do MTE');
-        $response->assertSee('Privacidade e Proteção de Dados');
+
+        // Ausência de declarações regulatórias indevidas
+        $response->assertDontSee('homologado pelo MTE');
+        $response->assertDontSee('homologação MTE');
+        $response->assertDontSee('INPI concluído');
+        $response->assertDontSee('assinatura ICP-Brasil ativa');
+        $response->assertDontSee('conformidade definitiva');
+        $response->assertDontSee('tranquilidade jurídica completa');
 
         // 7. Demonstração Interativa
         $response->assertSee('Simplicidade na Ponta do Dedo');
