@@ -170,7 +170,7 @@ new #[Layout('layouts.app')] #[Title('Entrar no Sistema • PontoFácil')] class
                 </a>
             </p>
             <p class="text-[11px] text-gray-400">
-                Sistema em conformidade com a Portaria 671 / MTP (REP-A)
+                Sistema com arquitetura preparada para a Portaria 671 (REP-P + PTRP)
             </p>
         </div>
     </div>

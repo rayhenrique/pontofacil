@@ -12,7 +12,7 @@
                         <span class="relative inline-flex rounded-full h-2 w-2 bg-indigo-600"></span>
                     </span>
                     <span class="text-xs font-bold uppercase tracking-wider text-indigo-950">
-                        Gestão de Jornada 100% Digital & Inviolável
+                        Controle de Jornada Digital • REP-P + PTRP
                     </span>
                 </div>
 
@@ -28,7 +28,7 @@
                 <p class="gsap-hero-element text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto lg:mx-0 font-normal leading-relaxed">
                     Chega de planilhas manuais e biometrias quebradas. Controle de ponto eletrônico inteligente com 
                     <strong class="font-semibold text-slate-900">validação cruzada por QR Code dinâmico e geolocalização exata (GPS)</strong>, 
-                    100% aderente à Portaria 671 do Ministério do Trabalho e Previdência.
+                    com arquitetura preparada para a Portaria 671 (REP-P e PTRP) e trilha de auditoria.
                 </p>
 
                 <!-- Ações / CTAs -->
@@ -68,7 +68,7 @@
                         <svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                         </svg>
-                        <span>REP-A com hash SHA-256</span>
+                        <span>Ledger REP-P com hash SHA-256</span>
                     </div>
                 </div>
 
@@ -114,7 +114,7 @@
                                 </span>
                             </div>
                             <span class="px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 text-[11px] font-bold">
-                                REP-A Oficial
+                                REP-P + PTRP
                             </span>
                         </div>
 

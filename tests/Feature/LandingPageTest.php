@@ -12,7 +12,7 @@ class LandingPageTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('PontoFácil');
-        $response->assertSee('Adequado à Portaria 671 / MTP');
+        $response->assertSee('Arquitetura preparada para a Portaria 671');
         $response->assertSee('https://kltecnologia.com');
     }
 
@@ -22,7 +22,7 @@ class LandingPageTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('PontoFácil');
-        $response->assertSee('Adequado à Portaria 671 / MTP');
+        $response->assertSee('Arquitetura preparada para a Portaria 671');
         $response->assertSee('https://kltecnologia.com');
     }
 
@@ -34,16 +34,16 @@ class LandingPageTest extends TestCase
         // Hero Section
         $response->assertSee('Do Caos da Folha à');
         $response->assertSee('Precisão em 1 Segundo');
-        $response->assertSee('REP-A Oficial');
+        $response->assertSee('REP-P + PTRP');
 
         // Comparativo
         $response->assertSee('O Jeito Antigo');
         $response->assertSee('Com o PontoFácil');
 
         // Recursos (Tríade)
-        $response->assertSee('Validação Cruzada Inviolável');
+        $response->assertSee('Validação Cruzada Segura');
         $response->assertSee('Espelho Automatizado em Tempo Real');
-        $response->assertSee('Auditoria Imutável (Portaria 671)');
+        $response->assertSee('Trilha de Auditoria e Rastreabilidade');
 
         // Demonstração Interativa
         $response->assertSee('Visão do Colaborador');

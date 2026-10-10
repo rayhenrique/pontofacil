@@ -15,7 +15,7 @@
                     <span class="text-xl font-extrabold tracking-tight text-slate-900 group-hover:text-indigo-600 transition-colors">
                         Ponto<span class="text-indigo-600">Fácil</span>
                     </span>
-                    <span class="text-[10px] uppercase font-bold tracking-widest text-slate-600">SaaS REP-A</span>
+                    <span class="text-[10px] uppercase font-bold tracking-widest text-slate-600">REP-P + PTRP</span>
                 </div>
             </a>
 
@@ -25,7 +25,7 @@
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
-                <span class="text-xs font-semibold tracking-wide">Adequado à Portaria 671 / MTP</span>
+                <span class="text-xs font-semibold tracking-wide">Arquitetura preparada para a Portaria 671</span>
             </div>
 
             <!-- Desktop Navigation Links -->
@@ -82,7 +82,7 @@
         <!-- Mobile Badge -->
         <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-50/80 text-indigo-900 text-xs font-semibold w-fit">
             <span class="inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            Adequado à Portaria 671 / MTP
+            Arquitetura preparada para a Portaria 671
         </div>
 
         <nav class="flex flex-col space-y-2 pt-2">

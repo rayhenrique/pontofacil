@@ -22,7 +22,7 @@
         </h2>
 
         <p class="text-base sm:text-xl text-indigo-100/90 max-w-2xl mx-auto font-normal leading-relaxed">
-            Elimine o retrabalho manual com planilhas, blinde sua empresa contra passivos trabalhistas e proporcione a melhor experiência para seus colaboradores.
+            Elimine o retrabalho manual com planilhas, ganhe segurança e rastreabilidade na apuração de horas e proporcione a melhor experiência para seus colaboradores.
         </p>
 
         <!-- CTA Principal -->
@@ -56,7 +56,7 @@
                 <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                 </svg>
-                <span>Conforme Portaria 671 / MTP</span>
+                <span>Arquitetura Portaria 671 (REP-P + PTRP)</span>
             </div>
             <div class="flex items-center gap-2">
                 <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
@@ -88,7 +88,7 @@
                     </span>
                 </div>
                 <p class="text-slate-400 text-xs leading-relaxed max-w-sm">
-                    Solução de controle de jornada eletrônica alternativa (REP-A) homologada sob a Portaria 671 do Ministério do Trabalho e Previdência. Validação cruzada por QR Code dinâmico e cerca virtual de GPS.
+                    Controle de jornada digital com arquitetura REP-P + PTRP preparada para a Portaria 671 do Ministério do Trabalho e Previdência. Trilha de auditoria, validação cruzada por QR Code e cerca virtual de GPS.
                 </p>
                 <div class="text-[11px] text-slate-500 font-medium">
                     Desenvolvido com excelência por 
@@ -121,9 +121,9 @@
                 <div class="text-white font-bold text-xs uppercase tracking-wider">Conformidade & Fiscalização</div>
                 <ul class="space-y-2 text-slate-400">
                     <li><span class="text-slate-300">Portaria 671 / MTP</span></li>
-                    <li><span class="text-slate-300">Padrão REP-A Oficial</span></li>
+                    <li><span class="text-slate-300">Padrão REP-P + PTRP</span></li>
                     <li><span class="text-slate-300">Carimbo de Tempo NTP.br</span></li>
-                    <li><span class="text-slate-300">Hash Inviolável SHA-256</span></li>
+                    <li><span class="text-slate-300">Hash de Integridade SHA-256</span></li>
                     <li><span class="text-slate-300">Cerca Virtual com GPS</span></li>
                     <li class="pt-1.5">
                         <a href="{{ route('receipts.verify') }}" class="text-emerald-400 hover:text-emerald-300 font-semibold transition inline-flex items-center gap-1.5">
@@ -154,7 +154,7 @@
                 © {{ date('Y') }} PontoFácil. Todos os direitos reservados.
             </div>
             <div class="flex items-center gap-6">
-                <span>Portaria 671 MTP / REP-A</span>
+                <span>Portaria 671 MTP (REP-P + PTRP)</span>
                 <span>•</span>
                 <span>Fuso Oficial de Maceió (GMT-3)</span>
                 <span>•</span>

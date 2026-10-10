@@ -381,11 +381,11 @@
                         </div>
 
                         <h3 class="text-lg font-bold text-slate-900 mb-2">
-                            Lançamento Oficial REP-A (Portaria 671 / MTP)
+                            Lançamento Inicial da Plataforma (Portaria 671 / MTP)
                         </h3>
 
                         <p class="text-sm text-slate-600 mb-3 leading-relaxed">
-                            Início da plataforma comercial com validação dupla pioneira (QR Code + Cerca Virtual GPS) e emissão de comprovantes eletrônicos com assinatura digital.
+                            Início da plataforma comercial com validação dupla pioneira (QR Code + Cerca Virtual GPS) e emissão de comprovantes com código de validação e hash de integridade.
                         </p>
 
                         <div class="flex flex-wrap gap-2 text-[11px] font-medium text-slate-600">

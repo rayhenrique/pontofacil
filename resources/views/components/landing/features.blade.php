@@ -7,9 +7,9 @@
                 <span>Tríade de Poder</span>
             </div>
             <h2 class="text-3xl sm:text-4xl md:text-5xl font-black text-slate-900 tracking-tight">
-                Arquitetura Blindada para <br class="hidden sm:inline" />
+                Arquitetura Preparada para <br class="hidden sm:inline" />
                 <span class="bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 bg-clip-text text-transparent">
-                    Máxima Segurança Jurídica
+                    Conformidade e Rastreabilidade
                 </span>
             </h2>
             <p class="text-base sm:text-lg text-slate-600 font-normal leading-relaxed">
@@ -32,7 +32,7 @@
                     </div>
 
                     <h3 class="text-xl font-bold text-slate-900 tracking-tight">
-                        Validação Cruzada Inviolável
+                        Validação Cruzada Segura
                     </h3>
 
                     <p class="text-sm text-slate-600 leading-relaxed">
@@ -112,7 +112,7 @@
                 </div>
             </div>
 
-            <!-- Card 3: Conformidade Total Portaria 671 (REP-A) -->
+            <!-- Card 3: Arquitetura REP-P + PTRP (Portaria 671) -->
             <div class="gsap-feature-card bg-white/80 backdrop-blur-md border border-slate-200/80 rounded-3xl p-8 shadow-sm hover:shadow-xl hover:border-indigo-200 transition-all duration-300 flex flex-col justify-between group">
                 <div class="space-y-6">
                     <!-- Ícone com Gradiente -->
@@ -123,18 +123,18 @@
                     </div>
 
                     <h3 class="text-xl font-bold text-slate-900 tracking-tight">
-                        Auditoria Imutável (Portaria 671)
+                        Trilha de Auditoria e Rastreabilidade
                     </h3>
 
                     <p class="text-sm text-slate-600 leading-relaxed">
-                        Homologado sob a modalidade REP-A. Cada batida gera assinatura eletrônica com carimbo temporal inviolável (GMT-3). Ajustes manuais exigem justificativa com trilha de auditoria completa.
+                        Arquitetura preparada para a Portaria 671 (REP-P e PTRP). Cada marcação conta com carimbo temporal auditado (GMT-3) e chave de integridade. Tratamentos e ajustes no PTRP possuem trilha de auditoria completa.
                     </p>
 
                     <!-- Selo de Imutabilidade / Hash SHA-256 -->
                     <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-2">
                         <div class="flex items-center justify-between text-xs font-semibold">
                             <span class="text-slate-700">Comprovante Eletrônico</span>
-                            <span class="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded">Inviolável</span>
+                            <span class="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded">Auditável</span>
                         </div>
                         <div class="text-[10px] font-mono text-slate-600 bg-white p-2 rounded-lg border border-slate-200/60 truncate">
                             SHA-256: e3b0c44298fc1c149afbf4c8996fb924...
@@ -149,7 +149,7 @@
                 </div>
 
                 <div class="pt-6 mt-6 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-indigo-600">
-                    <span>100% aderente ao MTP</span>
+                    <span>Estrutura preparada para conformidade fiscal</span>
                     <svg class="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
                     </svg>

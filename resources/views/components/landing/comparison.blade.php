@@ -129,7 +129,7 @@
                             </svg>
                             Com o PontoFácil
                         </div>
-                        <span class="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md">Portaria 671 (REP-A)</span>
+                        <span class="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md">Portaria 671 (REP-P + PTRP)</span>
                     </div>
 
                     <h3 class="text-2xl font-bold text-slate-900 tracking-tight">
@@ -137,7 +137,7 @@
                     </h3>
 
                     <p class="text-sm text-slate-600 leading-relaxed">
-                        Validação física e geográfica em tempo real com espelho de ponto instantâneo e conformidade jurídica blindada.
+                        Validação física e geográfica em tempo real com espelho de ponto instantâneo e estrutura preparada para conformidade fiscal.
                     </p>
 
                     <!-- Lista de Vantagens (Check Verde) -->
@@ -198,7 +198,7 @@
                             </div>
                             <span class="text-sm text-slate-700 leading-snug">
                                 <strong class="text-slate-900 font-bold">Trilha de auditoria permanente:</strong> 
-                                Carimbo temporal oficial inviolável e comprovante eletrônico com hash SHA-256.
+                                Carimbo temporal oficial auditado e comprovante eletrônico com hash SHA-256.
                             </span>
                         </li>
                     </ul>
@@ -209,7 +209,7 @@
                         <svg class="w-5 h-5 shrink-0 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
                         </svg>
-                        <span>Resultado: Fechamento em minutos e proteção jurídica total.</span>
+                        <span>Resultado: Fechamento em minutos com rastreabilidade e conformidade fiscal.</span>
                     </div>
                     <a href="{{ route('login') }}" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 group">
                         <span>Acessar</span>

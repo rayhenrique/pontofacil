@@ -188,7 +188,7 @@
                                 </div>
                                 <div class="text-sm">
                                     <strong class="text-slate-900 font-semibold">Comprovante eletrônico imediato:</strong>
-                                    <span class="text-slate-600"> Assinatura digital inviolável com carimbo de tempo oficial.</span>
+                                    <span class="text-slate-600"> Comprovante com identificador único, carimbo de tempo oficial e hash de integridade.</span>
                                 </div>
                             </div>
                         </div>
@@ -224,7 +224,7 @@
                                 <h3 class="text-xl font-bold text-slate-900">Painel Geral de Monitoramento • RH</h3>
                             </div>
                             <p class="text-xs text-slate-500 mt-1">
-                                Visão consolidada em tempo real com regras da Portaria 671 (REP-A)
+                                Visão consolidada em tempo real com regras da Portaria 671 (REP-P + PTRP)
                             </p>
                         </div>
                         <div class="flex items-center gap-3">

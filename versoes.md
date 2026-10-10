@@ -36,16 +36,25 @@
     - Inconsistência do AEJ corrigida: certificado pendente nunca resulta em `isHomologated = true`.
   - **Pacote Fiscal MTE (README e Manifesto):**
     - README atualizado para referenciar o ledger central da ARP (`arp_events`), CRC-16/KERMIT, SHA-256 Tipo 7 e o modo não homologado de desenvolvimento.
+  - **Congelamento Documental das Referências Oficiais MTE (31/07/2026):**
+    - Os leiautes oficiais de referência usados na implementação foram congelados em `ref/mte/2026-07-31/` (`afd.pdf` e `aej.pdf`).
+    - Hashes SHA-256 imutáveis registrados em `SHA256SUMS.txt` garantem rastreabilidade documental contra eventuais substituições silenciosas de conteúdo na mesma URL do portal `gov.br`.
+    - Futuras mudanças regulatórias do MTE exigirão nova referência versionada em diretório próprio (`ref/mte/YYYY-MM-DD/`), mantendo os registros históricos intactos.
+    - Teste automatizado offline `MteReferenceDocumentsIntegrityTest` assegura a integridade contínua dos binários locais sem dependência de runtime ou rede.
   - **Arquitetura Não-Bloqueante (INPI & ICP-Brasil):**
     - O sistema continua 100% operacional sem bloquear registros de ponto, ARP, PTRP, fechamento mensal, banco de horas, espelhos ou exportações de desenvolvimento.
   - **Golden Tests Read-Only:**
     - Fixtures `golden_afd_mte_2026.txt` (versão `004`) e `golden_aej_mte_2026.txt` (versão `001`) congeladas e validadas byte a byte em formato Windows CRLF.
+  - **Adequação da Landing Page e Metadados SEO para REP-P + PTRP (Portaria 671):**
+    - Revisão institucional de todo o conteúdo da Landing Page e metadados Open Graph/SEO, apresentando o sistema sob a arquitetura de controle de jornada digital REP-P + PTRP.
+    - Remoção de terminologias de REP-A e promessas absolutas ("inviolável", "blindada", "100% aderente"), adotando linguagem de conformidade técnica, chave de integridade SHA-256 e trilha de auditoria para fins fiscais.
+    - Atualização das asserções de texto em `LandingPageTest` para garantir conformidade contínua do texto institucional.
   - **Responsividade e Ergonomia da Tela de Bater Ponto (Mobile & Viewport Compacta):**
     - **Visibilidade Contínua do Botão "Escanear QR Code":** Redução de espaçamentos verticais excessivos e dimensionamento fluído do `#qr-reader` (`max-w-[190px]` a `max-w-[250px]`) com guias de foco e mira ("Câmera pronta"), garantindo que o botão principal de batida fique 100% visível sem rolagem em qualquer dispositivo (desktop, laptops 1366x768 e smartphones).
     - **Compactação do Relógio Digital:** Media queries dinâmicas (`@media (max-height)`) para preservar data, relógio oficial em segundos e fuso horário mesmo em telas compactas.
     - **Proteção Contra Sobreposição:** Ajuste do padding inferior do layout principal para manter margem limpa de segurança sobre a barra de navegação móvel (`bottom-nav`).
     - **Dimensionamento Dinâmico de QR Box:** Função de cálculo proporcional do leitor de QR Code para prevenir falhas de inicialização em viewports reduzidas.
-  - **Suíte de Testes Expandida:** `169 testes e 906 asserções 100% aprovados`.
+  - **Suíte de Testes Expandida:** `172 testes e 923 asserções 100% aprovados`.
 
 ## v2.4.0
 - **Compliance Portaria MTP 671/2021, ARP Completa e Integridade Criptográfica:**
