@@ -78,11 +78,20 @@ class LandingPageTest extends TestCase
         $response->assertSee('QR Code Dinâmico por Setor');
         $response->assertSee('Relatórios e Integração com Folha');
 
-        // 5. Segurança e Rastreabilidade
-        $response->assertSee('Trilha de auditoria contínua e dados protegidos');
-        $response->assertSee('Chave de Integridade SHA-256');
-        $response->assertSee('Validação Pública de Comprovantes');
-        $response->assertSee('Evidências Adicionais de Localização');
+        // 5. Segurança e Rastreabilidade (Linguagem técnica e confiável)
+        $response->assertSee('Rastreabilidade desde o registro e trilha de auditoria');
+        $response->assertSee('Registros imutáveis da ARP e NSR sequencial');
+        $response->assertSee('Integridade com Hash SHA-256');
+        $response->assertSee('Registro bruto separado do tratamento');
+        $response->assertSee('Comprovantes e histórico de marcações');
+        $response->assertSee('Validar comprovante');
+
+        // Ausência de termos exagerados e promessas absolutas
+        $response->assertDontSee('Arquitetura Blindada');
+        $response->assertDontSee('Máxima Segurança Jurídica');
+        $response->assertDontSee('Proteção jurídica total');
+        $response->assertDontSee('Inviolável');
+        $response->assertDontSee('segurança jurídica irrefutável');
 
         // Garantir que a localização nunca é apresentada como motivo para bloquear a marcação
         $response->assertDontSee('o registro só é aceito quando');

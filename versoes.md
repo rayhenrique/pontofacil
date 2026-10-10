@@ -53,6 +53,15 @@
     - O sistema continua 100% operacional sem bloquear registros de ponto, ARP, PTRP, fechamento mensal, banco de horas, espelhos ou exportações de desenvolvimento.
   - **Golden Tests Read-Only:**
     - Fixtures `golden_afd_mte_2026.txt` (versão `004`) e `golden_aej_mte_2026.txt` (versão `001`) congeladas e validadas byte a byte em formato Windows CRLF.
+  - **Refatoração Técnica da Seção de Segurança da Landing Page:**
+    - **Linguagem Técnica e Confiável:** Substituição de expressões exageradas ou com sugestão de garantia absoluta ("Arquitetura Blindada", "Máxima Segurança Jurídica", "Proteção jurídica total", "Inviolável", "segurança jurídica irrefutável") por terminologia técnica, precisa e auditável.
+    - **4 Pilares Técnicos Fundamentais:**
+      1. *Rastreabilidade desde o registro e trilha de auditoria:* visão arquitetural com cadeia de custódia e histórico contínuo;
+      2. *Registros imutáveis da ARP e NSR sequencial:* preservação perpétua no ledger de eventos com NSR contínuo por estabelecimento;
+      3. *Integridade com Hash SHA-256:* encadeamento fiscal a partir do evento anterior para auditoria e conferência sequencial;
+      4. *Registro bruto separado do tratamento de jornada:* modelo REP-P (dado original bruto na ARP) desacoplado do PTRP (cálculos, espelho e ajustes sem sobrescrever batidas);
+      5. *Comprovantes e histórico de marcações:* recibo digital instantâneo com identificador e carimbo de tempo, com portal de conferência pública acessível a auditores e trabalhadores.
+    - **Testes Automatizados:** Atualização de `LandingPageTest` com asserções estritas (`assertSee` para os novos pilares e `assertDontSee` para expressões exageradas e garantias jurídicas absolutas).
   - **Adequação da Landing Page e Metadados SEO para REP-P + PTRP (Portaria 671):**
     - Revisão institucional de todo o conteúdo da Landing Page e metadados Open Graph/SEO, apresentando o sistema sob a arquitetura de controle de jornada digital REP-P + PTRP.
     - Remoção de terminologias de REP-A e promessas absolutas ("inviolável", "blindada", "100% aderente"), adotando linguagem de conformidade técnica, chave de integridade SHA-256 e trilha de auditoria para fins fiscais.
