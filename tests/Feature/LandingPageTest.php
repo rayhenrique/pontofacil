@@ -53,11 +53,23 @@ class LandingPageTest extends TestCase
         $response->assertSee('Gestores acompanham jornadas e ocorrências');
         $response->assertSee('RH trata ajustes, banco de horas e fechamento');
 
-        // 3. Para o colaborador / Para a empresa
-        $response->assertSee('Para o Colaborador');
-        $response->assertSee('Para a Empresa e Gestão');
-        $response->assertSee('Rotina ágil sem filas nem complicação');
-        $response->assertSee('Fechamento sem estresse e conformidade fiscal');
+        // 3. Colaborador x Empresa (Para quem registra vs Para quem gerencia)
+        $response->assertSee('Colaborador x Empresa');
+        $response->assertSee('Para quem registra');
+        $response->assertSee('Para quem gerencia');
+        // Itens do Colaborador
+        $response->assertSee('Registrar ponto:');
+        $response->assertSee('Visualizar histórico:');
+        $response->assertSee('Receber comprovantes:');
+        $response->assertSee('Consultar espelho:');
+        $response->assertSee('Solicitar ajustes:');
+        // Itens da Empresa / Gestão
+        $response->assertSee('Acompanhar jornadas:');
+        $response->assertSee('Tratar ocorrências:');
+        $response->assertSee('Banco de horas:');
+        $response->assertSee('Fechamento:');
+        $response->assertSee('Relatórios:');
+        $response->assertSee('Auditoria:');
 
         // 4. Principais Recursos
         $response->assertSee('Tudo o que sua gestão precisa em um único sistema');
