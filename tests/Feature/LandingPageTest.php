@@ -96,6 +96,13 @@ class LandingPageTest extends TestCase
         $response->assertSee('Comece agora mesmo');
         $response->assertSee('KL Tecnologia');
 
+        // Garantir que a timeline técnica de versões não está presente na landing page comercial
+        $response->assertDontSee('id="evolucao"', false);
+        $response->assertDontSee('#evolucao');
+        $response->assertDontSee('gsap-timeline-item');
+        $response->assertDontSee('Estrutura Híbrida Inteligente de Setores');
+        $response->assertDontSee('Evolução & Versões');
+
         // Validação da ordem estrita de renderização das 8 seções
         $content = $response->getContent();
         $posHero = strpos($content, 'id="hero"');
@@ -149,8 +156,9 @@ class LandingPageTest extends TestCase
         $response->assertSee('Entrar');
         $response->assertSee('Entrar no sistema');
 
-        // Ausência de termos obsoletos
+        // Ausência de termos obsoletos e seções removidas
         $response->assertDontSee('SaaS REP-A');
+        $response->assertDontSee('Evolução');
     }
 
     public function test_login_page_contains_link_to_landing(): void

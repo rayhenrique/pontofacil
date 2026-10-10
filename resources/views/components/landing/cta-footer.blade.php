@@ -109,10 +109,12 @@
                 <div class="text-white font-bold text-xs uppercase tracking-wider">Navegação</div>
                 <ul class="space-y-2 text-slate-400">
                     <li><a href="#hero" class="hover:text-indigo-400 transition">Início</a></li>
+                    <li><a href="#como-funciona" class="hover:text-indigo-400 transition">Como Funciona</a></li>
+                    <li><a href="#para-empresas" class="hover:text-indigo-400 transition">Para Empresas</a></li>
                     <li><a href="#recursos" class="hover:text-indigo-400 transition">Recursos Principais</a></li>
-                    <li><a href="#comparativo" class="hover:text-indigo-400 transition">Comparativo</a></li>
+                    <li><a href="#seguranca" class="hover:text-indigo-400 transition">Segurança</a></li>
+                    <li><a href="#portaria-671" class="hover:text-indigo-400 transition">Portaria 671</a></li>
                     <li><a href="#demonstracao" class="hover:text-indigo-400 transition">Demonstração</a></li>
-                    <li><a href="#evolucao" class="hover:text-indigo-400 transition">Evolução & Versões</a></li>
                 </ul>
             </div>
 

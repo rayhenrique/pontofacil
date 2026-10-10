@@ -41,7 +41,7 @@
     - **Didática de Apresentação:** Explicar primeiro o produto (Hero + Como funciona), depois os benefícios para ambas as partes (Colaborador vs Empresa + Recursos centrais) e somente depois os detalhes técnicos e fiscais (Segurança + Portaria 671).
     - **Compactação e Otimização Mobile:** Espaçamentos verticais calibrados para dispositivos móveis (`py-10 sm:py-14 md:py-20`), eliminando áreas vazias excessivas e melhorando a progressão visual em telas pequenas (320px a 430px).
     - **Micro-animações GSAP:** Integração com ScrollTrigger para os novos blocos com staggers suaves em desktop e carregamento leve em mobile.
-    - **Preservação Arquitetural:** Zero alterações de backend, controllers ou rotas. Componentes legados mantidos intactos no repositório.
+    - **Preservação Arquitetural & Remoção da Timeline Comercial:** A timeline técnica de versões foi removida da landing comercial pública por se tratar de informação técnica interna. O histórico completo segue rigorosamente preservado neste documento (`versoes.md`), na documentação e no modal interno do sistema (`components/help.blade.php`). Foram eliminados links (`#evolucao`), IDs e animações GSAP residuais da landing, mantendo a página enxuta e focada na proposta de valor.
   - **Congelamento Documental das Referências Oficiais MTE (31/07/2026):**
     - Os leiautes oficiais de referência usados na implementação foram congelados em `ref/mte/2026-07-31/` (`afd.pdf` e `aej.pdf`).
     - Hashes SHA-256 imutáveis registrados em `SHA256SUMS.txt` garantem rastreabilidade documental contra eventuais substituições silenciosas de conteúdo na mesma URL do portal `gov.br`.

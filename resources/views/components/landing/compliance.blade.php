@@ -1,5 +1,4 @@
 <section id="portaria-671" class="py-10 sm:py-14 md:py-20 relative">
-    <div id="evolucao" class="absolute -top-24 left-0 pointer-events-none"></div>
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         <!-- Cabeçalho da Seção -->
