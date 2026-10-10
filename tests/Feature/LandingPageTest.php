@@ -32,9 +32,9 @@ class LandingPageTest extends TestCase
 
         $response->assertOk();
         // Hero Section
-        $response->assertSee('Do Caos da Folha à');
-        $response->assertSee('Precisão em 1 Segundo');
-        $response->assertSee('REP-P + PTRP');
+        $response->assertSee('Ponto eletrônico simples para o colaborador');
+        $response->assertSee('Gestão completa para a empresa');
+        $response->assertSee('Controle de jornada digital • REP-P + PTRP');
 
         // Comparativo
         $response->assertSee('O Jeito Antigo');

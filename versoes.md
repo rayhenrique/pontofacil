@@ -54,6 +54,12 @@
     - **Compactação do Relógio Digital:** Media queries dinâmicas (`@media (max-height)`) para preservar data, relógio oficial em segundos e fuso horário mesmo em telas compactas.
     - **Proteção Contra Sobreposição:** Ajuste do padding inferior do layout principal para manter margem limpa de segurança sobre a barra de navegação móvel (`bottom-nav`).
     - **Dimensionamento Dinâmico de QR Box:** Função de cálculo proporcional do leitor de QR Code para prevenir falhas de inicialização em viewports reduzidas.
+  - **Redesenho Mobile-First do Hero da Landing Page:**
+    - **Comunicação Direta e Descomplicada:** Foco na clareza do produto em poucos segundos, eliminando hipérboles publicitárias e enfatizando a proposta de valor: "Ponto eletrônico simples para o colaborador. Gestão completa para a empresa."
+    - **Legibilidade em Telas Compactas:** Título responsivo limitado a no máximo 3–4 linhas no mobile (`text-2xl min-[360px]:text-[28px] sm:text-4xl lg:text-5xl xl:text-6xl`), com quebras semânticas e subtítulo direto sobre registro, espelhos, ajustes e banco de horas.
+    - **Acesso ao Sistema em Destaque:** Ações primárias e secundárias com largura total no mobile (`w-full sm:w-auto`), facilitando o toque com transição dinâmica de "Entrar no PontoFácil" / "Ir para o Sistema" e "Conhecer os recursos".
+    - **Fluxo Visual Otimizado:** Posicionamento imediato do mockup interativo de registro de ponto logo após os botões de ação no mobile, eliminação de vácuos verticais desnecessários e paddings compactados (`pt-6 pb-12 sm:pt-10 sm:pb-16`).
+    - **Compatibilidade Extensiva:** Excelente leitura e fluidez em larguras estritas (320px, 360px, 390px, 430px e superiores), preservando rigorosamente a identidade visual branco + slate + índigo.
   - **Suíte de Testes Expandida:** `172 testes e 923 asserções 100% aprovados`.
 
 ## v2.4.0
