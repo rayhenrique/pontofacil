@@ -1,6 +1,25 @@
 # Histórico de Versões (Changelog)
 
 ## v2.5.1 (Atual)
+- **Revisão Final de UX Writing, Sobriedade e Acabamento da Landing Page:**
+  - **Remoção de Expressões Genéricas e Hype de Marketing:**
+    - Eliminação completa de clichês e termos superlativos ("nova era", "Comece agora mesmo", "Implantação Instantânea", "Poder Total", "segurança máxima", "inviolável", "100% seguro", "perpétuo").
+    - Adoção de redação operacional clara voltada para empresários, RH, DP, gestores e colaboradores: *"Organize a jornada da sua equipe em um só lugar"* e *"Registre, acompanhe e feche jornadas com menos retrabalho"*.
+  - **CTA Final Sóbrio e Enxuto:**
+    - Título refinado: *"Pronto para organizar a jornada da sua equipe?"* com subtítulo *"Registre, acompanhe e feche jornadas com menos retrabalho."* e corpo explicativo *"Registre pontos, acompanhe ocorrências, banco de horas e fechamento em um único sistema."*.
+    - Botão primário sóbrio: *"Entrar no PontoFácil"* e secundário: *"Conhecer os recursos"*. Remoção do badge "Implantação Instantânea".
+  - **Hero Benefit-First:**
+    - Badge do topo reestruturado para benefícios antes de siglas técnicas: *"Controle de jornada digital • Simples no celular, seguro para a empresa"*, reservando detalhes técnicos de REP-P/PTRP para a seção de conformidade.
+  - **Correção de Afirmações Técnicas:**
+    - Substituição de afirmações de segurança indevidas ("assinatura de segurança" / "comprovante assinado") por termos técnicos precisos: *"registro com dados de integridade"* e *"comprovante digital com dados de integridade"*.
+    - Zero declarações precipitadas de homologação governamental prévia, certificado ativo, INPI concluído ou assinatura ICP-Brasil enquanto pendentes.
+  - **Simplificação do Rodapé (~40% mais enxuto):**
+    - Remoção de detalhes de implementação interna desnecessários no footer comercial (NTP.br, SHA-256, cerca virtual, fuso de Maceió GMT-3). O fuso horário é responsabilidade de configuração por estabelecimento.
+    - Estrutura limpa: marca PontoFácil (*"Controle de ponto e gestão de jornada"*), links de navegação (`Recursos`, `Para empresas`, `Segurança`, `Portaria 671`, `Verificar comprovante`, `Entrar`), direitos autorais e *"Desenvolvido por KL Tecnologia"*.
+  - **Validação de Navegação e Responsividade Mobile-First:**
+    - Todos os anchors (`#hero`, `#como-funciona`, `#para-empresas`, `#recursos`, `#seguranca`, `#portaria-671`, `#demonstracao`, `#contato`) e rotas ativas checados sem links órfãos ou quebrados.
+    - Testado visualmente e medido sem qualquer overflow horizontal (scrollWidth <= innerWidth) em 320px, 360px, 375px, 390px, 430px, 768px, 1024px, 1280px e 1440px+.
+    - Testes automatizados atualizados (`LandingPageTest`) com 100% de aprovação (175 testes no total).
 - **Identidade Própria e Design com Elementos Reais do Domínio de Ponto (Landing Page):**
   - **Identidade do Produto Sem Dependência de Ícones Genéricos:**
     - O próprio dado de jornada virou elemento de design: horário (`08:01:32`), operação (`ENTRADA`/`SAÍDA`), `NSR #000004281`, jornadas, saldos (`+09m`, `-01m`, `+16m`), comprovantes (`PF-2026-8942-01`), espelhos de ponto e conciliação.

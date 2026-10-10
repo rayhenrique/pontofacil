@@ -65,7 +65,7 @@
                             O sistema gera o registro e o comprovante
                         </h3>
                         <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                            A marcação é gravada com horário preciso e assinatura de segurança, disponibilizando o recibo digital na hora.
+                            A marcação é gravada com horário preciso e dados de integridade, disponibilizando o recibo digital na hora.
                         </p>
                         <p class="text-[11px] font-semibold text-emerald-600 pt-1">
                             Comprovante digital imediato

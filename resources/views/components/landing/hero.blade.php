@@ -12,7 +12,7 @@
                         <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                     </span>
                     <span class="text-[11px] sm:text-xs font-bold tracking-tight sm:tracking-wider text-indigo-950 uppercase">
-                        Controle de jornada digital • REP-P + PTRP
+                        Controle de jornada digital • Simples no celular, seguro para a empresa
                     </span>
                 </div>
 

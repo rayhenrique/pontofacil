@@ -5,7 +5,7 @@
         <div class="text-center max-w-3xl mx-auto mb-8 sm:mb-10 space-y-2">
             <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-indigo-50 border border-indigo-100/80 text-indigo-700 text-xs font-bold uppercase tracking-wider">
                 <span class="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
-                <span>Ciclo do Registro • REP-P & PTRP</span>
+                <span>Ciclo do Registro • Do Celular ao Fechamento</span>
             </div>
             <h2 class="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 tracking-tight">
                 O que acontece quando alguém registra o ponto?
@@ -116,7 +116,7 @@
                         </div>
 
                         <p class="text-xs text-slate-600 leading-relaxed pt-1">
-                            O colaborador recebe na hora o comprovante eletrônico assinado para consulta ou download a qualquer tempo.
+                            O colaborador recebe na hora o comprovante digital com dados de integridade para consulta ou download a qualquer tempo.
                         </p>
                     </div>
 

@@ -35,7 +35,7 @@ class LandingPageTest extends TestCase
         // 1. Hero Section & Mockup da Tela Real do PontoFácil
         $response->assertSee('Ponto eletrônico simples para o colaborador');
         $response->assertSee('Gestão completa para a empresa');
-        $response->assertSee('Controle de jornada digital • REP-P + PTRP');
+        $response->assertSee('Controle de jornada digital • Simples no celular, seguro para a empresa');
         $response->assertSee('Olá, Carlos');
         $response->assertSee('Você ainda não registrou a saída');
         $response->assertSee('Registrar ponto');
@@ -125,9 +125,14 @@ class LandingPageTest extends TestCase
         $response->assertSee('gsap-scanner-laser');
 
         // 8. CTA Final & Footer
-        $response->assertSee('Sua gestão de ponto pronta para a nova era');
-        $response->assertSee('Comece agora mesmo');
+        $response->assertSee('Pronto para organizar a jornada da sua equipe?');
+        $response->assertSee('Registre, acompanhe e feche jornadas com menos retrabalho');
+        $response->assertSee('Entrar no PontoFácil');
         $response->assertSee('KL Tecnologia');
+        $response->assertDontSee('nova era');
+        $response->assertDontSee('Comece agora mesmo');
+        $response->assertDontSee('Implantação Instantânea');
+        $response->assertDontSee('Fuso Oficial de Maceió');
         $response->assertDontSee('shadow-2xl');
 
         // Garantir que a timeline técnica de versões não está presente na landing page comercial
