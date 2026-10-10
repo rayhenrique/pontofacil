@@ -50,6 +50,7 @@ Route::middleware('auth')->group(function () {
     // Management Routes (Admin & Gestor)
     Route::middleware('can:manageEmployees,App\Models\User')->prefix('admin')->name('admin.')->group(function () {
         Route::livewire('/employees', 'admin.employees')->name('employees');
+        Route::livewire('/shifts', 'admin.shifts-management')->name('shifts');
     });
 
     // PTRP Treatment Requests (Admin & Gestor - Segregação Operacional / RH)

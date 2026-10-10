@@ -74,6 +74,11 @@ class Employee extends Model
         return $this->hasMany(WorkScheduleAssignment::class)->orderBy('effective_from', 'desc');
     }
 
+    public function shiftAssignments(): HasMany
+    {
+        return $this->hasMany(ShiftAssignment::class)->orderBy('start_at_local', 'asc');
+    }
+
     public function timeBankAccount(): HasOne
     {
         return $this->hasOne(TimeBankAccount::class);

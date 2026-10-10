@@ -44,6 +44,15 @@ class WorkSchedule extends Model
         'active' => 'boolean',
     ];
 
+    protected $attributes = [
+        'schedule_data' => '[]',
+        'cycle_data' => '[]',
+        'tolerance_minutes' => 5,
+        'daily_tolerance_minutes' => 10,
+        'timezone' => 'America/Sao_Paulo',
+        'active' => true,
+    ];
+
     public function employees(): HasMany
     {
         return $this->hasMany(Employee::class);
@@ -52,6 +61,11 @@ class WorkSchedule extends Model
     public function assignments(): HasMany
     {
         return $this->hasMany(WorkScheduleAssignment::class);
+    }
+
+    public function shiftAssignments(): HasMany
+    {
+        return $this->hasMany(ShiftAssignment::class);
     }
 
     /**
