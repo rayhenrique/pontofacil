@@ -35,7 +35,12 @@
 @push('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        if (typeof gsap === 'undefined') return;
+        // Verificar preferência de movimento reduzido (Acessibilidade)
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (prefersReducedMotion) {
+            // Em modo reduzido, manter layout estático limpo sem disparar animações nem loops
+            return;
+        }
 
         // Registrar o plugin ScrollTrigger
         gsap.registerPlugin(ScrollTrigger);

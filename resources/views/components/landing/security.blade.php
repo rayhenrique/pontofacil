@@ -108,7 +108,9 @@
                 </div>
 
                 <div class="pt-3 mt-4 border-t border-slate-100 flex items-center justify-between text-[11px] sm:text-xs font-semibold text-emerald-700">
-                    <a href="{{ route('receipts.verify') }}" class="hover:underline flex items-center gap-1">
+                    <a href="{{ route('receipts.verify') }}" 
+                       class="hover:underline flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 rounded-md py-1"
+                       aria-label="Validar comprovante de ponto no portal público">
                         <span>Validar comprovante</span>
                         <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />

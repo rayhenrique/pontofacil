@@ -227,6 +227,40 @@ class LandingPageTest extends TestCase
         $response->assertDontSee('ponto GPS');
     }
 
+    public function test_landing_page_accessibility_and_responsive_attributes(): void
+    {
+        $response = $this->get(route('landing'));
+
+        $response->assertOk();
+
+        // 1. Skip link para navegação por teclado / leitores de tela
+        $response->assertSee('href="#hero"', false);
+        $response->assertSee('Pular para o conteúdo principal');
+
+        // 2. Respeito a preferência de movimento reduzido (prefers-reduced-motion)
+        $response->assertSee('@media (prefers-reduced-motion: reduce)', false);
+        $response->assertSee('prefers-reduced-motion: reduce', false);
+
+        // 3. Acessibilidade do Menu Mobile
+        $response->assertSee('aria-controls="mobile-menu"', false);
+        $response->assertSee('id="mobile-menu"', false);
+        $response->assertSee('role="region"', false);
+        $response->assertSee('aria-label="Menu móvel de navegação"', false);
+
+        // 4. Acessibilidade dos Seletores de Abas (Tabs)
+        $response->assertSee('role="tablist"', false);
+        $response->assertSee('role="tab"', false);
+        $response->assertSee('role="tabpanel"', false);
+
+        // 5. Botões e Ações com labels acessíveis
+        $response->assertSee('aria-label="Registrar ponto demonstrativo"', false);
+        $response->assertSee('aria-label="Validar comprovante de ponto no portal público"', false);
+
+        // 6. Foco visível (focus-visible)
+        $response->assertSee('focus-visible:outline-none', false);
+        $response->assertSee('focus-visible:ring-2', false);
+    }
+
     public function test_login_page_contains_link_to_landing(): void
     {
         $response = $this->get(route('login'));

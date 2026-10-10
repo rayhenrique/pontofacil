@@ -46,9 +46,24 @@
             font-feature-settings: "tnum" 1;
             font-variant-numeric: tabular-nums;
         }
+        /* Respeito a usuários com preferência de movimento reduzido */
+        @media (prefers-reduced-motion: reduce) {
+            *, ::before, ::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
+        }
     </style>
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-900 antialiased relative overflow-x-hidden selection:bg-indigo-600 selection:text-white">
+
+    <!-- Link de Acessibilidade: Pular para o Conteúdo Principal -->
+    <a href="#hero" 
+       class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2.5 focus:bg-indigo-600 focus:text-white focus:rounded-xl focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 text-sm font-semibold">
+        Pular para o conteúdo principal
+    </a>
 
     <!-- Fundo Visual Limpo e Sóbrio com Alto Contraste -->
     <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">

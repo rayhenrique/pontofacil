@@ -22,11 +22,17 @@
             
             <!-- Botões Seletor de Tabs -->
             <div class="flex justify-center">
-                <div class="inline-flex p-1.5 rounded-2xl bg-slate-200/80 border border-slate-300/60 shadow-inner">
+                <div class="inline-flex p-1.5 rounded-2xl bg-slate-200/80 border border-slate-300/60 shadow-inner"
+                     role="tablist"
+                     aria-label="Demonstração interativa do sistema">
                     <button @click="tab = 'colaborador'" 
+                            id="tab-preview-colaborador"
+                            role="tab"
+                            :aria-selected="tab === 'colaborador'"
+                            aria-controls="panel-preview-colaborador"
                             type="button" 
                             :class="tab === 'colaborador' ? 'bg-white text-indigo-600 shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 font-semibold'"
-                            class="flex items-center gap-2.5 px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm transition-all duration-200 focus:outline-hidden">
+                            class="flex items-center gap-2.5 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 min-h-[44px] cursor-pointer">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
                         </svg>
@@ -35,9 +41,13 @@
                     </button>
 
                     <button @click="tab = 'gestor'" 
+                            id="tab-preview-gestor"
+                            role="tab"
+                            :aria-selected="tab === 'gestor'"
+                            aria-controls="panel-preview-gestor"
                             type="button" 
                             :class="tab === 'gestor' ? 'bg-white text-indigo-600 shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 font-semibold'"
-                            class="flex items-center gap-2.5 px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm transition-all duration-200 focus:outline-hidden">
+                            class="flex items-center gap-2.5 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 min-h-[44px] cursor-pointer">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.143 2.143L15.75 6" />
                         </svg>
@@ -50,16 +60,19 @@
             <!-- TAB 1: VISÃO DO COLABORADOR (MOCKUP SCANNER QR CODE COM LASER GSAP) -->
             <div x-show="tab === 'colaborador'" 
                  x-cloak
+                 id="panel-preview-colaborador"
+                 role="tabpanel"
+                 aria-labelledby="tab-preview-colaborador"
                  x-transition:enter="transition ease-out duration-300"
                  x-transition:enter-start="opacity-0 transform scale-98"
                  x-transition:enter-end="opacity-100 transform scale-100"
-                 class="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-5 sm:p-8 md:p-10 shadow-xs">
+                 class="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 min-[360px]:p-6 sm:p-8 md:p-10 shadow-xs">
                 
                 <div class="grid md:grid-cols-12 gap-8 items-center">
                     
                     <!-- Coluna do Scanner Visual Interativo -->
                     <div class="md:col-span-6 flex justify-center">
-                        <div class="w-full max-w-xs bg-slate-900 rounded-[32px] p-3.5 sm:p-4 shadow-lg border-2 border-slate-700 relative">
+                        <div class="w-full max-w-[280px] min-[360px]:max-w-xs bg-slate-900 rounded-[28px] min-[360px]:rounded-[32px] p-3 min-[360px]:p-4 shadow-lg border-2 border-slate-700 relative">
                             
                             <!-- Notch / Speaker do Celular -->
                             <div class="w-32 h-4 bg-slate-800 rounded-full mx-auto mb-3 flex items-center justify-center">
@@ -210,10 +223,13 @@
             <!-- TAB 2: VISÃO DO GESTOR / RH (DASHBOARD & FECHAMENTO) -->
             <div x-show="tab === 'gestor'" 
                  x-cloak
+                 id="panel-preview-gestor"
+                 role="tabpanel"
+                 aria-labelledby="tab-preview-gestor"
                  x-transition:enter="transition ease-out duration-300"
                  x-transition:enter-start="opacity-0 transform scale-98"
                  x-transition:enter-end="opacity-100 transform scale-100"
-                 class="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-5 sm:p-8 md:p-10 shadow-xs">
+                 class="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 min-[360px]:p-6 sm:p-8 md:p-10 shadow-xs">
                 
                 <div class="space-y-8">
                     <!-- Header do Dashboard do Gestor -->

@@ -29,20 +29,30 @@
             
             <!-- Seletor de Tabs em Telas Menores (< 1024px) com área de toque mínima confortável -->
             <div class="lg:hidden flex justify-center mb-6">
-                <div class="inline-flex p-1.5 rounded-2xl bg-slate-200/80 border border-slate-300/60 shadow-inner w-full max-w-md">
+                <div class="inline-flex p-1.5 rounded-2xl bg-slate-200/80 border border-slate-300/60 shadow-inner w-full max-w-md"
+                     role="tablist"
+                     aria-label="Público atendido pelo PontoFácil">
                     <button @click="tab = 'registra'" 
+                            id="tab-registra"
+                            role="tab"
+                            :aria-selected="tab === 'registra'"
+                            aria-controls="panel-registra"
                             type="button" 
                             :class="tab === 'registra' ? 'bg-white text-indigo-700 shadow-sm font-bold' : 'text-slate-600 font-semibold'"
-                            class="flex-1 py-3 px-3.5 rounded-xl text-xs min-[380px]:text-sm transition-all duration-200 text-center min-h-[48px] flex items-center justify-center gap-1.5 cursor-pointer">
+                            class="flex-1 py-3 px-3.5 rounded-xl text-xs min-[380px]:text-sm transition-all duration-200 text-center min-h-[48px] flex items-center justify-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600">
                         <svg class="w-4 h-4 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
                         </svg>
                         <span>Para quem registra</span>
                     </button>
                     <button @click="tab = 'gerencia'" 
+                            id="tab-gerencia"
+                            role="tab"
+                            :aria-selected="tab === 'gerencia'"
+                            aria-controls="panel-gerencia"
                             type="button" 
                             :class="tab === 'gerencia' ? 'bg-white text-purple-700 shadow-sm font-bold' : 'text-slate-600 font-semibold'"
-                            class="flex-1 py-3 px-3.5 rounded-xl text-xs min-[380px]:text-sm transition-all duration-200 text-center min-h-[48px] flex items-center justify-center gap-1.5 cursor-pointer">
+                            class="flex-1 py-3 px-3.5 rounded-xl text-xs min-[380px]:text-sm transition-all duration-200 text-center min-h-[48px] flex items-center justify-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600">
                         <svg class="w-4 h-4 text-purple-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
                         </svg>
@@ -56,6 +66,9 @@
                 
                 <!-- Card 1: Para quem registra (Colaborador) -->
                 <div :class="(!isMobile || tab === 'registra') ? 'flex' : 'hidden lg:flex'"
+                     id="panel-registra"
+                     role="tabpanel"
+                     aria-labelledby="tab-registra"
                      class="gsap-comparison-card bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-8 shadow-xs hover:border-slate-300 transition-all duration-200 flex-col justify-between">
                     <div class="space-y-5">
                         
@@ -158,6 +171,9 @@
 
                 <!-- Card 2: Para quem gerencia (Empresa, Gestores e RH) -->
                 <div :class="(!isMobile || tab === 'gerencia') ? 'flex' : 'hidden lg:flex'"
+                     id="panel-gerencia"
+                     role="tabpanel"
+                     aria-labelledby="tab-gerencia"
                      class="gsap-comparison-card bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-8 shadow-xs hover:border-slate-300 transition-all duration-200 flex-col justify-between">
                     <div class="space-y-5">
                         

@@ -32,7 +32,7 @@
                 <!-- CTAs (Largura total no mobile, flex-row em telas maiores) -->
                 <div class="gsap-hero-element flex flex-col sm:flex-row items-stretch sm:items-center justify-center lg:justify-start gap-3 pt-1">
                     <a href="{{ Auth::check() ? route('home') : route('login') }}" 
-                       class="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 sm:px-7 sm:py-4 rounded-xl sm:rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-sm sm:text-base shadow-sm hover:shadow-md transition-all duration-200 transform active:scale-[0.99] sm:hover:-translate-y-0.5">
+                       class="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 sm:px-7 sm:py-4 rounded-xl sm:rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-sm sm:text-base shadow-sm hover:shadow-md transition-all duration-200 transform active:scale-[0.99] sm:hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 min-h-[48px]">
                         <span>{{ Auth::check() ? 'Ir para o Sistema' : 'Entrar no PontoFácil' }}</span>
                         <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
@@ -40,7 +40,7 @@
                     </a>
 
                     <a href="#recursos" 
-                       class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3.5 sm:px-6 sm:py-4 rounded-xl sm:rounded-2xl bg-white hover:bg-slate-50 text-slate-700 hover:text-indigo-600 font-semibold text-sm sm:text-base border border-slate-200 shadow-2xs hover:shadow-xs transition-all duration-200">
+                       class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3.5 sm:px-6 sm:py-4 rounded-xl sm:rounded-2xl bg-white hover:bg-slate-50 text-slate-700 hover:text-indigo-600 font-semibold text-sm sm:text-base border border-slate-200 shadow-2xs hover:shadow-xs transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 min-h-[48px]">
                         <span>Conhecer os recursos</span>
                         <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
@@ -140,7 +140,7 @@
 
                         <!-- Display do Relógio Digital Atual -->
                         <div class="text-center py-2.5 sm:py-3 px-3 bg-slate-50/80 rounded-xl sm:rounded-2xl border border-slate-100">
-                            <div class="text-4xl min-[360px]:text-5xl sm:text-6xl font-black text-slate-900 tracking-tight font-mono-numbers py-0.5"
+                            <div class="text-3xl min-[340px]:text-4xl min-[380px]:text-5xl sm:text-6xl font-black text-slate-900 tracking-tight font-mono-numbers py-0.5"
                                  x-text="time || '22:41:08'">
                                 22:41:08
                             </div>
@@ -167,7 +167,8 @@
                             <button @click="simulatePunch()" 
                                     :disabled="registered"
                                     type="button" 
-                                    class="w-full py-3.5 sm:py-4 px-5 rounded-xl sm:rounded-2xl font-bold text-sm sm:text-base text-white shadow-sm transition-all duration-200 flex items-center justify-center gap-2.5 cursor-pointer touch-manipulation"
+                                    aria-label="Registrar ponto demonstrativo"
+                                    class="w-full py-3.5 sm:py-4 px-5 rounded-xl sm:rounded-2xl font-bold text-sm sm:text-base text-white shadow-sm transition-all duration-200 flex items-center justify-center gap-2.5 cursor-pointer touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 min-h-[48px]"
                                     :class="registered ? 'bg-emerald-600' : 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 active:scale-98'">
                                 <svg x-show="!registered" class="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
