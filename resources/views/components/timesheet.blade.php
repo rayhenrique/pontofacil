@@ -102,6 +102,20 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
         $this->userSearch = '';
     }
 
+    public function previousMonth(): void
+    {
+        $date = Carbon::createFromDate((int) $this->year, (int) $this->month, 1)->subMonth();
+        $this->month = $date->month;
+        $this->year = $date->year;
+    }
+
+    public function nextMonth(): void
+    {
+        $date = Carbon::createFromDate((int) $this->year, (int) $this->month, 1)->addMonth();
+        $this->month = $date->month;
+        $this->year = $date->year;
+    }
+
     public function openTreatmentModal(?string $date = null, ?string $type = null, ?string $punchId = null): void
     {
         $this->validateAuthorizedUserId((int) $this->userId);
@@ -542,57 +556,141 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
 };
 ?>
 
-<div class="max-w-7xl mx-auto py-2 sm:py-6 px-1 sm:px-6 lg:px-8">
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 border-b border-gray-200 pb-4">
+<div class="max-w-7xl mx-auto py-3 sm:py-6 px-2 sm:px-6 lg:px-8 space-y-4 sm:space-y-6">
+
+    {{-- 1. CABEÇALHO CORPORATIVO COM HIERARQUIA DE AÇÕES --}}
+    <header class="bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-5 shadow-2xs">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div>
-                <div class="flex items-center gap-2 flex-wrap">
-                    <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Espelho de Ponto</h2>
+                <div class="flex items-center gap-2.5 flex-wrap">
+                    <h1 class="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Espelho de Ponto</h1>
                     @if($isClosedPeriod)
-                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-800 border border-slate-300">
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-300">
                             Competência Fechada (Snapshot v{{ $snapshotVersion }})
                         </span>
                     @endif
                 </div>
-                <p class="text-xs sm:text-sm text-gray-500 mt-0.5">
-                    Histórico auditado sob o PTRP (Portaria 671/2021 MTP) · 
-                    <span class="font-semibold text-gray-700">{{ $targetUser->name }}</span>
+                <p class="text-xs sm:text-sm text-gray-500 mt-1">
+                    Consulte marcações, acompanhe sua jornada e solicite correções.
                 </p>
+                <div class="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100 text-xs text-gray-600">
+                    <div class="w-2 h-2 rounded-full {{ $isClosedPeriod ? 'bg-slate-400' : 'bg-emerald-500' }}"></div>
+                    <span>Histórico auditado sob o PTRP (Portaria 671/2021 MTP) · Colaborador: <strong class="text-gray-900 font-semibold">{{ $targetUser->name }}</strong></span>
+                </div>
             </div>
-            <div class="flex flex-wrap items-center gap-2">
+
+            {{-- Ações em Hierarquia (Mobile Friendly) --}}
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2 lg:pt-0 border-t lg:border-t-0 border-gray-100">
                 @if(! $isClosedPeriod)
-                    <button wire:click="openTreatmentModal" class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-2xs transition cursor-pointer">
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                        <span>Solicitar Ajuste</span>
+                    <button wire:click="openTreatmentModal" 
+                            type="button"
+                            class="min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl text-xs sm:text-sm font-bold shadow-xs transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 cursor-pointer">
+                        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                        </svg>
+                        <span>Solicitar ajuste</span>
                     </button>
                 @else
-                    <span class="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-100 text-gray-500 rounded-xl text-xs font-semibold border border-gray-200 select-none" title="Competência formalmente fechada pelo DP/RH. Solicitações bloqueadas.">
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
-                        Período Fechado
+                    <span class="min-h-[44px] inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-gray-100 text-gray-500 rounded-xl text-xs font-semibold border border-gray-200 select-none" 
+                          title="Competência formalmente fechada pelo DP/RH. Solicitações bloqueadas.">
+                        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                        </svg>
+                        <span>Período Fechado</span>
                     </span>
                 @endif
 
-                <a href="{{ route('folha-ponto', ['userId' => $this->userId, 'month' => $this->month, 'year' => $this->year]) }}" 
-                   class="inline-flex items-center gap-2 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs sm:text-sm font-bold shadow-2xs transition">
-                    <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-                    </svg>
-                    <span>Imprimir folha de ponto</span>
-                </a>
-                <a href="{{ route('home') }}" class="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 text-sm font-semibold">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
-                    Bater Ponto
-                </a>
+                <div class="flex items-center gap-2">
+                    <a href="{{ route('folha-ponto', ['userId' => $this->userId, 'month' => $this->month, 'year' => $this->year]) }}" 
+                       class="flex-1 sm:flex-initial min-h-[44px] inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white hover:bg-gray-50 active:bg-gray-100 text-gray-700 border border-gray-300 rounded-xl text-xs sm:text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+                        <svg class="w-4 h-4 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                        </svg>
+                        <span>Imprimir folha de ponto</span>
+                    </a>
+
+                    <a href="{{ route('home') }}" 
+                       class="min-h-[44px] inline-flex items-center justify-center gap-1 px-3 py-2 text-indigo-600 hover:text-indigo-800 text-xs sm:text-sm font-semibold rounded-xl hover:bg-indigo-50/60 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+                        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                        </svg>
+                        <span>Bater Ponto</span>
+                    </a>
+                </div>
             </div>
         </div>
+    </header>
 
-        <!-- Filters (Busca Segura no Servidor com Debounce) -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6 pb-6 border-b border-gray-200">
+    {{-- 2. FILTRO DE COMPETÊNCIA E BUSCA SEGURA DE COLABORADOR --}}
+    <section class="bg-white rounded-2xl border border-gray-200/80 p-3 sm:p-4 shadow-2xs">
+        <div class="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+            
+            {{-- Navegador de Competência: [Anterior] Mês de Ano [Próximo] --}}
+            <div class="flex items-center justify-between gap-1 sm:gap-2 bg-gray-50 border border-gray-200 rounded-xl p-1">
+                <button type="button" 
+                        wire:click="previousMonth" 
+                        class="min-h-[44px] min-w-[44px] inline-flex items-center justify-center p-2 rounded-lg text-gray-600 hover:text-indigo-600 hover:bg-white active:bg-gray-100 transition cursor-pointer"
+                        aria-label="Mês anterior"
+                        title="Mês anterior">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                    </svg>
+                </button>
+
+                <div class="flex items-center gap-2 px-2">
+                    <span class="text-xs sm:text-sm font-bold text-gray-900 capitalize font-mono tabular-nums">
+                        {{ Carbon::createFromDate((int) $this->year, (int) $this->month, 1)->translatedFormat('F \d\e Y') }}
+                    </span>
+                </div>
+
+                <button type="button" 
+                        wire:click="nextMonth" 
+                        class="min-h-[44px] min-w-[44px] inline-flex items-center justify-center p-2 rounded-lg text-gray-600 hover:text-indigo-600 hover:bg-white active:bg-gray-100 transition cursor-pointer"
+                        aria-label="Próximo mês"
+                        title="Próximo mês">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                    </svg>
+                </button>
+
+                {{-- Alternativa direta de seleção rápida de Mês e Ano (Desktop) --}}
+                <div class="hidden md:flex items-center gap-1.5 pl-2 border-l border-gray-200">
+                    <select wire:model.live="month" class="text-xs py-1.5 px-2 border border-gray-300 rounded-lg bg-white text-gray-700 font-medium focus:ring-2 focus:ring-indigo-500" aria-label="Mês de apuração">
+                        @for($i = 1; $i <= 12; $i++)
+                            <option value="{{ $i }}">{{ sprintf('%02d', $i) }} - {{ Carbon::create(null, $i, 1)->translatedFormat('F') }}</option>
+                        @endfor
+                    </select>
+                    <select wire:model.live="year" class="text-xs py-1.5 px-2 border border-gray-300 rounded-lg bg-white text-gray-700 font-medium focus:ring-2 focus:ring-indigo-500" aria-label="Ano de apuração">
+                        @for($i = now()->year - 8; $i <= now()->year + 1; $i++)
+                            <option value="{{ $i }}">{{ $i }}</option>
+                        @endfor
+                    </select>
+                </div>
+            </div>
+
+            {{-- Alternativa direta em Mobile (Selects Compactos) --}}
+            <div class="grid grid-cols-2 gap-2 md:hidden">
+                <div>
+                    <label class="sr-only">Mês</label>
+                    <select wire:model.live="month" class="w-full min-h-[44px] text-xs py-2 px-3 border border-gray-300 rounded-xl bg-white text-gray-700 font-medium focus:ring-2 focus:ring-indigo-500">
+                        @for($i = 1; $i <= 12; $i++)
+                            <option value="{{ $i }}">{{ sprintf('%02d', $i) }} - {{ Carbon::create(null, $i, 1)->translatedFormat('F') }}</option>
+                        @endfor
+                    </select>
+                </div>
+                <div>
+                    <label class="sr-only">Ano</label>
+                    <select wire:model.live="year" class="w-full min-h-[44px] text-xs py-2 px-3 border border-gray-300 rounded-xl bg-white text-gray-700 font-medium focus:ring-2 focus:ring-indigo-500">
+                        @for($i = now()->year - 8; $i <= now()->year + 1; $i++)
+                            <option value="{{ $i }}">{{ $i }}</option>
+                        @endfor
+                    </select>
+                </div>
+            </div>
+
+            {{-- Filtro de Colaborador (Exibido somente para Admin ou Gestor Autorizado) --}}
             @if($canSelectUser)
-            <div class="sm:col-span-2 lg:col-span-1 relative" x-data="{ open: false }">
-                <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Colaborador <span class="text-indigo-600 font-normal">(buscar por Nome ou CPF)</span>
-                </label>
+            <div class="w-full lg:max-w-md relative" x-data="{ open: false }">
                 <div class="relative">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
                         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
@@ -603,12 +701,13 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                            wire:model.live.debounce.300ms="userSearch"
                            @focus="open = true"
                            @click.outside="open = false"
-                           placeholder="Buscar: {{ $targetUser->name }}"
-                           class="block w-full pl-9 pr-9 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" />
+                           placeholder="Buscar colaborador: {{ $targetUser->name }}"
+                           class="block w-full min-h-[44px] pl-9 pr-9 py-2 text-xs sm:text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" />
                     @if($userSearch !== '')
                         <button type="button"
                                 wire:click="$set('userSearch', '')"
-                                class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer">
+                                class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                                aria-label="Limpar busca">
                             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
                             </svg>
@@ -616,7 +715,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                     @endif
                 </div>
 
-                <!-- Autocomplete com Resultados Autorizados e CPF Mascarado -->
+                {{-- Autocomplete Dropdown Seguro com CPF Mascarado --}}
                 @if($searchResults->isNotEmpty() || $userSearch !== '')
                 <div x-show="open && $wire.userSearch.length > 0"
                      x-cloak
@@ -627,393 +726,446 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                                 @click="open = false"
                                 class="w-full text-left px-3.5 py-2.5 flex items-center justify-between gap-2 transition hover:bg-gray-50 cursor-pointer {{ (int)$userId === (int)$u['id'] ? 'bg-indigo-50/80 font-semibold' : '' }}">
                             <div class="truncate">
-                                <p class="text-sm font-medium text-gray-900 truncate">{{ $u['name'] }}</p>
-                                <p class="text-xs text-gray-500 truncate">{{ $u['job_title'] }}</p>
+                                <p class="text-xs sm:text-sm font-medium text-gray-900 truncate">{{ $u['name'] }}</p>
+                                <p class="text-[11px] text-gray-500 truncate">{{ $u['job_title'] }}</p>
                             </div>
                             <div class="text-right shrink-0">
-                                <span class="text-xs font-mono px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">
+                                <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">
                                     {{ $u['masked_cpf'] }}
                                 </span>
                             </div>
                         </button>
                     @empty
                         <div class="px-4 py-3 text-xs text-gray-500 text-center">
-                            Nenhum colaborador autorizado localizado com "<span class="font-medium">{{ $userSearch }}</span>".
+                            Nenhum colaborador autorizado com "<span class="font-medium">{{ $userSearch }}</span>".
                         </div>
                     @endforelse
                 </div>
                 @endif
             </div>
             @endif
-            
-            <div>
-                <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Mês</label>
-                <select wire:model.live="month" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white">
-                    @for($i = 1; $i <= 12; $i++)
-                        <option value="{{ $i }}">{{ sprintf('%02d', $i) }} - {{ Carbon::create(null, $i, 1)->translatedFormat('F') }}</option>
-                    @endfor
-                </select>
+        </div>
+    </section>
+
+    {{-- 3. BANCO DE HORAS (SE ATIVADO NA POLÍTICA VIGENTE) --}}
+    @if($policy && $policy->enabled && $timeBankSummary)
+    <section class="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-2xs border border-slate-800">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3 mb-4">
+            <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="text-xs sm:text-sm font-bold text-white tracking-tight">Banco de Horas</h2>
+                    <p class="text-[11px] text-slate-400">Regra de apuração: {{ $policy->closing_mode->label() }}</p>
+                </div>
             </div>
 
-            <div>
-                <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Ano</label>
-                <select wire:model.live="year" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white">
-                    @for($i = now()->year - 2; $i <= now()->year + 1; $i++)
-                        <option value="{{ $i }}">{{ $i }}</option>
-                    @endfor
-                </select>
+            <div class="text-left sm:text-right">
+                <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Saldo Atual</span>
+                <span class="text-xl sm:text-2xl font-bold font-mono tabular-nums {{ $timeBankSummary->currentBalanceMinutes >= 0 ? 'text-emerald-400' : 'text-rose-400' }}">
+                    {{ $timeBankSummary->formattedCurrentBalance() }}
+                </span>
             </div>
         </div>
 
-        <!-- Card Banco de Horas (Se ativado na política vigente) -->
-        @if($policy && $policy->enabled && $timeBankSummary)
-        <div class="bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-950 text-white rounded-2xl p-5 mb-6 shadow-md border border-indigo-800/60">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-800/80 pb-3 mb-4">
-                <div class="flex items-center gap-2">
-                    <div class="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-300 flex items-center justify-center">
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                    </div>
-                    <div>
-                        <h3 class="text-sm font-bold tracking-tight text-white">Banco de Horas</h3>
-                        <p class="text-[11px] text-indigo-300">Regra: {{ $policy->closing_mode->label() }}</p>
-                    </div>
-                </div>
-
-                <div class="text-right">
-                    <span class="text-[10px] uppercase font-bold text-indigo-300 tracking-wider block">Saldo Atual</span>
-                    <span class="text-2xl font-black font-mono {{ $timeBankSummary->currentBalanceMinutes >= 0 ? 'text-emerald-400' : 'text-rose-400' }}">
-                        {{ $timeBankSummary->formattedCurrentBalance() }}
-                    </span>
-                </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+            <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 text-[10px] uppercase font-sans font-semibold block">Saldo Anterior</span>
+                <span class="font-bold text-slate-200 text-sm tabular-nums">{{ $timeBankSummary->formattedPreviousBalance() }}</span>
             </div>
-
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
-                <div>
-                    <span class="text-indigo-300 text-[10px] uppercase font-sans font-semibold block">Saldo Anterior</span>
-                    <span class="font-bold text-slate-200 text-sm">{{ $timeBankSummary->formattedPreviousBalance() }}</span>
-                </div>
-                <div>
-                    <span class="text-emerald-300 text-[10px] uppercase font-sans font-semibold block">Créditos do Mês</span>
-                    <span class="font-bold text-emerald-400 text-sm">+{{ $timeBankSummary->formattedMonthCredits() }}</span>
-                </div>
-                <div>
-                    <span class="text-rose-300 text-[10px] uppercase font-sans font-semibold block">Débitos do Mês</span>
-                    <span class="font-bold text-rose-400 text-sm">{{ $timeBankSummary->formattedMonthDebits() }}</span>
-                </div>
-                <div>
-                    <span class="text-amber-300 text-[10px] uppercase font-sans font-semibold block">Ajustes Manuais</span>
-                    <span class="font-bold text-amber-400 text-sm">{{ $timeBankSummary->formattedMonthAdjustments() }}</span>
-                </div>
+            <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-800">
+                <span class="text-emerald-400 text-[10px] uppercase font-sans font-semibold block">Créditos do Mês</span>
+                <span class="font-bold text-emerald-400 text-sm tabular-nums">+{{ $timeBankSummary->formattedMonthCredits() }}</span>
             </div>
-
-            @if($timeBankSummary->closingResetMinutes !== 0)
-                <div class="mt-4 pt-3 border-t border-indigo-800/80 flex flex-wrap items-center justify-between gap-2 text-xs font-mono bg-indigo-950/60 p-2.5 rounded-xl">
-                    <span class="text-purple-300 font-sans font-bold">Encerramento mensal / Zeramento formal:</span>
-                    <span class="font-bold text-purple-300">{{ $timeBankSummary->formattedClosingReset() }}</span>
-                    <span class="text-indigo-200 font-sans">Saldo transportado: <strong>00:00</strong></span>
-                </div>
-            @endif
+            <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-800">
+                <span class="text-rose-400 text-[10px] uppercase font-sans font-semibold block">Débitos do Mês</span>
+                <span class="font-bold text-rose-400 text-sm tabular-nums">{{ $timeBankSummary->formattedMonthDebits() }}</span>
+            </div>
+            <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-800">
+                <span class="text-amber-400 text-[10px] uppercase font-sans font-semibold block">Ajustes Manuais</span>
+                <span class="font-bold text-amber-400 text-sm tabular-nums">{{ $timeBankSummary->formattedMonthAdjustments() }}</span>
+            </div>
         </div>
+
+        @if($timeBankSummary->closingResetMinutes !== 0)
+            <div class="mt-3 pt-2.5 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs font-mono bg-slate-950/70 p-2.5 rounded-xl">
+                <span class="text-slate-300 font-sans font-medium">Fechamento / Zeramento formal da competência:</span>
+                <span class="font-bold text-amber-400 tabular-nums">{{ $timeBankSummary->formattedClosingReset() }}</span>
+                <span class="text-slate-400 font-sans text-[11px]">Saldo transportado: <strong>00:00</strong></span>
+            </div>
         @endif
+    </section>
+    @endif
 
-        <!-- Monthly Summary KPI Cards -->
-        @if($totalPunches > 0 || $totalWorkedMinutes > 0)
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-            <div class="bg-indigo-50/60 border border-indigo-100 rounded-xl p-4 flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                </div>
-                <div>
-                    <div class="flex items-center gap-1.5">
-                        <p class="text-xs font-semibold text-indigo-900 uppercase tracking-wider">Total Trabalhado</p>
-                        @if($isPartial)
-                            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200" title="Apuração parcial: existem dias com pendência ou jornadas incompletas no mês">Parcial</span>
+    {{-- 4. CARDS DE INDICADORES OBJETIVOS (SEM ÍCONES GIGANTES SUPÉRFLUOS) --}}
+    @if($totalPunches > 0 || $totalWorkedMinutes > 0)
+    <section class="grid grid-cols-1 min-[360px]:grid-cols-2 lg:grid-cols-3 gap-3">
+        
+        {{-- Total Trabalhado --}}
+        <div class="bg-white border border-gray-200/90 rounded-2xl p-4 shadow-2xs">
+            <div class="flex items-center justify-between gap-2">
+                <span class="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Total Trabalhado</span>
+                @if($isPartial)
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200" title="Apuração parcial: existem dias com pendência no mês">
+                        Parcial
+                    </span>
+                @elseif($isClosedPeriod)
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                        Fechado
+                    </span>
+                @endif
+            </div>
+            <p class="text-2xl font-bold text-gray-900 font-mono tabular-nums mt-1.5">{{ $totalMonthFormatted }}</p>
+            <p class="text-[11px] text-gray-500 mt-1">
+                @if($isClosedPeriod)
+                    Apuração formal congelada em snapshot
+                @else
+                    Apuração minuto a minuto PTRP
+                @endif
+            </p>
+        </div>
+
+        {{-- Dias Trabalhados --}}
+        <div class="bg-white border border-gray-200/90 rounded-2xl p-4 shadow-2xs">
+            <span class="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Dias Trabalhados</span>
+            <p class="text-2xl font-bold text-emerald-800 font-mono tabular-nums mt-1.5">{{ $workedDaysCount }} {{ $workedDaysCount === 1 ? 'dia' : 'dias' }}</p>
+            <p class="text-[11px] text-gray-500 mt-1">
+                {{ $completedDaysCount }} concluídas @if($incompleteDaysCount > 0) · <span class="text-rose-600 font-semibold">{{ $incompleteDaysCount }} incompleta(s)</span>@endif
+            </p>
+        </div>
+
+        {{-- Média Diária (Sem Roxo Aleatório) --}}
+        <div class="bg-white border border-gray-200/90 rounded-2xl p-4 shadow-2xs min-[360px]:col-span-2 lg:col-span-1">
+            <span class="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Média Diária</span>
+            <p class="text-2xl font-bold text-indigo-900 font-mono tabular-nums mt-1.5">{{ $avgFormatted }}</p>
+            <p class="text-[11px] text-gray-500 mt-1 truncate" title="{{ $avgCriteria }}">{{ $avgCriteria }}</p>
+        </div>
+    </section>
+    @endif
+
+    {{-- 5. HISTÓRICO CRONOLÓGICO POR DATA & TIMELINE MOBILE-FIRST --}}
+    <main class="space-y-3 sm:space-y-4" data-loading-class="opacity-50" wire:transition>
+        @forelse($groupedEntries as $date => $dayEntries)
+            <article class="bg-white border border-gray-200/90 rounded-2xl overflow-hidden shadow-2xs" wire:key="day-{{ $date }}">
+                
+                {{-- Cabeçalho do Dia (Mobile First) --}}
+                <div class="bg-gray-50/80 px-3.5 sm:px-4 py-3 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <h2 class="text-xs sm:text-sm font-bold text-gray-900 capitalize flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                            </svg>
+                            <span>{{ Carbon::parse($date)->isoFormat('dddd, LL') }}</span>
+                        </h2>
+
+                        <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-200/70 text-gray-700">
+                            {{ count($dayEntries) }} {{ count($dayEntries) === 1 ? 'registro' : 'registros' }}
+                        </span>
+                    </div>
+
+                    <div class="flex items-center gap-2 flex-wrap">
+                        @if(isset($daysCalculated[$date]))
+                            @php $dayCalc = $daysCalculated[$date]; @endphp
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border {{ $dayCalc['status_badge_class'] }}">
+                                @if($dayCalc['is_open'])
+                                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                @endif
+                                @if($dayCalc['status'] === 'concluded')
+                                    {{ $dayCalc['formatted'] }} trabalhadas
+                                @else
+                                    {{ $dayCalc['formatted'] }} ({{ $dayCalc['status_label'] }})
+                                @endif
+                            </span>
+                        @endif
+
+                        @if(! $isClosedPeriod)
+                            <button type="button" 
+                                    wire:click="openTreatmentModal('{{ $date }}')" 
+                                    class="min-h-[36px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer"
+                                    title="Solicitar correção ou justificativa para este dia">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                                </svg>
+                                <span>Solicitar correção</span>
+                            </button>
                         @endif
                     </div>
-                    <p class="text-xl font-black text-indigo-950 font-mono">{{ $totalMonthFormatted }}</p>
-                    @if($isClosedPeriod)
-                        <p class="text-[10px] text-indigo-700/80 mt-0.5">Apuração formal congelada</p>
-                    @else
-                        <p class="text-[10px] text-gray-500 mt-0.5">Apuração minuto a minuto PTRP</p>
-                    @endif
                 </div>
-            </div>
 
-            <div class="bg-emerald-50/60 border border-emerald-100 rounded-xl p-4 flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
-                </div>
-                <div>
-                    <p class="text-xs font-semibold text-emerald-900 uppercase tracking-wider">Dias Trabalhados</p>
-                    <p class="text-xl font-black text-emerald-950 font-mono">{{ $workedDaysCount }} {{ $workedDaysCount === 1 ? 'dia' : 'dias' }}</p>
-                    <p class="text-[10px] text-gray-500 mt-0.5" title="Apenas datas com jornada concluída e apurada">
-                        {{ $completedDaysCount }} concluídas @if($incompleteDaysCount > 0) · <span class="text-rose-600 font-bold">{{ $incompleteDaysCount }} incompleta(s)</span>@endif
-                    </p>
-                </div>
-            </div>
-
-            <div class="bg-purple-50/60 border border-purple-100 rounded-xl p-4 flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-purple-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>
-                </div>
-                <div>
-                    <p class="text-xs font-semibold text-purple-900 uppercase tracking-wider">Média por Dia</p>
-                    <p class="text-xl font-black text-purple-950 font-mono">{{ $avgFormatted }}</p>
-                    <p class="text-[10px] text-gray-500 mt-0.5 truncate max-w-[220px]" title="{{ $avgCriteria }}">{{ $avgCriteria }}</p>
-                </div>
-            </div>
-        </div>
-        @endif
-
-        <!-- Timesheet Data -->
-        <div class="space-y-4" data-loading-class="opacity-50" wire:transition>
-            @forelse($groupedEntries as $date => $dayEntries)
-                <div class="border border-gray-200 rounded-xl overflow-hidden shadow-xs" wire:key="day-{{ $date }}">
-                    <div class="bg-gray-50 px-4 py-3 border-b border-gray-200 flex flex-wrap justify-between items-center gap-2">
-                        <h3 class="text-sm font-bold text-gray-800 capitalize flex items-center gap-2">
-                            <svg class="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
-                            {{ Carbon::parse($date)->isoFormat('dddd, LL') }}
-                        </h3>
-                        <div class="flex items-center gap-2 flex-wrap">
-                            @if(! $isClosedPeriod)
+                {{-- Faixa de Solicitações de Tratamento do Dia --}}
+                @if(isset($daysCalculated[$date]['treatments']) && $daysCalculated[$date]['treatments']->isNotEmpty())
+                    <div class="bg-slate-50 px-3.5 sm:px-4 py-2 border-b border-gray-100 flex flex-wrap items-center gap-2">
+                        <span class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Ajustes:</span>
+                        @foreach($daysCalculated[$date]['treatments'] as $treatment)
+                            @if($treatment->status->value === 'pending')
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-900 border border-amber-300">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                    <span>Pendente: {{ $treatment->type->label() }}</span>
+                                </span>
+                            @elseif($treatment->status->value === 'approved')
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-900 border border-emerald-300">
+                                    <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                    </svg>
+                                    <span>Aprovada: {{ $treatment->type->label() }}</span>
+                                </span>
+                            @elseif($treatment->status->value === 'rejected')
                                 <button type="button" 
-                                        wire:click="openTreatmentModal('{{ $date }}')" 
-                                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 shadow-2xs transition cursor-pointer"
-                                        title="Solicitar correção ou justificativa para este dia">
-                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
-                                    <span>Solicitar correção</span>
+                                        wire:click="viewTreatmentDetails('{{ $treatment->id }}')" 
+                                        class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-900 border border-rose-300 hover:bg-rose-100 transition cursor-pointer"
+                                        title="Clique para ver o motivo da recusa">
+                                    <svg class="w-3.5 h-3.5 text-rose-600" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                    <span>Recusada: {{ $treatment->type->label() }}</span>
+                                    <span class="underline text-[11px] text-rose-700 font-bold ml-1">Ver motivo</span>
                                 </button>
                             @endif
-
-                            @if(isset($daysCalculated[$date]))
-                                @php $dayCalc = $daysCalculated[$date]; @endphp
-                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border {{ $dayCalc['status_badge_class'] }}">
-                                    @if($dayCalc['is_open'])
-                                        <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                                    @endif
-                                    @if($dayCalc['status'] === 'concluded')
-                                        {{ $dayCalc['formatted'] }} trabalhadas
-                                    @else
-                                        {{ $dayCalc['formatted'] }} ({{ $dayCalc['status_label'] }})
-                                    @endif
-                                </span>
-                            @endif
-                            <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
-                                {{ count($dayEntries) }} {{ count($dayEntries) === 1 ? 'registro' : 'registros' }}
-                            </span>
-                        </div>
+                        @endforeach
                     </div>
+                @endif
 
-                    {{-- Faixa de Solicitações de Tratamento do Dia --}}
-                    @if(isset($daysCalculated[$date]['treatments']) && $daysCalculated[$date]['treatments']->isNotEmpty())
-                        <div class="bg-slate-50/90 px-4 py-2 border-b border-gray-100 flex flex-wrap items-center gap-2">
-                            <span class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Ajustes:</span>
-                            @foreach($daysCalculated[$date]['treatments'] as $treatment)
-                                @if($treatment->status->value === 'pending')
-                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                                        <span>Pendente: {{ $treatment->type->label() }}</span>
+                {{-- Notas Normativas PTRP do Dia --}}
+                @if(isset($daysCalculated[$date]['notes']) && count($daysCalculated[$date]['notes']) > 0)
+                    <div class="bg-indigo-50/30 px-3.5 sm:px-4 py-2 border-b border-indigo-100/60 text-xs text-indigo-900 space-y-0.5">
+                        @foreach($daysCalculated[$date]['notes'] as $note)
+                            <p class="flex items-center gap-1.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0"></span>
+                                <span>{{ $note }}</span>
+                            </p>
+                        @endforeach
+                    </div>
+                @endif
+
+                {{-- Timeline de Marcações do Dia --}}
+                <ul class="divide-y divide-gray-100" role="list">
+                    @foreach($dayEntries as $entry)
+                        <li class="px-3.5 sm:px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-gray-50/80 transition {{ !empty($entry->is_disregarded) ? 'bg-gray-50/60 opacity-70' : '' }}" wire:key="entry-{{ $entry->id }}">
+                            
+                            {{-- Lado Esquerdo: Tipo, Horário e Badges --}}
+                            <div class="flex items-center gap-2.5 flex-wrap">
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold shrink-0 {{ $entry->type === 'in' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200' }}">
+                                    {{ $entry->type === 'in' ? 'Entrada' : 'Saída' }}
+                                </span>
+
+                                <span class="text-sm sm:text-base font-bold font-mono tabular-nums text-gray-900 {{ !empty($entry->is_disregarded) ? 'line-through text-gray-400' : '' }}">
+                                    {{ Carbon::parse($entry->timestamp)->format('H:i:s') }}
+                                </span>
+
+                                @if($entry->is_manual)
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                                        Ajuste Manual
                                     </span>
-                                @elseif($treatment->status->value === 'approved')
-                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-900 border border-emerald-300">
-                                        <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
-                                        <span>Aprovada: {{ $treatment->type->label() }}</span>
+                                @endif
+
+                                @if($entry->nsr)
+                                    <span class="text-xs font-mono tabular-nums text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                                        NSR #{{ str_pad((string)$entry->nsr, 9, '0', STR_PAD_LEFT) }}
                                     </span>
-                                @elseif($treatment->status->value === 'rejected')
+                                @endif
+
+                                {{-- Status da Marcação no PTRP --}}
+                                @if(!empty($entry->is_disregarded))
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-gray-200 text-gray-700">
+                                        Desconsiderada pelo RH
+                                    </span>
+                                @elseif(!empty($entry->has_pending_disregard))
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-50 text-amber-900 border border-amber-300">
+                                        Desconsideração Pendente
+                                    </span>
+                                @elseif(!empty($entry->has_rejected_disregard) && $entry->treatment)
                                     <button type="button" 
-                                            wire:click="viewTreatmentDetails('{{ $treatment->id }}')" 
-                                            class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-900 border border-rose-300 hover:bg-rose-200 transition cursor-pointer"
-                                            title="Clique para ver o motivo da recusa">
-                                        <svg class="w-3.5 h-3.5 text-rose-600" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                                        <span>Recusada: {{ $treatment->type->label() }}</span>
-                                        <span class="underline text-[10px] text-rose-700 ml-1">Ver motivo</span>
+                                            wire:click="viewTreatmentDetails('{{ $entry->treatment->id }}')" 
+                                            class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-rose-50 text-rose-800 border border-rose-300 hover:bg-rose-100 cursor-pointer"
+                                            title="Clique para ver a justificativa da recusa">
+                                        Desconsideração Rejeitada (Ver)
                                     </button>
                                 @endif
-                            @endforeach
-                        </div>
-                    @endif
+                            </div>
 
-                    @if(isset($daysCalculated[$date]['notes']) && count($daysCalculated[$date]['notes']) > 0)
-                        <div class="bg-indigo-50/40 px-4 py-1.5 border-b border-indigo-100 text-[11px] text-indigo-800 space-y-0.5">
-                            @foreach($daysCalculated[$date]['notes'] as $note)
-                                <p class="flex items-center gap-1.5">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                                    {{ $note }}
-                                </p>
-                            @endforeach
-                        </div>
-                    @endif
+                            {{-- Lado Direito: Ações Contextuais, Localização e Comprovante --}}
+                            <div class="flex items-center gap-3 flex-wrap justify-between sm:justify-end pt-1 sm:pt-0 border-t sm:border-t-0 border-gray-100">
+                                
+                                {{-- Ação Contextual de Desconsiderar Batida --}}
+                                @if(! $isClosedPeriod && empty($entry->is_disregarded) && empty($entry->has_pending_disregard))
+                                    <button type="button" 
+                                            wire:click="openTreatmentModalForPunch('{{ $date }}', '{{ $entry->id }}')" 
+                                            class="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-rose-600 font-medium transition cursor-pointer"
+                                            title="Solicitar desconsideração desta marcação indevida ou duplicada">
+                                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                        </svg>
+                                        <span>Desconsiderar</span>
+                                    </button>
+                                @endif
 
-                    <ul class="divide-y divide-gray-100">
-                        @foreach($dayEntries as $entry)
-                            <li class="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-gray-50 transition {{ !empty($entry->is_disregarded) ? 'bg-gray-50/70 opacity-75' : '' }}" wire:key="entry-{{ $entry->id }}">
-                                <div class="flex items-center gap-2.5 flex-wrap">
-                                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold {{ $entry->type === 'in' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
-                                        {{ $entry->type === 'in' ? 'Entrada' : 'Saída' }}
+                                {{-- Detalhe Geográfico Contextual (Apenas quando relevante) --}}
+                                @if($entry->has_valid_location)
+                                    <span class="inline-flex items-center gap-1 text-[11px] font-mono text-gray-500 bg-gray-50 px-2 py-0.5 rounded border border-gray-200" title="Coordenadas geográficas registradas no ponto">
+                                        <svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                                        </svg>
+                                        <span>Lat: {{ number_format($entry->latitude, 4) }}, Lng: {{ number_format($entry->longitude, 4) }}</span>
                                     </span>
-                                    <span class="text-base text-gray-900 font-mono font-bold {{ !empty($entry->is_disregarded) ? 'line-through text-gray-400' : '' }}">
-                                        {{ Carbon::parse($entry->timestamp)->format('H:i:s') }}
+                                @else
+                                    <span class="inline-flex items-center gap-1 text-[11px] font-sans text-gray-400" title="Sem coordenadas de GPS registradas no ato da batida">
+                                        <svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                                        </svg>
+                                        <span class="italic">Localização não disponível</span>
                                     </span>
-                                    @if($entry->is_manual)
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-amber-100 text-amber-800">
-                                            Ajuste Manual
-                                        </span>
-                                    @endif
-                                    @if($entry->nsr)
-                                        <span class="text-xs font-mono text-gray-400">
-                                            NSR #{{ str_pad((string)$entry->nsr, 9, '0', STR_PAD_LEFT) }}
-                                        </span>
-                                    @endif
+                                @endif
 
-                                    {{-- Status da Marcação no PTRP --}}
-                                    @if(!empty($entry->is_disregarded))
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-gray-200 text-gray-700">
-                                            Desconsiderada pelo RH
-                                        </span>
-                                    @elseif(!empty($entry->has_pending_disregard))
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
-                                            Desconsideração Pendente
-                                        </span>
-                                    @elseif(!empty($entry->has_rejected_disregard) && $entry->treatment)
-                                        <button type="button" 
-                                                wire:click="viewTreatmentDetails('{{ $entry->treatment->id }}')" 
-                                                class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-300 hover:bg-rose-200 cursor-pointer"
-                                                title="Clique para ver a justificativa da recusa">
-                                            Desconsideração Rejeitada (Ver)
-                                        </button>
-                                    @endif
-                                </div>
-
-                                <div class="flex items-center gap-3">
-                                    {{-- Botão de Solicitação de Desconsideração Contextual por Batida --}}
-                                    @if(! $isClosedPeriod && empty($entry->is_disregarded) && empty($entry->has_pending_disregard))
-                                        <button type="button" 
-                                                wire:click="openTreatmentModalForPunch('{{ $date }}', '{{ $entry->id }}')" 
-                                                class="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-rose-600 transition cursor-pointer"
-                                                title="Solicitar desconsideração desta marcação indevida ou duplicada">
-                                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
-                                            <span>Desconsiderar</span>
-                                        </button>
-                                    @endif
-
-                                    @if($entry->has_valid_location)
-                                        <div class="text-xs text-gray-500 font-mono flex items-center gap-1" title="Coordenadas geográficas registradas no ponto">
-                                            <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
-                                            <span>Lat: {{ number_format($entry->latitude, 4) }}, Lng: {{ number_format($entry->longitude, 4) }}</span>
-                                        </div>
-                                    @else
-                                        <div class="text-xs text-gray-400 font-sans flex items-center gap-1" title="Sem coordenadas de GPS registradas no ato da batida">
-                                            <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
-                                            <span class="italic">Localização não disponível</span>
-                                        </div>
-                                    @endif
-
-                                    @if(isset($entry->receipt) && $entry->receipt)
-                                        <a href="{{ route('receipts.pdf', ['code' => $entry->receipt->verification_code]) }}"
-                                           target="_blank"
-                                           title="Baixar comprovante fiscal oficial (PDF)"
-                                           class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition">
-                                            <span>Comprovante</span>
-                                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" /></svg>
-                                        </a>
-                                    @endif
-                                </div>
-                            </li>
-                        @endforeach
-                    </ul>
+                                {{-- Link Direto ao Comprovante Digital --}}
+                                @if(isset($entry->receipt) && $entry->receipt)
+                                    <a href="{{ route('receipts.pdf', ['code' => $entry->receipt->verification_code]) }}"
+                                       target="_blank"
+                                       title="Visualizar comprovante de ponto homologado (PDF)"
+                                       class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition">
+                                        <span>Comprovante</span>
+                                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                                        </svg>
+                                    </a>
+                                @endif
+                            </div>
+                        </li>
+                    @endforeach
+                </ul>
+            </article>
+        @empty
+            {{-- 6. ESTADO VAZIO ESPECÍFICO --}}
+            <div class="text-center py-12 px-4 bg-white border border-gray-200/90 rounded-2xl shadow-2xs space-y-3" wire:key="empty-state">
+                <div class="w-12 h-12 mx-auto rounded-full bg-gray-100 text-gray-400 flex items-center justify-center">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                    </svg>
                 </div>
-            @empty
-                <div class="text-center py-12 text-gray-500 bg-gray-50 rounded-xl" wire:key="empty-state">
-                    <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                    <p class="text-sm font-medium text-gray-600">Nenhum registro encontrado para este período.</p>
+                <div>
+                    <h3 class="text-sm font-bold text-gray-900">Não há marcações neste período.</h3>
+                    <p class="text-xs text-gray-500 max-w-sm mx-auto mt-1">
+                        Quando houver registros de ponto ou justificativas de jornada nesta competência, eles aparecerão aqui cronologicamente.
+                    </p>
                 </div>
-            @endforelse
-        </div>
-    </div>
+                @if(! $isClosedPeriod)
+                    <div class="pt-2">
+                        <button type="button" 
+                                wire:click="openTreatmentModal" 
+                                class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold rounded-xl text-xs transition border border-indigo-200 cursor-pointer">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                            </svg>
+                            <span>Solicitar inclusão manual para este mês</span>
+                        </button>
+                    </div>
+                @endif
+            </div>
+        @endforelse
+    </main>
 
-    <!-- Modal Solicitação de Tratamento / Justificativa Contextual -->
+    {{-- 7. MODAL DE SOLICITAÇÃO DE AJUSTE / JUSTIFICATIVA CONTEXTUAL --}}
     @if($showTreatmentModal)
-        <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+        <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4"
              role="dialog"
              aria-modal="true"
              aria-labelledby="treatment-modal-title"
              @keydown.escape.window="$wire.closeTreatmentModal()">
-            <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div class="bg-white rounded-2xl max-w-lg w-full max-h-[92vh] overflow-y-auto p-4 sm:p-6 shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150 border border-gray-200">
+                
+                {{-- Topo do Modal --}}
                 <div class="flex items-center justify-between border-b border-gray-100 pb-3">
-                    <div class="flex items-center gap-2">
-                        <div class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
-                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                            </svg>
                         </div>
-                        <h3 id="treatment-modal-title" class="text-base font-bold text-gray-900">Solicitar Ajuste ou Justificativa</h3>
+                        <div>
+                            <h2 id="treatment-modal-title" class="text-base font-bold text-gray-900 tracking-tight">Solicitar Ajuste ou Justificativa</h2>
+                            <p class="text-[11px] text-gray-500">Tratamento formal auditado sob o PTRP</p>
+                        </div>
                     </div>
-                    <button type="button" wire:click="closeTreatmentModal" class="text-gray-400 hover:text-gray-600 cursor-pointer">✕</button>
+                    <button type="button" 
+                            wire:click="closeTreatmentModal" 
+                            class="min-h-[44px] min-w-[44px] inline-flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition cursor-pointer"
+                            aria-label="Fechar modal">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
                 </div>
 
                 <form wire:submit="submitTreatmentRequest" class="space-y-4 text-xs">
-                    {{-- Seleção Contextual do Tipo de Solicitação --}}
+                    
+                    {{-- Seleção Contextual do Tipo de Solicitação (Touch Friendly) --}}
                     <div>
-                        <label class="block font-bold text-gray-700 uppercase mb-1">Tipo de Solicitação</label>
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-1.5 p-1 bg-gray-100 rounded-xl">
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5">Tipo de Solicitação</label>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-1.5 p-1 bg-gray-100 rounded-xl" role="tablist">
                             <button type="button" 
                                     wire:click="$set('reqType', 'manual_punch_added')"
-                                    class="py-2 px-2.5 rounded-lg text-center font-bold transition cursor-pointer {{ $reqType === 'manual_punch_added' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-600 hover:text-gray-900' }}">
+                                    class="min-h-[44px] py-2 px-2.5 rounded-lg text-center font-bold text-xs transition cursor-pointer {{ $reqType === 'manual_punch_added' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-600 hover:text-gray-900' }}">
                                 Inclusão de Batida
                             </button>
                             <button type="button" 
                                     wire:click="$set('reqType', 'absence_justified')"
-                                    class="py-2 px-2.5 rounded-lg text-center font-bold transition cursor-pointer {{ $reqType === 'absence_justified' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-600 hover:text-gray-900' }}">
+                                    class="min-h-[44px] py-2 px-2.5 rounded-lg text-center font-bold text-xs transition cursor-pointer {{ $reqType === 'absence_justified' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-600 hover:text-gray-900' }}">
                                 Justificativa Ausência
                             </button>
                             <button type="button" 
                                     wire:click="$set('reqType', 'punch_disregarded')"
-                                    class="py-2 px-2.5 rounded-lg text-center font-bold transition cursor-pointer {{ $reqType === 'punch_disregarded' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-600 hover:text-gray-900' }}">
+                                    class="min-h-[44px] py-2 px-2.5 rounded-lg text-center font-bold text-xs transition cursor-pointer {{ $reqType === 'punch_disregarded' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-600 hover:text-gray-900' }}">
                                 Desconsiderar Batida
                             </button>
                         </div>
-                        @error('reqType') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                        @error('reqType') <p class="text-xs font-semibold text-rose-600 mt-1">{{ $message }}</p> @enderror
                     </div>
 
                     {{-- 1. CAMPOS DE INCLUSÃO DE BATIDA ESQUECIDA --}}
                     @if($reqType === 'manual_punch_added')
-                        <div class="grid grid-cols-2 gap-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                                <label class="block font-bold text-gray-700 uppercase mb-1">Data da Ocorrência</label>
-                                <input type="date" wire:model.live="reqDate" class="w-full px-3 py-2 border rounded-xl font-mono" required>
-                                @error('reqDate') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Data da Ocorrência *</label>
+                                <input type="date" wire:model.live="reqDate" class="w-full min-h-[44px] px-3 py-2 border rounded-xl font-mono text-xs focus:ring-2 focus:ring-indigo-500" required>
+                                @error('reqDate') <p class="text-xs font-semibold text-rose-600 mt-1">{{ $message }}</p> @enderror
                             </div>
                             <div>
-                                <label class="block font-bold text-gray-700 uppercase mb-1">Horário Previsto</label>
-                                <input type="time" wire:model="reqTime" class="w-full px-3 py-2 border rounded-xl font-mono" required>
-                                @error('reqTime') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Horário Previsto *</label>
+                                <input type="time" wire:model="reqTime" class="w-full min-h-[44px] px-3 py-2 border rounded-xl font-mono text-xs focus:ring-2 focus:ring-indigo-500" required>
+                                @error('reqTime') <p class="text-xs font-semibold text-rose-600 mt-1">{{ $message }}</p> @enderror
                             </div>
                         </div>
 
                         <div>
-                            <label class="block font-bold text-gray-700 uppercase mb-1">Justificativa do Esquecimento (Obrigatória)</label>
-                            <textarea wire:model="reqReason" rows="3" class="w-full px-3 py-2 border rounded-xl" placeholder="Ex: Esquecimento de registro na saída para almoço em virtude de atendimento emergencial..." required></textarea>
-                            @error('reqReason') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Justificativa do Esquecimento *</label>
+                            <textarea wire:model="reqReason" rows="3" class="w-full px-3 py-2 border rounded-xl text-xs focus:ring-2 focus:ring-indigo-500" placeholder="Ex: Esquecimento de registro na saída para almoço em virtude de atendimento emergencial..." required></textarea>
+                            @error('reqReason') <p class="text-xs font-semibold text-rose-600 mt-1">{{ $message }}</p> @enderror
                         </div>
 
                         <div>
-                            <label class="block font-bold text-gray-700 uppercase mb-1">Anexo / Comprovante <span class="text-gray-400 font-normal">(Opcional)</span></label>
+                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Anexo / Comprovante <span class="text-gray-400 font-normal">(Opcional)</span></label>
                             <input type="file" wire:model="reqAttachment" accept=".pdf,.jpg,.jpeg,.png" class="w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border border-gray-200 rounded-xl p-1 bg-gray-50">
-                            <p class="text-[10px] text-gray-400 mt-1">Formatos aceitos: PDF, PNG, JPG (máx. 5MB). Opcional para inclusões manuais.</p>
-                            @error('reqAttachment') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                            <p class="text-[10px] text-gray-500 mt-1">Formatos aceitos: PDF, PNG, JPG (máx. 5MB). Opcional para inclusões manuais.</p>
+                            @error('reqAttachment') <p class="text-xs font-semibold text-rose-600 mt-1">{{ $message }}</p> @enderror
                         </div>
 
                     {{-- 2. CAMPOS DE JUSTIFICATIVA DE AUSÊNCIA (DIA INTEIRO / ABONO) --}}
                     @elseif($reqType === 'absence_justified')
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                                <label class="block font-bold text-gray-700 uppercase mb-1">Data da Ausência</label>
-                                <input type="date" wire:model.live="reqDate" class="w-full px-3 py-2 border rounded-xl font-mono" required>
-                                <p class="text-[10px] text-gray-400 mt-0.5">A justificativa cobre o expediente completo da data.</p>
-                                @error('reqDate') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Data da Ausência *</label>
+                                <input type="date" wire:model.live="reqDate" class="w-full min-h-[44px] px-3 py-2 border rounded-xl font-mono text-xs focus:ring-2 focus:ring-indigo-500" required>
+                                <p class="text-[10px] text-gray-500 mt-0.5">A justificativa cobre o expediente completo da data.</p>
+                                @error('reqDate') <p class="text-xs font-semibold text-rose-600 mt-1">{{ $message }}</p> @enderror
                             </div>
 
                             <div>
-                                <label class="block font-bold text-gray-700 uppercase mb-1">Motivo Legal / Categoria</label>
-                                <select wire:model.live="reqReasonCategory" class="w-full px-3 py-2 border rounded-xl bg-white font-medium">
+                                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Motivo Legal / Categoria *</label>
+                                <select wire:model.live="reqReasonCategory" class="w-full min-h-[44px] px-3 py-2 border rounded-xl bg-white font-medium text-xs focus:ring-2 focus:ring-indigo-500">
                                     <option value="medical_certificate">Atestado Médico / Odontológico</option>
                                     <option value="medical_appointment">Declaração de Consulta / Exames</option>
                                     <option value="bereavement">Falecimento em Família (Licença Nojo)</option>
@@ -1022,21 +1174,21 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                                     <option value="court_summons">Convocação Judicial / Eleitoral</option>
                                     <option value="other">Outro Motivo / Força Maior</option>
                                 </select>
-                                @error('reqReasonCategory') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                                @error('reqReasonCategory') <p class="text-xs font-semibold text-rose-600 mt-1">{{ $message }}</p> @enderror
                             </div>
                         </div>
 
                         <div>
-                            <label class="block font-bold text-gray-700 uppercase mb-1">Justificativa e Detalhamento (Obrigatório)</label>
-                            <textarea wire:model="reqReason" rows="3" class="w-full px-3 py-2 border rounded-xl" placeholder="Descreva o motivo da ausência para análise do RH/Gestor..." required></textarea>
-                            @error('reqReason') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Justificativa e Detalhamento *</label>
+                            <textarea wire:model="reqReason" rows="3" class="w-full px-3 py-2 border rounded-xl text-xs focus:ring-2 focus:ring-indigo-500" placeholder="Descreva o motivo da ausência para análise do RH/Gestor..." required></textarea>
+                            @error('reqReason') <p class="text-xs font-semibold text-rose-600 mt-1">{{ $message }}</p> @enderror
                         </div>
 
                         <div>
                             @php
-                                $isDocRequired = in_array($reqReasonCategory, ['medical_certificate', 'medical_appointment', 'blood_donation', 'court_summons'], true);
+                                $isDocRequired = ($reqReasonCategory === 'medical_certificate');
                             @endphp
-                            <label class="block font-bold text-gray-700 uppercase mb-1">
+                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">
                                 Anexo / Comprovante Documental 
                                 @if($isDocRequired)
                                     <span class="text-rose-600 font-bold">* (Obrigatório)</span>
@@ -1045,40 +1197,40 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                                 @endif
                             </label>
                             <input type="file" wire:model="reqAttachment" accept=".pdf,.jpg,.jpeg,.png" class="w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border border-gray-200 rounded-xl p-1 bg-gray-50">
-                            <p class="text-[10px] {{ $isDocRequired ? 'text-rose-600 font-medium' : 'text-gray-400' }} mt-1">
+                            <p class="text-[10px] {{ $isDocRequired ? 'text-rose-600 font-medium' : 'text-gray-500' }} mt-1">
                                 @if($isDocRequired)
-                                    Atestados médicos e declarações legais exigem comprovação documental arquivada de forma privada (PDF, PNG, JPG de até 5MB).
+                                    Atestados médicos exigem comprovação documental arquivada de forma privada (PDF, PNG, JPG de até 5MB).
                                 @else
                                     Formatos aceitos: PDF, PNG, JPG (máx. 5MB). Opcional para este motivo.
                                 @endif
                             </p>
-                            @error('reqAttachment') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                            @error('reqAttachment') <p class="text-xs font-semibold text-rose-600 mt-1">{{ $message }}</p> @enderror
                         </div>
 
                     {{-- 3. CAMPOS DE DESCONSIDERAÇÃO DE MARCAÇÃO --}}
                     @elseif($reqType === 'punch_disregarded')
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                                <label class="block font-bold text-gray-700 uppercase mb-1">Data da Marcação</label>
-                                <input type="date" wire:model.live="reqDate" class="w-full px-3 py-2 border rounded-xl font-mono" required>
-                                @error('reqDate') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Data da Marcação *</label>
+                                <input type="date" wire:model.live="reqDate" class="w-full min-h-[44px] px-3 py-2 border rounded-xl font-mono text-xs focus:ring-2 focus:ring-indigo-500" required>
+                                @error('reqDate') <p class="text-xs font-semibold text-rose-600 mt-1">{{ $message }}</p> @enderror
                             </div>
 
                             <div>
-                                <label class="block font-bold text-gray-700 uppercase mb-1">Marcação Existente a Desconsiderar</label>
+                                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Marcação Existente a Desconsiderar *</label>
                                 @if(!empty($availablePunchesForDate))
-                                    <select wire:model="reqReferencePunchId" class="w-full px-3 py-2 border rounded-xl bg-white font-mono text-xs font-semibold">
+                                    <select wire:model="reqReferencePunchId" class="w-full min-h-[44px] px-3 py-2 border rounded-xl bg-white font-mono text-xs font-semibold focus:ring-2 focus:ring-indigo-500">
                                         <option value="">Selecione a marcação...</option>
                                         @foreach($availablePunchesForDate as $punchOpt)
                                             <option value="{{ $punchOpt['id'] }}">{{ $punchOpt['label'] }}</option>
                                         @endforeach
                                     </select>
                                 @else
-                                    <div class="p-2 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px]">
+                                    <div class="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px]">
                                         Nenhuma marcação bruta encontrada para {{ Carbon::parse($reqDate)->format('d/m/Y') }}.
                                     </div>
                                 @endif
-                                @error('reqReferencePunchId') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                                @error('reqReferencePunchId') <p class="text-xs font-semibold text-rose-600 mt-1">{{ $message }}</p> @enderror
                             </div>
                         </div>
 
@@ -1087,15 +1239,15 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                         </div>
 
                         <div>
-                            <label class="block font-bold text-gray-700 uppercase mb-1">Motivo da Desconsideração (Obrigatório)</label>
-                            <textarea wire:model="reqReason" rows="3" class="w-full px-3 py-2 border rounded-xl" placeholder="Descreva porque esta marcação deve ser desconsiderada (ex: batida duplicada acidental, teste operacional)..." required></textarea>
-                            @error('reqReason') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Motivo da Desconsideração *</label>
+                            <textarea wire:model="reqReason" rows="3" class="w-full px-3 py-2 border rounded-xl text-xs focus:ring-2 focus:ring-indigo-500" placeholder="Descreva porque esta marcação deve ser desconsiderada (ex: batida duplicada acidental, teste operacional)..." required></textarea>
+                            @error('reqReason') <p class="text-xs font-semibold text-rose-600 mt-1">{{ $message }}</p> @enderror
                         </div>
 
                         <div>
-                            <label class="block font-bold text-gray-700 uppercase mb-1">Anexo <span class="text-gray-400 font-normal">(Opcional)</span></label>
+                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Anexo <span class="text-gray-400 font-normal">(Opcional)</span></label>
                             <input type="file" wire:model="reqAttachment" accept=".pdf,.jpg,.jpeg,.png" class="w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border border-gray-200 rounded-xl p-1 bg-gray-50">
-                            @error('reqAttachment') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                            @error('reqAttachment') <p class="text-xs font-semibold text-rose-600 mt-1">{{ $message }}</p> @enderror
                         </div>
                     @endif
 
@@ -1107,17 +1259,17 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                         A solicitação será registrada com status <strong>Pendente</strong> no PTRP, sendo submetida para aprovação do gestor do setor e RH antes de alterar o espelho de ponto.
                     </div>
 
-                    <div class="flex justify-end gap-2 pt-3 border-t border-gray-100">
+                    <div class="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-3 border-t border-gray-100">
                         <button type="button" 
                                 wire:click="closeTreatmentModal" 
-                                class="px-4 py-2 border rounded-xl font-bold text-gray-600 hover:bg-gray-50 cursor-pointer">
+                                class="min-h-[44px] px-4 py-2 border rounded-xl font-bold text-gray-600 hover:bg-gray-50 transition cursor-pointer">
                             Cancelar
                         </button>
                         <button type="submit" 
                                 wire:loading.attr="disabled"
                                 wire:target="submitTreatmentRequest"
                                 :disabled="$wire.isSubmitting"
-                                class="px-5 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-sm transition disabled:opacity-50 cursor-pointer flex items-center gap-2">
+                                class="min-h-[44px] px-5 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-sm transition disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2">
                             <span wire:loading.remove wire:target="submitTreatmentRequest">Enviar Solicitação</span>
                             <span wire:loading wire:target="submitTreatmentRequest" class="flex items-center gap-1.5">
                                 <svg class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
@@ -1130,29 +1282,36 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
         </div>
     @endif
 
-    <!-- Modal de Detalhes da Decisão do Tratamento -->
+    {{-- 8. MODAL DE DETALHES DA DECISÃO DO TRATAMENTO --}}
     @if($showTreatmentDetailsModal && $viewingTreatment)
-        <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+        <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4"
              role="dialog"
              aria-modal="true"
              aria-labelledby="treatment-details-title"
              @keydown.escape.window="$wire.closeTreatmentDetailsModal()">
-            <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div class="bg-white rounded-2xl max-w-md w-full p-4 sm:p-6 shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150 border border-gray-200">
                 <div class="flex items-center justify-between border-b border-gray-100 pb-3">
                     <div>
-                        <h3 id="treatment-details-title" class="text-base font-bold text-gray-900">Detalhes da Solicitação</h3>
+                        <h2 id="treatment-details-title" class="text-base font-bold text-gray-900 tracking-tight">Detalhes da Solicitação</h2>
                         <p class="text-xs text-gray-500">{{ $viewingTreatment['type_label'] }} · {{ $viewingTreatment['effective_date'] }}</p>
                     </div>
-                    <button type="button" wire:click="closeTreatmentDetailsModal" class="text-gray-400 hover:text-gray-600 cursor-pointer">✕</button>
+                    <button type="button" 
+                            wire:click="closeTreatmentDetailsModal" 
+                            class="min-h-[44px] min-w-[44px] inline-flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition cursor-pointer"
+                            aria-label="Fechar detalhes">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
                 </div>
 
                 <div class="space-y-3 text-xs">
                     <div>
                         <span class="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Status Atual</span>
                         <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-bold text-xs mt-1
-                            {{ $viewingTreatment['status'] === 'approved' ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' : '' }}
-                            {{ $viewingTreatment['status'] === 'rejected' ? 'bg-rose-100 text-rose-900 border border-rose-300' : '' }}
-                            {{ $viewingTreatment['status'] === 'pending' ? 'bg-amber-100 text-amber-900 border border-amber-300' : '' }}">
+                            {{ $viewingTreatment['status'] === 'approved' ? 'bg-emerald-50 text-emerald-900 border border-emerald-300' : '' }}
+                            {{ $viewingTreatment['status'] === 'rejected' ? 'bg-rose-50 text-rose-900 border border-rose-300' : '' }}
+                            {{ $viewingTreatment['status'] === 'pending' ? 'bg-amber-50 text-amber-900 border border-amber-300' : '' }}">
                             {{ $viewingTreatment['status_label'] }}
                         </span>
                     </div>
@@ -1171,7 +1330,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                                 {{ $viewingTreatment['rejection_reason'] ?: 'Motivo não informado pelo avaliador.' }}
                             </p>
                             @if($viewingTreatment['decided_by'])
-                                <p class="text-[11px] text-rose-600 pt-1">
+                                <p class="text-[11px] text-rose-700 pt-1">
                                     Decidido por: <strong>{{ $viewingTreatment['decided_by'] }}</strong> em {{ $viewingTreatment['decided_at'] }}
                                 </p>
                             @endif
@@ -1187,7 +1346,9 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                 </div>
 
                 <div class="flex justify-end pt-3 border-t border-gray-100">
-                    <button type="button" wire:click="closeTreatmentDetailsModal" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold cursor-pointer transition">
+                    <button type="button" 
+                            wire:click="closeTreatmentDetailsModal" 
+                            class="min-h-[44px] px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold cursor-pointer transition">
                         Fechar
                     </button>
                 </div>

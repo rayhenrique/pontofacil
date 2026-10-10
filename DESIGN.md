@@ -540,3 +540,40 @@ O módulo `/ponto` é a interface de maior criticidade e frequência de uso para
 2. **Reaproveitamento Antes da Invenção:** Ao criar novas telas, consulte as diretrizes deste documento e reutilize classes, espaçamentos e componentes já existentes.
 3. **Decisões Deliberadas:** Nenhuma nova cor, efeito ou padrão visual deve ser introduzido sem justificativa de produto.
 4. **Atualizações Normativas:** Alterações neste documento devem ser intencionais, registradas em changelog e validadas contra o código real da aplicação.
+
+---
+
+## 28. Padrões do Espelho de Ponto (/timesheet)
+
+O módulo de Espelho de Ponto é a interface central de apuração e acompanhamento de jornada individual do colaborador e de consulta do gestor/RH, fundamentado nas regras do PTRP sob a Portaria 671/2021 MTP.
+
+### 28.1. Seletor de Competência e Período
+* **Navegação Rápida:** Composição `[Anterior] Nome do Mês de Ano [Próximo]` com botões acessíveis e touch targets mínimos de 44px (`min-h-[44px]`).
+* **Seleção Direta:** Alternativa por menus suspensos compactos (`select`) de mês e ano para salto rápido sem navegação sequencial repetitiva.
+* **Histórico Não Restritivo:** Suporte a histórico de anos retroativos autorizados sem travas arbitrárias de 2 anos quando houver registros fiscais anteriores.
+* **Indicação de Período Fechado:** Quando a competência estiver fechada (`isPeriodClosed`), exibir badge sóbrio `slate-800` com texto explicativo e snapshot de apuração.
+
+### 28.2. Resumo Mensal e Indicadores de Jornada
+* **Informações Reais de Domínio:** Priorizar métricas reais apuradas pelo PTRP:
+  * Horas Apuradas (com numerais tabulares `font-mono`);
+  * Dias com Jornada Concluída;
+  * Ocorrências Pendentes / Incompletas.
+* **Banco de Horas Integrado:** Apresentação em card sóbrio com fundo escuro (`bg-slate-900 border-slate-800`), sem gradientes roxos decorativos, destacando saldo com sinal (`+` ou `-`) e data limite de compensação acordada.
+* **Cards de Indicadores:** Numeral em destaque (`text-xl font-bold font-mono`), rótulo curto em cinza (`text-xs uppercase font-medium text-slate-500`) e descrição de estado. Grid adaptativa: 1 coluna em telas ultrafinas, 2 colunas a partir de 360px e 3 colunas em desktop.
+
+### 28.3. Timeline de Marcações e Histórico Diário
+* **Identidade do Dado:** Cada dia exibe em destaque o dia da semana, a data, o status da jornada e o total apurado de horas trabalhadas.
+* **Estados da Jornada:** Associação obrigatória de cor semântica e texto explícito:
+  * `Concluída`: Verde/Emerald (`text-emerald-700 bg-emerald-50 border-emerald-200`);
+  * `Em andamento`: Azul/Sky (`text-sky-700 bg-sky-50 border-sky-200`);
+  * `Incompleta`: Âmbar/Amber (`text-amber-700 bg-amber-50 border-amber-200`);
+  * `Período Fechado`: Ardósia/Slate (`text-slate-700 bg-slate-100 border-slate-300`);
+  * `Pendente`: Vermelho/Rose (`text-rose-700 bg-rose-50 border-rose-200`).
+* **Ausência de Pulse Desnecessário:** Proibido o uso de `animate-pulse` em pendências ou registros históricos consolidados.
+* **Chips de Evidência:** Exibição discreta de geolocalização (`Lat/Long`) e comprovante com código fiscal em chips neutros (`bg-slate-50 text-slate-600 border-slate-200`).
+
+### 28.4. Ações Contextuais e Modal de Tratamento
+* **Ação Contextual por Dia:** Botão "Ajuste" direto no cabeçalho do dia com status incompleto, preenchendo automaticamente a data de referência no modal.
+* **Modal Responsivo Mobile-First:** Apresentação em largura total no mobile (`p-4 sm:p-6`) com cantos arredondados corporativos (`rounded-2xl`), scroll interno confortável para viewports baixos e fechamento seguro.
+* **Campos Contextuais PTRP:** Interface contextual por tipo de solicitação (Inclusão de Batida, Justificativa de Ausência, Desconsideração), mantendo o aviso normativo de que o registro original nunca é alterado fisicamente (Portaria 671/2021 MTP).
+
