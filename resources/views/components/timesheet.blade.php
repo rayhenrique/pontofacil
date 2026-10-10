@@ -1,23 +1,29 @@
 <?php
 
-use Livewire\Component;
+use App\Domain\PTRP\Enums\TreatmentEventType;
+use App\Domain\PTRP\Services\TimesheetJourneyService;
+use App\Enums\UserRole;
+use App\Models\ClosedPeriod;
+use App\Models\Employee;
+use App\Models\Sector;
+use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
-use App\Models\TimeEntry;
-use App\Models\User;
-use App\Models\Sector;
-use App\Models\Employee;
-use Illuminate\Support\Facades\Auth;
-use Carbon\Carbon;
-use App\Enums\UserRole;
+use Livewire\Component;
 use Livewire\WithFileUploads;
 
 new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Component
 {
     use WithFileUploads;
+
     public $month;
     public $year;
     public $userId;
+
+    public string $userSearch = '';
 
     public $showTreatmentModal = false;
     public $reqDate = '';
@@ -26,16 +32,81 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
     public $reqReason = '';
     public $reqAttachment = null;
 
-    public function mount()
+    public function mount(?int $userId = null): void
     {
-        $this->month = now()->month;
-        $this->year = now()->year;
-        $this->userId = Auth::id();
+        $this->month = (int) (request('month') ?? now()->month);
+        $this->year = (int) (request('year') ?? now()->year);
+
+        $targetId = $userId ?? (int) request('userId', Auth::id());
+        $this->validateAuthorizedUserId($targetId);
+        $this->userId = $targetId;
         $this->reqDate = now()->toDateString();
     }
 
-    public function openTreatmentModal(?string $date = null)
+    public function updatingUserId($value): void
     {
+        $this->validateAuthorizedUserId((int) $value);
+    }
+
+    /**
+     * Validação rigorosa de autorização no servidor (anti-tampering de Livewire).
+     * - Colaborador: visualiza unicamente o seu próprio espelho.
+     * - Gestor: visualiza somente colaboradores dos setores geridos por ele.
+     * - Admin: visualiza colaboradores da empresa/instalação dedicada.
+     */
+    protected function validateAuthorizedUserId(int $targetUserId): void
+    {
+        $currentUser = Auth::user();
+        if (! $currentUser) {
+            abort(401);
+        }
+
+        if ($targetUserId === (int) $currentUser->id) {
+            return;
+        }
+
+        if ($currentUser->role === UserRole::Admin) {
+            if (! User::where('id', $targetUserId)->exists()) {
+                abort(404, 'Colaborador não encontrado.');
+            }
+            return;
+        }
+
+        if ($currentUser->role === UserRole::Manager) {
+            $managedSectorIds = Sector::where('manager_id', $currentUser->id)->pluck('id');
+            $allowedUserIds = Employee::whereIn('sector_id', $managedSectorIds)->pluck('user_id');
+
+            if (! $allowedUserIds->contains($targetUserId)) {
+                abort(403, 'Acesso não autorizado aos dados deste colaborador.');
+            }
+            return;
+        }
+
+        abort(403, 'Acesso restrito ao próprio espelho de ponto.');
+    }
+
+    public function selectUser(int $id): void
+    {
+        $this->validateAuthorizedUserId($id);
+        $this->userId = $id;
+        $this->userSearch = '';
+    }
+
+    public function openTreatmentModal(?string $date = null): void
+    {
+        $this->validateAuthorizedUserId((int) $this->userId);
+
+        $parsedDate = $date ? Carbon::parse($date) : now();
+        if (ClosedPeriod::isClosed($parsedDate->year, $parsedDate->month)) {
+            $this->dispatch('app-modal-alert', [
+                'type' => 'error',
+                'title' => 'Período Fechado',
+                'message' => sprintf('A competência %02d/%04d encontra-se fechada e congelada. Solicitações retroativas não são permitidas.', $parsedDate->month, $parsedDate->year),
+                'buttonText' => 'Entendido',
+            ]);
+            return;
+        }
+
         $this->reqDate = $date ?? now()->toDateString();
         $this->reqTime = '08:00';
         $this->reqType = 'manual_punch_added';
@@ -44,8 +115,16 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
         $this->showTreatmentModal = true;
     }
 
-    public function submitTreatmentRequest()
+    public function submitTreatmentRequest(): void
     {
+        $this->validateAuthorizedUserId((int) $this->userId);
+
+        $currentUser = Auth::user();
+        // Colaborador comum não pode solicitar ajuste em nome de terceiros
+        if ($currentUser->role === UserRole::Employee && (int) $this->userId !== (int) $currentUser->id) {
+            abort(403, 'Você não possui permissão para solicitar ajustes para outro colaborador.');
+        }
+
         $this->validate([
             'reqDate' => 'required|date',
             'reqTime' => 'required|date_format:H:i',
@@ -53,31 +132,41 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
             'reqReason' => 'required|string|min:5|max:500',
         ]);
 
-        $employee = Employee::where('user_id', $this->userId)->first();
-        if (!$employee) {
+        $effectiveAt = Carbon::parse($this->reqDate . ' ' . $this->reqTime);
+        if (ClosedPeriod::isClosed($effectiveAt->year, $effectiveAt->month)) {
             $this->dispatch('app-modal-alert', [
                 'type' => 'error',
-                'title' => 'Perfil Incompleto',
-                'message' => 'Colaborador não possui cadastro funcional ativo.',
-                'buttonText' => 'OK'
+                'title' => 'Competência Fechada',
+                'message' => 'Esta competência encontra-se formalmente fechada e congelada fiscalmente. Solicitações de tratamento retroativas não são permitidas.',
+                'buttonText' => 'Fechar',
             ]);
             return;
         }
 
-        $typeEnum = match($this->reqType) {
-            'manual_punch_added' => \App\Domain\PTRP\Enums\TreatmentEventType::ManualPunchAdded,
-            'absence_justified' => \App\Domain\PTRP\Enums\TreatmentEventType::AbsenceJustified,
-            'punch_disregarded' => \App\Domain\PTRP\Enums\TreatmentEventType::PunchDisregarded,
+        $employee = Employee::where('user_id', $this->userId)->first();
+        if (! $employee) {
+            $this->dispatch('app-modal-alert', [
+                'type' => 'error',
+                'title' => 'Perfil Incompleto',
+                'message' => 'Colaborador não possui cadastro funcional ativo para vincular o tratamento.',
+                'buttonText' => 'OK',
+            ]);
+            return;
+        }
+
+        $typeEnum = match ($this->reqType) {
+            'manual_punch_added' => TreatmentEventType::ManualPunchAdded,
+            'absence_justified' => TreatmentEventType::AbsenceJustified,
+            'punch_disregarded' => TreatmentEventType::PunchDisregarded,
         };
 
-        $effectiveAt = Carbon::parse($this->reqDate . ' ' . $this->reqTime);
-
+        // Armazenamento em disco privado (local) para proteger documentos sensíveis (LGPD)
         $attachmentPath = null;
         if ($this->reqAttachment) {
             $this->validate([
                 'reqAttachment' => 'file|mimes:pdf,jpg,jpeg,png|max:5120',
             ]);
-            $attachmentPath = $this->reqAttachment->store('treatment_attachments', 'public');
+            $attachmentPath = $this->reqAttachment->store('treatment_attachments', 'local');
         }
 
         try {
@@ -86,7 +175,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                 type: $typeEnum,
                 effectiveAt: $effectiveAt,
                 reasonText: $this->reqReason,
-                requestedBy: Auth::user(),
+                requestedBy: $currentUser,
                 attachmentPath: $attachmentPath,
             );
 
@@ -96,16 +185,31 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                 'type' => 'success',
                 'title' => 'Solicitação Enviada com Sucesso!',
                 'message' => 'Sua solicitação de tratamento/justificativa foi enviada ao RH para análise e aprovação.',
-                'buttonText' => 'OK'
+                'buttonText' => 'OK',
             ]);
         } catch (\Throwable $e) {
+            // Em caso de falha, remove arquivo temporário já persistido no disco privado
+            if ($attachmentPath && Storage::disk('local')->exists($attachmentPath)) {
+                Storage::disk('local')->delete($attachmentPath);
+            }
+
             $this->dispatch('app-modal-alert', [
                 'type' => 'error',
                 'title' => 'Erro ao Enviar Solicitação',
                 'message' => $e->getMessage(),
-                'buttonText' => 'Fechar'
+                'buttonText' => 'Fechar',
             ]);
         }
+    }
+
+    protected function maskCpf(?string $cpf): string
+    {
+        $clean = preg_replace('/\D/', '', (string) $cpf);
+        if (strlen($clean) !== 11) {
+            return '***.***.***-**';
+        }
+
+        return substr($clean, 0, 3) . '.***.***-' . substr($clean, -2);
     }
 
     /**
@@ -113,150 +217,61 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
      */
     public function with(): array
     {
-        $user = Auth::user();
-        $isAdmin = $user->role === UserRole::Admin;
-        $isManager = $user->role === UserRole::Manager;
+        $this->validateAuthorizedUserId((int) $this->userId);
+        $currentUser = Auth::user();
 
-        $selectableUsers = $this->resolveSelectableUsers($user, $isAdmin, $isManager);
-        $canSelectUser = $isAdmin || ($isManager && $selectableUsers->count() > 1);
-        $userList = $this->formatUserList($selectableUsers);
+        $isAdmin = $currentUser->role === UserRole::Admin;
+        $isManager = $currentUser->role === UserRole::Manager;
 
-        $entries = TimeEntry::with('user')
-            ->where('user_id', $this->userId)
-            ->whereYear('timestamp', $this->year)
-            ->whereMonth('timestamp', $this->month)
-            ->orderBy('timestamp', 'asc')
-            ->get();
+        $targetUser = User::with('employee.sector')->findOrFail($this->userId);
 
-        $calc = $this->resolveMonthCalculations($entries);
+        // Busca autorizada com paginação e máscara de CPF (sem expor lista total no frontend)
+        $canSelectUser = $isAdmin || $isManager;
+        $searchResults = collect([]);
 
-        $employee = Employee::where('user_id', $this->userId)->first();
-        $periodDate = Carbon::createFromDate($this->year, $this->month, 1)->endOfMonth();
-        $policy = \App\Models\TimeBankPolicy::forDate($periodDate);
+        if ($canSelectUser && $this->userSearch !== '') {
+            $term = trim($this->userSearch);
+            $cleanTerm = preg_replace('/\D/', '', $term);
 
-        $timeBankSummary = null;
-        if ($policy && $policy->enabled && $employee) {
-            $timeBankSummary = app(\App\Domain\PTRP\Services\TimeBankStatementService::class)
-                ->getMonthlySummary($employee, (int) $this->year, (int) $this->month);
+            $query = User::with('employee')
+                ->where(function ($q) use ($term, $cleanTerm) {
+                    $q->where('name', 'like', "%{$term}%")
+                        ->orWhere('email', 'like', "%{$term}%");
+
+                    if ($cleanTerm !== '') {
+                        $q->orWhereHas('employee', fn ($eq) => $eq->where('cpf', 'like', "%{$cleanTerm}%"));
+                    }
+                });
+
+            if ($isManager) {
+                $managedSectorIds = Sector::where('manager_id', $currentUser->id)->pluck('id');
+                $allowedIds = Employee::whereIn('sector_id', $managedSectorIds)->pluck('user_id')->push($currentUser->id);
+                $query->whereIn('id', $allowedIds);
+            }
+
+            $searchResults = $query->orderBy('name')
+                ->take(15)
+                ->get()
+                ->map(fn ($u) => [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'masked_cpf' => $this->maskCpf($u->employee?->cpf),
+                    'job_title' => $u->employee?->job_title ?? ($u->role ? $u->role->label() : 'Colaborador'),
+                ]);
         }
 
-        return [
-            'groupedEntries' => $calc['groupedEntries'],
-            'daysCalculated' => $calc['daysCalculated'],
-            'totalMonthFormatted' => $calc['monthFormatted'],
-            'workedDaysCount' => $calc['workedDaysCount'],
-            'totalPunches' => $entries->count(),
-            'avgFormatted' => $calc['avgFormatted'],
+        // Resolução Oficial via Domínio PTRP
+        $ptrpData = app(TimesheetJourneyService::class)->resolveMonthData(
+            targetUser: $targetUser,
+            year: (int) $this->year,
+            month: (int) $this->month
+        );
+
+        return array_merge($ptrpData, [
             'canSelectUser' => $canSelectUser,
-            'users' => $selectableUsers,
-            'userList' => $userList,
-            'timeBankSummary' => $timeBankSummary,
-            'policy' => $policy,
-            'employee' => $employee,
-        ];
-    }
-
-    protected function resolveSelectableUsers(User $user, bool $isAdmin, bool $isManager): \Illuminate\Support\Collection
-    {
-        if ($isAdmin) {
-            return User::with('employee')->orderBy('name')->get();
-        }
-
-        if ($isManager) {
-            $managedSectorIds = Sector::where('manager_id', $user->id)->pluck('id');
-            $employeeUserIds = Employee::whereIn('sector_id', $managedSectorIds)->pluck('user_id');
-            $allowedUserIds = $employeeUserIds->push($user->id)->unique();
-
-            if (! in_array((int) $this->userId, $allowedUserIds->map(fn ($id) => (int) $id)->toArray())) {
-                $this->userId = $user->id;
-            }
-
-            return User::with('employee')->whereIn('id', $allowedUserIds)->orderBy('name')->get();
-        }
-
-        $this->userId = $user->id;
-
-        return collect([]);
-    }
-
-    protected function formatUserList(\Illuminate\Support\Collection $selectableUsers): \Illuminate\Support\Collection
-    {
-        return $selectableUsers->map(function ($u) {
-            return [
-                'id' => $u->id,
-                'name' => $u->name,
-                'cpf' => $u->employee?->cpf ?? '',
-                'clean_cpf' => preg_replace('/\D/', '', (string) ($u->employee?->cpf ?? '')),
-                'job_title' => $u->employee?->job_title ?? ($u->role ? $u->role->label() : 'Colaborador'),
-            ];
-        })->values();
-    }
-
-    protected function resolveMonthCalculations(\Illuminate\Support\Collection $entries): array
-    {
-        $groupedEntries = $entries->groupBy(function ($entry) {
-            return Carbon::parse($entry->timestamp)->format('Y-m-d');
-        });
-
-        $daysCalculated = [];
-        $totalMonthMinutes = 0;
-
-        foreach ($groupedEntries as $date => $dayEntries) {
-            $metrics = $this->calculateDayMetrics($dayEntries);
-            $daysCalculated[$date] = $metrics;
-            $totalMonthMinutes += $metrics['minutes'];
-        }
-
-        $monthHours = intdiv($totalMonthMinutes, 60);
-        $monthRemMinutes = $totalMonthMinutes % 60;
-        $monthFormatted = sprintf('%dh %02dm', $monthHours, $monthRemMinutes);
-
-        $workedDaysCount = count($groupedEntries);
-        $avgMinutesPerDay = $workedDaysCount > 0 ? (int) round($totalMonthMinutes / $workedDaysCount) : 0;
-        $avgFormatted = sprintf('%02dh %02dm', intdiv($avgMinutesPerDay, 60), $avgMinutesPerDay % 60);
-
-        return [
-            'groupedEntries' => $groupedEntries,
-            'daysCalculated' => $daysCalculated,
-            'monthFormatted' => $monthFormatted,
-            'workedDaysCount' => $workedDaysCount,
-            'avgFormatted' => $avgFormatted,
-        ];
-    }
-
-    public function calculateDayMetrics($dayEntries): array
-    {
-        $totalMinutes = 0;
-        $lastIn = null;
-        $hasOpenInterval = false;
-
-        $sorted = collect($dayEntries)->sortBy('timestamp');
-
-        foreach ($sorted as $entry) {
-            $time = Carbon::parse($entry->timestamp);
-            if ($entry->type === 'in' || $entry->type === 'entrada') {
-                $lastIn = $time;
-            } elseif (($entry->type === 'out' || $entry->type === 'saida') && $lastIn) {
-                $totalMinutes += $lastIn->diffInMinutes($time);
-                $lastIn = null;
-            }
-        }
-
-        if ($lastIn !== null) {
-            $hasOpenInterval = true;
-        }
-
-        $hours = intdiv($totalMinutes, 60);
-        $minutes = $totalMinutes % 60;
-        $formatted = sprintf('%02dh %02dm', $hours, $minutes);
-
-        return [
-            'minutes' => $totalMinutes,
-            'hours' => $hours,
-            'remMinutes' => $minutes,
-            'formatted' => $formatted,
-            'isOpen' => $hasOpenInterval,
-        ];
+            'targetUser' => $targetUser,
+            'searchResults' => $searchResults,
+        ]);
     }
 };
 ?>
@@ -265,14 +280,32 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
     <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 sm:p-6">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 border-b border-gray-200 pb-4">
             <div>
-                <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Espelho de Ponto</h2>
-                <p class="text-xs sm:text-sm text-gray-500 mt-0.5">Histórico completo de registros de jornada e horas trabalhadas</p>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Espelho de Ponto</h2>
+                    @if($isClosedPeriod)
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-800 border border-slate-300">
+                            Competência Fechada (Snapshot v{{ $snapshotVersion }})
+                        </span>
+                    @endif
+                </div>
+                <p class="text-xs sm:text-sm text-gray-500 mt-0.5">
+                    Histórico auditado sob o PTRP (Portaria 671/2021 MTP) · 
+                    <span class="font-semibold text-gray-700">{{ $targetUser->name }}</span>
+                </p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-                <button wire:click="openTreatmentModal" class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-2xs transition">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                    <span>Solicitar Ajuste</span>
-                </button>
+                @if(! $isClosedPeriod)
+                    <button wire:click="openTreatmentModal" class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-2xs transition cursor-pointer">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                        <span>Solicitar Ajuste</span>
+                    </button>
+                @else
+                    <span class="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-100 text-gray-500 rounded-xl text-xs font-semibold border border-gray-200 select-none" title="Competência formalmente fechada pelo DP/RH. Solicitações bloqueadas.">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
+                        Período Fechado
+                    </span>
+                @endif
+
                 <a href="{{ route('folha-ponto', ['userId' => $this->userId, 'month' => $this->month, 'year' => $this->year]) }}" 
                    class="inline-flex items-center gap-2 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs sm:text-sm font-bold shadow-2xs transition">
                     <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
@@ -287,37 +320,10 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
             </div>
         </div>
 
-        <!-- Filters (Responsive Mobile Stack) -->
+        <!-- Filters (Busca Segura no Servidor com Debounce) -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6 pb-6 border-b border-gray-200">
             @if($canSelectUser)
-            <div class="sm:col-span-2 lg:col-span-1 relative" 
-                 x-data="{
-                    open: false,
-                    search: @js($users->firstWhere('id', (int) $this->userId)?->name ?? ''),
-                    selectedId: @entangle('userId').live,
-                    users: @js($userList),
-                    get filteredUsers() {
-                        const term = (this.search || '').toLowerCase().trim();
-                        if (!term) return this.users;
-                        const cleanTerm = term.replace(/\D/g, '');
-                        return this.users.filter(u => {
-                            const matchName = (u.name || '').toLowerCase().includes(term);
-                            const matchCpf = (u.cpf || '').toLowerCase().includes(term) || (cleanTerm && (u.clean_cpf || '').includes(cleanTerm));
-                            return matchName || matchCpf;
-                        });
-                    },
-                    selectUser(u) {
-                        this.selectedId = u.id;
-                        this.search = u.name;
-                        this.open = false;
-                    },
-                    resetSearch() {
-                        const curr = this.users.find(u => u.id === Number(this.selectedId));
-                        this.search = curr ? curr.name : '';
-                    }
-                 }"
-                 @click.outside="open = false; resetSearch()"
-                 @keydown.escape.window="open = false">
+            <div class="sm:col-span-2 lg:col-span-1 relative" x-data="{ open: false }">
                 <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
                     Colaborador <span class="text-indigo-600 font-normal">(buscar por Nome ou CPF)</span>
                 </label>
@@ -328,53 +334,49 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                         </svg>
                     </div>
                     <input type="text"
-                           x-ref="searchInput"
-                           x-model="search"
-                           @focus="open = true; $event.target.select()"
-                           @input="open = true"
-                           placeholder="Digite o nome ou CPF..."
+                           wire:model.live.debounce.300ms="userSearch"
+                           @focus="open = true"
+                           @click.outside="open = false"
+                           placeholder="Buscar: {{ $targetUser->name }}"
                            class="block w-full pl-9 pr-9 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" />
-                    <button type="button"
-                            x-show="search.length > 0"
-                            @click="search = ''; open = true; $refs.searchInput.focus()"
-                            class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer">
-                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-                        </svg>
-                    </button>
+                    @if($userSearch !== '')
+                        <button type="button"
+                                wire:click="$set('userSearch', '')"
+                                class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer">
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    @endif
                 </div>
 
-                <!-- Autocomplete Dropdown List -->
-                <div x-show="open"
+                <!-- Autocomplete com Resultados Autorizados e CPF Mascarado -->
+                @if($searchResults->isNotEmpty() || $userSearch !== '')
+                <div x-show="open && $wire.userSearch.length > 0"
                      x-cloak
-                     x-transition:enter="transition ease-out duration-100"
-                     x-transition:enter-start="opacity-0 scale-95"
-                     x-transition:enter-end="opacity-100 scale-100"
-                     x-transition:leave="transition ease-in duration-75"
-                     x-transition:leave-start="opacity-100 scale-100"
-                     x-transition:leave-end="opacity-0 scale-95"
                      class="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto bg-white rounded-xl shadow-xl border border-gray-200 py-1 text-sm divide-y divide-gray-100">
-                    <template x-if="filteredUsers.length === 0">
-                        <div class="px-4 py-3 text-xs text-gray-500 text-center">
-                            Nenhum colaborador localizado com "<span class="font-medium" x-text="search"></span>".
-                        </div>
-                    </template>
-                    <template x-for="u in filteredUsers" :key="u.id">
+                    @forelse($searchResults as $u)
                         <button type="button"
-                                @click="selectUser(u)"
-                                :class="selectedId === u.id ? 'bg-indigo-50/80 text-indigo-900 font-semibold' : 'text-gray-700 hover:bg-gray-50'"
-                                class="w-full text-left px-3.5 py-2.5 flex items-center justify-between gap-2 transition cursor-pointer">
+                                wire:click="selectUser({{ $u['id'] }})"
+                                @click="open = false"
+                                class="w-full text-left px-3.5 py-2.5 flex items-center justify-between gap-2 transition hover:bg-gray-50 cursor-pointer {{ (int)$userId === (int)$u['id'] ? 'bg-indigo-50/80 font-semibold' : '' }}">
                             <div class="truncate">
-                                <p class="text-sm font-medium text-gray-900 truncate" x-text="u.name"></p>
-                                <p class="text-xs text-gray-500 truncate" x-text="u.job_title"></p>
+                                <p class="text-sm font-medium text-gray-900 truncate">{{ $u['name'] }}</p>
+                                <p class="text-xs text-gray-500 truncate">{{ $u['job_title'] }}</p>
                             </div>
                             <div class="text-right shrink-0">
-                                <span class="text-xs font-mono px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200"
-                                      x-text="u.cpf ? u.cpf : 'Sem CPF'"></span>
+                                <span class="text-xs font-mono px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">
+                                    {{ $u['masked_cpf'] }}
+                                </span>
                             </div>
                         </button>
-                    </template>
+                    @empty
+                        <div class="px-4 py-3 text-xs text-gray-500 text-center">
+                            Nenhum colaborador autorizado localizado com "<span class="font-medium">{{ $userSearch }}</span>".
+                        </div>
+                    @endforelse
                 </div>
+                @endif
             </div>
             @endif
             
@@ -390,7 +392,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
             <div>
                 <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Ano</label>
                 <select wire:model.live="year" class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white">
-                    @for($i = now()->year - 2; $i <= now()->year; $i++)
+                    @for($i = now()->year - 2; $i <= now()->year + 1; $i++)
                         <option value="{{ $i }}">{{ $i }}</option>
                     @endfor
                 </select>
@@ -449,15 +451,25 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
         @endif
 
         <!-- Monthly Summary KPI Cards -->
-        @if($totalPunches > 0)
+        @if($totalPunches > 0 || $totalWorkedMinutes > 0)
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
             <div class="bg-indigo-50/60 border border-indigo-100 rounded-xl p-4 flex items-center gap-3">
                 <div class="w-10 h-10 rounded-lg bg-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
                 </div>
                 <div>
-                    <p class="text-xs font-semibold text-indigo-900 uppercase tracking-wider">Total Trabalhado</p>
+                    <div class="flex items-center gap-1.5">
+                        <p class="text-xs font-semibold text-indigo-900 uppercase tracking-wider">Total Trabalhado</p>
+                        @if($isPartial)
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200" title="Apuração parcial: existem dias com pendência ou jornadas incompletas no mês">Parcial</span>
+                        @endif
+                    </div>
                     <p class="text-xl font-black text-indigo-950 font-mono">{{ $totalMonthFormatted }}</p>
+                    @if($isClosedPeriod)
+                        <p class="text-[10px] text-indigo-700/80 mt-0.5">Apuração formal congelada</p>
+                    @else
+                        <p class="text-[10px] text-gray-500 mt-0.5">Apuração minuto a minuto PTRP</p>
+                    @endif
                 </div>
             </div>
 
@@ -468,6 +480,9 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                 <div>
                     <p class="text-xs font-semibold text-emerald-900 uppercase tracking-wider">Dias Trabalhados</p>
                     <p class="text-xl font-black text-emerald-950 font-mono">{{ $workedDaysCount }} {{ $workedDaysCount === 1 ? 'dia' : 'dias' }}</p>
+                    <p class="text-[10px] text-gray-500 mt-0.5" title="Apenas datas com jornada concluída e apurada">
+                        {{ $completedDaysCount }} concluídas @if($incompleteDaysCount > 0) · <span class="text-rose-600 font-bold">{{ $incompleteDaysCount }} incompleta(s)</span>@endif
+                    </p>
                 </div>
             </div>
 
@@ -478,6 +493,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                 <div>
                     <p class="text-xs font-semibold text-purple-900 uppercase tracking-wider">Média por Dia</p>
                     <p class="text-xl font-black text-purple-950 font-mono">{{ $avgFormatted }}</p>
+                    <p class="text-[10px] text-gray-500 mt-0.5 truncate max-w-[220px]" title="{{ $avgCriteria }}">{{ $avgCriteria }}</p>
                 </div>
             </div>
         </div>
@@ -494,23 +510,35 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                         </h3>
                         <div class="flex items-center gap-2 flex-wrap">
                             @if(isset($daysCalculated[$date]))
-                                @if($daysCalculated[$date]['isOpen'])
-                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                                @php $dayCalc = $daysCalculated[$date]; @endphp
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border {{ $dayCalc['status_badge_class'] }}">
+                                    @if($dayCalc['is_open'])
                                         <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                                        {{ $daysCalculated[$date]['formatted'] }} (em andamento)
-                                    </span>
-                                @else
-                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                                        <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                                        {{ $daysCalculated[$date]['formatted'] }} trabalhadas
-                                    </span>
-                                @endif
+                                    @endif
+                                    @if($dayCalc['status'] === 'concluded')
+                                        {{ $dayCalc['formatted'] }} trabalhadas
+                                    @else
+                                        {{ $dayCalc['formatted'] }} ({{ $dayCalc['status_label'] }})
+                                    @endif
+                                </span>
                             @endif
                             <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
                                 {{ count($dayEntries) }} {{ count($dayEntries) === 1 ? 'registro' : 'registros' }}
                             </span>
                         </div>
                     </div>
+
+                    @if(isset($daysCalculated[$date]['notes']) && count($daysCalculated[$date]['notes']) > 0)
+                        <div class="bg-indigo-50/40 px-4 py-1.5 border-b border-indigo-100 text-[11px] text-indigo-800 space-y-0.5">
+                            @foreach($daysCalculated[$date]['notes'] as $note)
+                                <p class="flex items-center gap-1.5">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                                    {{ $note }}
+                                </p>
+                            @endforeach
+                        </div>
+                    @endif
+
                     <ul class="divide-y divide-gray-100">
                         @foreach($dayEntries as $entry)
                             <li class="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-gray-50 transition" wire:key="entry-{{ $entry->id }}">
@@ -526,10 +554,35 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                                             Ajuste Manual
                                         </span>
                                     @endif
+                                    @if($entry->nsr)
+                                        <span class="text-xs font-mono text-gray-400">
+                                            NSR #{{ str_pad((string)$entry->nsr, 9, '0', STR_PAD_LEFT) }}
+                                        </span>
+                                    @endif
                                 </div>
-                                <div class="text-xs text-gray-500 font-mono flex items-center gap-1">
-                                    <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
-                                    <span>Lat: {{ number_format($entry->latitude, 4) }}, Lng: {{ number_format($entry->longitude, 4) }}</span>
+
+                                <div class="flex items-center gap-3">
+                                    @if($entry->has_valid_location)
+                                        <div class="text-xs text-gray-500 font-mono flex items-center gap-1" title="Coordenadas geográficas registradas no ponto">
+                                            <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+                                            <span>Lat: {{ number_format($entry->latitude, 4) }}, Lng: {{ number_format($entry->longitude, 4) }}</span>
+                                        </div>
+                                    @else
+                                        <div class="text-xs text-gray-400 font-sans flex items-center gap-1" title="Sem coordenadas de GPS registradas no ato da batida">
+                                            <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+                                            <span class="italic">Localização não disponível</span>
+                                        </div>
+                                    @endif
+
+                                    @if(isset($entry->receipt) && $entry->receipt)
+                                        <a href="{{ route('receipts.pdf', ['code' => $entry->receipt->verification_code]) }}"
+                                           target="_blank"
+                                           title="Baixar comprovante fiscal oficial (PDF)"
+                                           class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition">
+                                            <span>Comprovante</span>
+                                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" /></svg>
+                                        </a>
+                                    @endif
                                 </div>
                             </li>
                         @endforeach
@@ -555,7 +608,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                         </div>
                         <h3 class="text-base font-bold text-gray-900">Solicitar Ajuste ou Justificativa</h3>
                     </div>
-                    <button wire:click="$set('showTreatmentModal', false)" class="text-gray-400 hover:text-gray-600">✕</button>
+                    <button wire:click="$set('showTreatmentModal', false)" class="text-gray-400 hover:text-gray-600 cursor-pointer">✕</button>
                 </div>
 
                 <form wire:submit="submitTreatmentRequest" class="space-y-4 text-xs">
@@ -591,10 +644,10 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                     <div>
                         <label class="block font-bold text-gray-700 uppercase mb-1">Anexo / Atestado Médico (Opcional / Obrigatório para Abono)</label>
                         <input type="file" wire:model="reqAttachment" accept=".pdf,.jpg,.jpeg,.png" class="w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border border-gray-200 rounded-xl p-1 bg-gray-50">
-                        <p class="text-[10px] text-gray-400 mt-1">Formatos aceitos: PDF, PNG, JPG (máx. 5MB). Indispensável para auditoria do RH e abono legal de faltas.</p>
+                        <p class="text-[10px] text-gray-400 mt-1">Armazenamento seguro e confidencial. Formatos aceitos: PDF, PNG, JPG (máx. 5MB). Indispensável para auditoria do RH e abono legal de faltas.</p>
                         @error('reqAttachment') <span class="text-red-500 mt-1 block">{{ $message }}</span> @enderror
                         <div wire:loading wire:target="reqAttachment" class="text-[11px] text-indigo-600 font-semibold mt-1">
-                            Enviando anexo... aguarde.
+                            Enviando anexo confidencial... aguarde.
                         </div>
                     </div>
 
@@ -603,8 +656,8 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                     </div>
 
                     <div class="flex justify-end gap-2 pt-3 border-t">
-                        <button type="button" wire:click="$set('showTreatmentModal', false)" class="px-4 py-2 border rounded-xl font-bold text-gray-600 hover:bg-gray-50">Cancelar</button>
-                        <button type="submit" class="px-5 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-sm">Enviar Solicitação</button>
+                        <button type="button" wire:click="$set('showTreatmentModal', false)" class="px-4 py-2 border rounded-xl font-bold text-gray-600 hover:bg-gray-50 cursor-pointer">Cancelar</button>
+                        <button type="submit" class="px-5 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-sm cursor-pointer">Enviar Solicitação</button>
                     </div>
                 </form>
             </div>

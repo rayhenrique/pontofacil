@@ -65,14 +65,15 @@ class TimesheetCalculationTest extends TestCase
 
     public function test_open_interval_marks_as_in_progress(): void
     {
+        $date = Carbon::create(2026, 10, 1, 0, 0, 0, 'America/Maceio');
+        Carbon::setTestNow($date->copy()->setTime(14, 0, 0));
+
         $user = User::create([
             'name' => 'Colaborador Em Andamento',
             'email' => 'andamento@test.com',
             'password' => 'secret123',
             'role' => UserRole::Employee,
         ]);
-
-        $date = Carbon::create(2026, 10, 1, 0, 0, 0, 'America/Maceio');
 
         // Entrada: 08:00
         TimeEntry::create([
@@ -95,11 +96,15 @@ class TimesheetCalculationTest extends TestCase
             'type' => 'in',
         ]);
 
-        $component = Livewire::actingAs($user)
-            ->test('timesheet')
-            ->set('year', 2026)
-            ->set('month', 10);
+        try {
+            $component = Livewire::actingAs($user)
+                ->test('timesheet')
+                ->set('year', 2026)
+                ->set('month', 10);
 
-        $component->assertSee('04h 00m (em andamento)');
+            $component->assertSee('04h 00m (em andamento)');
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 }

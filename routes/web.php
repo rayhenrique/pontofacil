@@ -74,11 +74,20 @@ Route::middleware('auth')->group(function () {
             $canView = true;
         }
 
-        if (! $canView || ! $event->attachment_path || ! Storage::disk('public')->exists($event->attachment_path)) {
-            abort(403, 'Acesso não autorizado ao comprovante/atestado médico ou arquivo não encontrado.');
+        if (! $canView || ! $event->attachment_path) {
+            abort(403, 'Acesso não autorizado ao comprovante/atestado médico.');
         }
 
-        return Storage::disk('public')->response($event->attachment_path);
+        // Armazenamento privado (local) para novos documentos; fallback para public para registros legados
+        if (Storage::disk('local')->exists($event->attachment_path)) {
+            return Storage::disk('local')->response($event->attachment_path);
+        }
+
+        if (Storage::disk('public')->exists($event->attachment_path)) {
+            return Storage::disk('public')->response($event->attachment_path);
+        }
+
+        abort(404, 'Comprovante/atestado médico não encontrado no armazenamento.');
     })->name('treatment.attachment');
 
     // Admin Exclusive Routes (RH Total)

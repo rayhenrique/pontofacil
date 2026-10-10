@@ -10,6 +10,7 @@ use App\Domain\PTRP\Policies\LaborPolicy;
 use App\Models\Employee;
 use App\Models\Establishment;
 use App\Models\PunchEvent;
+use App\Models\TimeEntry;
 use App\Models\TreatmentEvent;
 use App\Models\WorkSchedule;
 use Carbon\Carbon;
@@ -119,6 +120,26 @@ class CalculateDailyJourneyAction
             ];
         }
 
+        // Fallback para histórico legado em TimeEntry se não houver registros em PunchEvent
+        if ($rawPunches->isEmpty() && $employee->user_id) {
+            $legacyEntries = TimeEntry::where('user_id', $employee->user_id)
+                ->whereDate('timestamp', $dateStr)
+                ->orderBy('timestamp', 'asc')
+                ->get();
+
+            foreach ($legacyEntries as $entry) {
+                $entryTime = Carbon::parse($entry->timestamp);
+                $effectivePunches[] = [
+                    'id' => (string) $entry->id,
+                    'nsr' => 0,
+                    'time' => $entryTime->format('H:i'),
+                    'timestamp' => $entryTime,
+                    'type' => $entry->type ?? 'punch',
+                    'source' => 'time_entry_projection',
+                ];
+            }
+        }
+
         // Adicionar batidas manuais tratadas
         foreach ($approvedTreatments->where('type', TreatmentEventType::ManualPunchAdded) as $manual) {
             $effectivePunches[] = [
@@ -136,7 +157,82 @@ class CalculateDailyJourneyAction
         // Ordenar cronologicamente
         usort($effectivePunches, fn ($a, $b) => strcmp($a['time'], $b['time']));
 
-        $punchCount = count($effectivePunches);
+        // Verificar se a primeira batida do dia é a saída de uma jornada noturna iniciada na véspera
+        if (! empty($effectivePunches) && $effectivePunches[0]['type'] === 'out') {
+            $prevDateStr = $date->copy()->subDay()->format('Y-m-d');
+            $prevPunches = PunchEvent::where(function ($q) use ($employee) {
+                $q->where('employee_id', $employee->id)
+                    ->orWhere('user_id', $employee->user_id);
+            })
+                ->whereDate('occurred_at_local', $prevDateStr)
+                ->orderBy('occurred_at_local', 'asc')
+                ->get();
+
+            if ($prevPunches->isEmpty() && $employee->user_id) {
+                $prevPunches = TimeEntry::where('user_id', $employee->user_id)
+                    ->whereDate('timestamp', $prevDateStr)
+                    ->orderBy('timestamp', 'asc')
+                    ->get();
+            }
+
+            if ($prevPunches->isNotEmpty()) {
+                $lastPrev = $prevPunches->last();
+                $lastPrevType = $lastPrev->direction ?? $lastPrev->type;
+                $lastPrevTime = Carbon::parse($lastPrev->occurred_at_local ?? $lastPrev->timestamp);
+                $currTime = Carbon::parse($effectivePunches[0]['timestamp'] ?? ($dateStr.' '.$effectivePunches[0]['time']));
+
+                if ($lastPrevType === 'in' && $lastPrevTime->hour >= 18 && $currTime->diffInHours($lastPrevTime) <= 16) {
+                    $effectivePunches[0]['is_previous_day_exit'] = true;
+                    $treatmentNotes[] = sprintf('Saída das %s vinculada à jornada noturna iniciada no dia anterior.', $effectivePunches[0]['time']);
+                }
+            }
+        }
+
+        // Se o último registro do dia for uma entrada noturna (>=18h), verificar se há saída no dia seguinte
+        $unpairedCount = count(array_filter($effectivePunches, fn ($p) => empty($p['is_previous_day_exit'])));
+        if ($unpairedCount % 2 !== 0 && end($effectivePunches)['type'] === 'in') {
+            $lastEntry = end($effectivePunches);
+            $lastEntryTime = Carbon::parse($lastEntry['timestamp'] ?? ($dateStr.' '.$lastEntry['time']));
+            if ($lastEntryTime->hour >= 18) {
+                $nextDateStr = $date->copy()->addDay()->format('Y-m-d');
+                $nextPunches = PunchEvent::where(function ($q) use ($employee) {
+                    $q->where('employee_id', $employee->id)
+                        ->orWhere('user_id', $employee->user_id);
+                })
+                    ->whereDate('occurred_at_local', $nextDateStr)
+                    ->orderBy('occurred_at_local', 'asc')
+                    ->get();
+
+                if ($nextPunches->isEmpty() && $employee->user_id) {
+                    $nextPunches = TimeEntry::where('user_id', $employee->user_id)
+                        ->whereDate('timestamp', $nextDateStr)
+                        ->orderBy('timestamp', 'asc')
+                        ->get();
+                }
+
+                if ($nextPunches->isNotEmpty()) {
+                    $firstNext = $nextPunches->first();
+                    $firstNextType = $firstNext->direction ?? $firstNext->type;
+                    $firstNextTime = Carbon::parse($firstNext->occurred_at_local ?? $firstNext->timestamp);
+
+                    if ($firstNextType === 'out' && $firstNextTime->diffInHours($lastEntryTime) <= 16) {
+                        $effectivePunches[] = [
+                            'id' => (string) $firstNext->id,
+                            'nsr' => $firstNext->nsr ?? 0,
+                            'time' => $firstNextTime->format('H:i'),
+                            'timestamp' => $firstNextTime,
+                            'type' => 'out',
+                            'source' => 'rep_p_next_day_nocturnal',
+                            'is_next_day_exit' => true,
+                        ];
+                        $treatmentNotes[] = sprintf('Jornada noturna concluída no dia seguinte às %s.', $firstNextTime->format('H:i'));
+                    }
+                }
+            }
+        }
+
+        $punchesToCalculate = array_values(array_filter($effectivePunches, fn ($p) => empty($p['is_previous_day_exit'])));
+        $punchCount = count($punchesToCalculate);
         $isIncomplete = ($punchCount % 2 !== 0);
 
         // 7. Calcular minutos trabalhados e intervalos intrajornada
@@ -144,15 +240,15 @@ class CalculateDailyJourneyAction
         $breakMinutes = 0;
 
         for ($i = 0; $i + 1 < $punchCount; $i += 2) {
-            $entry = Carbon::parse($dateStr.' '.$effectivePunches[$i]['time']);
-            $exit = Carbon::parse($dateStr.' '.$effectivePunches[$i + 1]['time']);
+            $entry = Carbon::parse($punchesToCalculate[$i]['timestamp'] ?? ($dateStr.' '.$punchesToCalculate[$i]['time']));
+            $exit = Carbon::parse($punchesToCalculate[$i + 1]['timestamp'] ?? ($dateStr.' '.$punchesToCalculate[$i + 1]['time']));
             if ($exit->greaterThanOrEqualTo($entry)) {
                 $workedMinutes += $entry->diffInMinutes($exit);
             }
 
             // Intervalo entre a saída do período anterior e a entrada do próximo
             if ($i + 2 < $punchCount) {
-                $nextEntry = Carbon::parse($dateStr.' '.$effectivePunches[$i + 2]['time']);
+                $nextEntry = Carbon::parse($punchesToCalculate[$i + 2]['timestamp'] ?? ($dateStr.' '.$punchesToCalculate[$i + 2]['time']));
                 if ($nextEntry->greaterThanOrEqualTo($exit)) {
                     $breakMinutes += $exit->diffInMinutes($nextEntry);
                 }
