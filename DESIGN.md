@@ -454,7 +454,41 @@ Todo Empty State deve fornecer:
 
 ---
 
-## 24. Anti-Padrões Oficiais (O Que o PontoFácil NUNCA Faz)
+## 24. Padrões do Módulo de Registro de Ponto (/ponto)
+
+O módulo `/ponto` é a interface de maior criticidade e frequência de uso para os colaboradores. Ele deve conciliar rapidez operacional com rastreabilidade jurídica.
+
+### 24.1. Cabeçalho Operacional e Relógio Oficial
+* **Abordagem Sóbria:** O relógio nunca deve ser estilizado como um banner promocional ou decorativo. É um indicador funcional de precisão.
+* **Tipografia Tabular:** O mostrador de horas utiliza algarismos tabulares (`font-mono` com `tabular-nums`) para prevenir micro-deslocamentos horizontais a cada segundo.
+* **Fuso Horário Contextual:** O fuso horário exibido deve ser o retornado pelo estabelecimento do colaborador autenticado (`$establishmentTimezone`), identificando de forma contextual: *"Horário do estabelecimento (GMT-X)"*. É vedado cravar textos fixos regionais como se fossem o padrão de todos os clientes.
+* **Reserva Legal:** A interface deve deixar claro ao colaborador que o relógio visual atua como referência temporal operacional, sendo o registro fiscal chancelado pela estampa de tempo soberana do servidor auditado.
+
+### 24.2. Viewfinder e Scanner QR Code
+* **Proporção e Foco:** O scanner é o protagonista do fluxo. Utiliza área contida quadrada (aspect ratio 1:1, largura típica de 240px a 300px), sem esticar a câmera ou gerar distorções de lente.
+* **Retícula Discreta:** Moldura com retícula de cantos demarcados (`border-indigo-500`) e contraste suave contra o fundo cinza, sinalizando prontidão de leitura sem animações invasivas de varredura constante.
+* **Ação Primária Imediata:** O botão de acionamento (`min-h-[48px]`, `rounded-xl`, `bg-indigo-600`) fica posicionado imediatamente abaixo do viewfinder. No mobile (320px+), deve estar visível no primeiro terço de tela sem exigir rolagem extensa.
+* **Máquina de Estados e Ciclo de Vida:** O scanner opera com estados unívocos (`idle`, `starting`, `scanning`, `location`, `submitting`, `success`, `warning`, `error`, `unknown`). Ao transicionar, encerrar ou navegar via Livewire, todas as instâncias de câmera e timers associados devem ser explicitamente desmontados para evitar travamento de dispositivos móveis.
+
+### 24.3. Confirmação e Comprovante de Marcação
+* **Feedback Operacional:** Confirmações de ponto exibem imediatamente o tipo de batida (`Entrada`, `Saída`, `Intervalo`), o horário exato e o badge de validação (`Confirmada` em `emerald-700`).
+* **Acesso Direto ao Comprovante:** Toda marcação confirmada deve disponibilizar acesso imediato ao comprovante com NSR e assinatura digital, cumprindo o direito de emissão instantânea da Portaria 671/2021 MTP.
+
+### 24.4. Painel Contextual de Jornada
+* **Fidelidade de Dados:** O painel exibe unicamente marcações reais já persistidas do colaborador no dia. É expressamente proibido projetar saldos fictícios, tolerâncias estimadas ou cálculos de banco de horas no frontend.
+* **Diferenciação Semântica de Estados:**
+  * **Sem registros no dia:** *"Você ainda não possui marcações neste período."* (com orientação de uso);
+  * **Falha de sincronização/carregamento:** *"Não foi possível carregar seu histórico agora."* (diferenciando erro técnico de ausência legítima de registros).
+
+### 24.5. Responsividade e Aproveitamento de Espaço
+* **Mobile-First (320px a 767px):** Fluxo de coluna única com cabeçalho compacto, scanner no topo, botão de leitura, card da última marcação e histórico do dia. O container deve prever padding inferior de segurança (`pb-28`) para respeitar a safe area e impedir sobreposição com a barra inferior fixa.
+* **Desktop (1024px+):** Contêiner balanceado em duas colunas (~900px a 1100px), evitando o esticamento do scanner:
+  * **Coluna Esquerda:** Registro operacional (scanner, câmera, botão e feedback);
+  * **Coluna Direita:** Contexto imediato (última marcação com atalho ao comprovante e resumo das batidas do dia).
+
+---
+
+## 25. Anti-Padrões Oficiais (O Que o PontoFácil NUNCA Faz)
 
 1. ❌ **Nunca usar gradientes em textos** em títulos e cabeçalhos.
 2. ❌ **Nunca transformar todas as seções em grids de cards isolados.**
@@ -473,9 +507,9 @@ Todo Empty State deve fornecer:
 
 ---
 
-## 25. Checklists de Qualidade para Novas Telas
+## 26. Checklists de Qualidade para Novas Telas
 
-### 25.1. Checklist Geral de Qualquer Nova Tela
+### 26.1. Checklist Geral de Qualquer Nova Tela
 - [ ] O layout foi desenhado mobile-first a partir de 320px?
 - [ ] Foi testado em 320px, 360px, 390px, 768px, 1024px e 1280px+ sem overflow horizontal?
 - [ ] A hierarquia de ações está evidente (no máximo uma ação primária em destaque)?
@@ -488,7 +522,7 @@ Todo Empty State deve fornecer:
 - [ ] Animações respeitam `prefers-reduced-motion` e o conteúdo aparece mesmo sem JavaScript?
 - [ ] Se o logotipo for removido, a tela ainda é reconhecível como parte do PontoFácil?
 
-### 25.2. Checklist Específico da Landing Page
+### 26.2. Checklist Específico da Landing Page
 - [ ] O Hero explica o produto nos primeiros 5 segundos de leitura?
 - [ ] O produto real é apresentado antes de qualquer mockup conceitual?
 - [ ] Os dados reais de jornada (horários, comprovantes, saldos, NSR) atuam como elementos visuais de design?
@@ -500,7 +534,7 @@ Todo Empty State deve fornecer:
 
 ---
 
-## 26. Governança e Evolução do Design System
+## 27. Governança e Evolução do Design System
 
 1. **Fonte Única da Verdade:** Este arquivo (`DESIGN.md`) é a especificação soberana de UX/UI do PontoFácil.
 2. **Reaproveitamento Antes da Invenção:** Ao criar novas telas, consulte as diretrizes deste documento e reutilize classes, espaçamentos e componentes já existentes.

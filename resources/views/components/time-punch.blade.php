@@ -21,6 +21,7 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
     public string $greetingText = '';
     public string $currentDateFormatted = '';
     public ?array $confirmationData = null;
+    public bool $hasHistoryLoadError = false;
 
     public function mount()
     {
@@ -42,7 +43,28 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
     }
 
     /**
-     * Retorna os registros reais de hoje do colaborador autenticado para exibição no painel lateral.
+     * Retorna a última marcação histórica do colaborador autenticado para destaque no card.
+     */
+    public function getLatestPunchProperty(): ?PunchEvent
+    {
+        $user = Auth::user();
+        if (! $user) {
+            return null;
+        }
+
+        try {
+            return PunchEvent::with('receipt')
+                ->where('user_id', $user->id)
+                ->orderBy('occurred_at_utc', 'desc')
+                ->first();
+        } catch (\Throwable $e) {
+            report($e);
+            return null;
+        }
+    }
+
+    /**
+     * Retorna os registros reais de hoje do colaborador autenticado para exibição no painel de jornada.
      */
     public function getTodayPunchesProperty()
     {
@@ -51,14 +73,20 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
             return collect();
         }
 
-        $tz = $this->establishmentTimezone ?: config('app.timezone', 'America/Maceio');
-        $todayDateStr = Carbon::now($tz)->toDateString();
+        try {
+            $tz = $this->establishmentTimezone ?: config('app.timezone', 'America/Maceio');
+            $todayDateStr = Carbon::now($tz)->toDateString();
 
-        return PunchEvent::with('receipt')
-            ->where('user_id', $user->id)
-            ->whereDate('occurred_at_local', $todayDateStr)
-            ->orderBy('occurred_at_local', 'asc')
-            ->get();
+            return PunchEvent::with('receipt')
+                ->where('user_id', $user->id)
+                ->whereDate('occurred_at_local', $todayDateStr)
+                ->orderBy('occurred_at_local', 'asc')
+                ->get();
+        } catch (\Throwable $e) {
+            report($e);
+            $this->hasHistoryLoadError = true;
+            return collect();
+        }
     }
 
     /**
@@ -318,42 +346,51 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
     <!-- Anunciador de acessibilidade para tecnologias assistivas -->
     <div class="sr-only" aria-live="polite" x-text="statusAnnouncement"></div>
 
-    <!-- Header Operacional (Saudação e Relógio Digital Oficial) -->
-    <div class="mb-4 sm:mb-6 bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-            <h1 class="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 tracking-tight">{{ $greetingText }}</h1>
-            <p class="text-xs sm:text-sm text-gray-500 font-medium mt-0.5">Registro de ponto &bull; {{ $currentDateFormatted }}</p>
-        </div>
-        <div class="text-left sm:text-right">
-            <div class="font-mono text-2xl sm:text-3xl md:text-4xl font-extrabold text-indigo-950 tracking-tight tabular-nums" x-text="currentTime">
+    <!-- Header Superior (Minimalista, Funcional e Não-Decorativo) -->
+    <div class="mb-4 sm:mb-6 px-1">
+        <!-- Linha 1: Data Compacta -->
+        <p class="text-xs sm:text-sm font-medium text-gray-500 tracking-normal">
+            {{ $currentDateFormatted }}
+        </p>
+
+        <!-- Linha 2: Relógio Digital com Números Tabulares e Ícone Discreto -->
+        <div class="flex items-center justify-between mt-0.5">
+            <div class="font-mono text-3xl min-[360px]:text-4xl sm:text-5xl font-extrabold text-gray-950 tracking-tight tabular-nums" x-text="currentTime">
                 {{ Carbon::now($establishmentTimezone)->format('H:i:s') }}
             </div>
-            <p class="text-[11px] sm:text-xs text-indigo-700 font-medium" x-text="timezoneLabel">{{ $timezoneLabel }}</p>
+            <div class="text-gray-400 p-1" title="Horário de referência do estabelecimento">
+                <svg class="w-6 h-6 sm:w-7 sm:h-7" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+            </div>
+        </div>
+
+        <!-- Linha 3: Identificação Contextual do Fuso Horário e Saudação -->
+        <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-[11px] sm:text-xs text-gray-500 font-medium">
+            <span class="inline-flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                <span x-text="timezoneLabel">{{ $timezoneLabel }}</span>
+            </span>
+            <span class="text-gray-300 hidden sm:inline">&bull;</span>
+            <span class="text-gray-600 hidden sm:inline">{{ $greetingText }}</span>
         </div>
     </div>
 
     <!-- Composição Responsiva: 2 Colunas no Desktop / Empilhamento no Mobile -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-start">
         
-        <!-- Coluna 1: Card de Registro e Scanner QR Code -->
-        <div class="bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-6 shadow-2xs flex flex-col justify-between">
+        <!-- Coluna Esquerda (Mobile: Topo / Desktop: lg:col-span-5 xl:col-span-5): Card de Registro e Scanner -->
+        <div class="lg:col-span-5 xl:col-span-5 bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-6 shadow-xs flex flex-col justify-between">
             <div>
-                <div class="pb-3 mb-3 border-b border-gray-100 flex items-center justify-between">
-                    <div>
-                        <h2 class="text-base sm:text-lg font-bold text-gray-900 tracking-tight">Registrar ponto</h2>
-                        <p class="text-xs text-gray-500">Leitor oficial de QR Code da empresa</p>
-                    </div>
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold"
-                          :class="state === 'scanning' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-slate-100 text-slate-600 border border-slate-200'">
-                        <span class="w-1.5 h-1.5 rounded-full"
-                              :class="state === 'scanning' ? 'bg-indigo-600 animate-pulse' : 'bg-slate-400'"></span>
-                        <span x-text="stateBadgeLabel"></span>
-                    </span>
+                <!-- Cabeçalho do Card (Conforme Wireframe 1) -->
+                <div class="text-center pb-2">
+                    <h2 class="text-base sm:text-lg font-bold text-gray-900 tracking-tight">Registrar ponto</h2>
+                    <p class="text-xs sm:text-sm text-gray-500 mt-0.5">Leia o QR Code disponibilizado pela empresa</p>
                 </div>
 
                 <!-- Alertas Inline de Feedback -->
                 @if($message)
-                    <div class="mb-4 rounded-xl p-3 flex items-start gap-2.5 text-left text-xs sm:text-sm {{ $status === 'success' ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' : ($status === 'warning' ? 'bg-amber-50 text-amber-900 border border-amber-200' : 'bg-red-50 text-red-900 border border-red-200') }}">
+                    <div class="mt-3 rounded-xl p-3 flex items-start gap-2.5 text-left text-xs sm:text-sm {{ $status === 'success' ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' : ($status === 'warning' ? 'bg-amber-50 text-amber-900 border border-amber-200' : 'bg-red-50 text-red-900 border border-red-200') }}">
                         <div class="w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 {{ $status === 'success' ? 'text-emerald-600' : ($status === 'warning' ? 'text-amber-600' : 'text-red-600') }}">
                             @if($status === 'success')
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
@@ -367,30 +404,30 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                     </div>
                 @endif
 
-                <!-- Área Central do Viewfinder / Scanner -->
+                <!-- Área Central do Viewfinder / Scanner (Proporção Quadrada, Borda Discreta) -->
                 <div class="my-4">
-                    <div class="relative w-full max-w-[210px] sm:max-w-[240px] aspect-square mx-auto overflow-hidden rounded-2xl border-2 border-dashed transition-all duration-200 shadow-inner flex items-center justify-center bg-slate-50"
+                    <div class="relative w-full max-w-[220px] sm:max-w-[250px] aspect-square mx-auto overflow-hidden rounded-2xl border-2 border-dashed transition-all duration-200 shadow-inner flex items-center justify-center bg-slate-50"
                          :class="{
-                             'border-indigo-200': state === 'idle',
+                             'border-slate-200': state === 'idle',
                              'border-indigo-400': state === 'starting' || state === 'scanning',
-                             'border-emerald-300': state === 'location' || state === 'submitting',
-                             'border-red-200': state === 'error',
-                             'border-amber-200': state === 'unknown'
+                             'border-emerald-400': state === 'location' || state === 'submitting',
+                             'border-red-300': state === 'error',
+                             'border-amber-300': state === 'unknown'
                          }">
                         
-                        <!-- Elemento real de vídeo do Html5Qrcode (Permanece no DOM sempre com dimensões reais) -->
+                        <!-- Elemento real de vídeo do Html5Qrcode -->
                         <div id="qr-reader" 
                              class="absolute inset-0 w-full h-full overflow-hidden rounded-2xl flex items-center justify-center [&_video]:w-full [&_video]:h-full [&_video]:object-cover [&_video]:rounded-2xl [&_#qr-reader__scan_region]:w-full [&_#qr-reader__scan_region]:h-full"></div>
                         
-                        <!-- Estado 1: Idle (Leitura não iniciada) -->
+                        <!-- Estado 1: Idle (Leitura não iniciada - Ícone de retícula simples conforme Wireframe) -->
                         <div x-show="state === 'idle'" class="absolute inset-0 z-10 bg-slate-50 flex flex-col items-center justify-center p-4 text-center select-none text-gray-400">
-                            <div class="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center mb-2.5 text-gray-500">
-                                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor">
+                            <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-2 text-gray-500">
+                                <svg class="w-10 h-10 text-gray-600" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.875 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5Z" />
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M14.25 14.25h1.5v1.5h-1.5zM18.75 14.25h1.5v1.5h-1.5zM14.25 18.75h1.5v1.5h-1.5zM18.75 18.75h1.5v1.5h-1.5zM16.5 16.5h1.5v1.5h-1.5z" />
                                 </svg>
                             </div>
-                            <p class="text-xs font-semibold text-gray-700">Leitura não iniciada</p>
+                            <p class="text-xs sm:text-sm font-semibold text-gray-700">Leitura não iniciada</p>
                             <p class="text-[11px] text-gray-400 mt-0.5">Toque no botão abaixo para ativar a câmera</p>
                         </div>
 
@@ -409,15 +446,15 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                         <!-- Estado 3: Scanning Overlay (Aponte para o QR Code) -->
                         <div x-show="state === 'scanning'" style="display: none;" class="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-3 text-indigo-500">
                             <div class="w-full flex justify-between">
-                                <div class="w-3.5 h-3.5 border-t-2 border-l-2 border-indigo-600 rounded-tl"></div>
-                                <div class="w-3.5 h-3.5 border-t-2 border-r-2 border-indigo-600 rounded-tr"></div>
+                                <div class="w-4 h-4 border-t-2 border-l-2 border-indigo-600 rounded-tl"></div>
+                                <div class="w-4 h-4 border-t-2 border-r-2 border-indigo-600 rounded-tr"></div>
                             </div>
-                            <span class="text-[10px] sm:text-[11px] font-semibold text-white bg-gray-900/70 px-2 py-0.5 rounded-full backdrop-blur-xs">
+                            <span class="text-[10px] sm:text-[11px] font-semibold text-white bg-gray-900/70 px-2.5 py-0.5 rounded-full backdrop-blur-xs">
                                 Aponte para o QR Code
                             </span>
                             <div class="w-full flex justify-between">
-                                <div class="w-3.5 h-3.5 border-b-2 border-l-2 border-indigo-600 rounded-bl"></div>
-                                <div class="w-3.5 h-3.5 border-b-2 border-r-2 border-indigo-600 rounded-br"></div>
+                                <div class="w-4 h-4 border-b-2 border-l-2 border-indigo-600 rounded-bl"></div>
+                                <div class="w-4 h-4 border-b-2 border-r-2 border-indigo-600 rounded-br"></div>
                             </div>
                         </div>
 
@@ -442,7 +479,7 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                                 </svg>
                             </div>
                             <p class="text-xs font-bold text-gray-900">Registrando marcação...</p>
-                            <p class="text-[11px] text-gray-500 mt-0.5">Preservando registro oficial</p>
+                            <p class="text-[11px] text-gray-500 mt-0.5">Preservando registro oficial REP-P</p>
                         </div>
 
                         <!-- Estado 6: Error (Falha confirmada de câmera ou código) -->
@@ -466,17 +503,13 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                 </div>
             </div>
 
-            <!-- Botões de Ação Dinâmicos por Estado (Área de Toque >= 44px) -->
+            <!-- Botões de Ação Dinâmicos por Estado (Área de Toque Confortável >= 48px) -->
             <div class="pt-2">
                 <!-- Botão 1: Idle -> Iniciar Leitura -->
                 <button x-show="state === 'idle'"
                         @click="startScanner($el)"
                         type="button"
-                        class="w-full min-h-[44px] inline-flex items-center justify-center px-6 py-3 border border-transparent text-sm sm:text-base font-bold rounded-xl shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 transition touch-manipulation cursor-pointer">
-                    <svg class="w-5 h-5 mr-2 -ml-1" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
-                    </svg>
+                        class="w-full min-h-[48px] inline-flex items-center justify-center px-6 py-3 border border-transparent text-sm sm:text-base font-bold rounded-xl shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 transition touch-manipulation cursor-pointer">
                     Iniciar leitura do QR Code
                 </button>
 
@@ -485,7 +518,7 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                         style="display: none;"
                         @click="stopScanner()"
                         type="button"
-                        class="w-full min-h-[44px] inline-flex items-center justify-center px-6 py-3 border border-rose-200 text-sm sm:text-base font-bold rounded-xl shadow-xs text-rose-700 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 transition touch-manipulation cursor-pointer">
+                        class="w-full min-h-[48px] inline-flex items-center justify-center px-6 py-3 border border-rose-200 text-sm sm:text-base font-bold rounded-xl shadow-xs text-rose-700 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 transition touch-manipulation cursor-pointer">
                     <svg class="w-5 h-5 mr-2 -ml-1" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -497,7 +530,7 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                         style="display: none;"
                         disabled
                         type="button"
-                        class="w-full min-h-[44px] inline-flex items-center justify-center px-6 py-3 border border-transparent text-sm sm:text-base font-bold rounded-xl text-white bg-indigo-500/80 cursor-not-allowed">
+                        class="w-full min-h-[48px] inline-flex items-center justify-center px-6 py-3 border border-transparent text-sm sm:text-base font-bold rounded-xl text-white bg-indigo-500/80 cursor-not-allowed">
                     <svg class="animate-spin w-5 h-5 mr-2 -ml-1 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -510,7 +543,7 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                         style="display: none;"
                         @click="resetToIdle(); startScanner($el);"
                         type="button"
-                        class="w-full min-h-[44px] inline-flex items-center justify-center px-6 py-3 border border-transparent text-sm sm:text-base font-bold rounded-xl shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 transition touch-manipulation cursor-pointer">
+                        class="w-full min-h-[48px] inline-flex items-center justify-center px-6 py-3 border border-transparent text-sm sm:text-base font-bold rounded-xl shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 transition touch-manipulation cursor-pointer">
                     <svg class="w-5 h-5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
                     </svg>
@@ -540,83 +573,142 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
             </div>
         </div>
 
-        <!-- Coluna 2: Card "Sua jornada hoje" (Registros Reais do Colaborador) -->
-        <div class="bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-6 shadow-2xs flex flex-col justify-between">
-            <div>
-                <div class="pb-3 mb-3 border-b border-gray-100 flex items-center justify-between">
-                    <div>
-                        <h2 class="text-base sm:text-lg font-bold text-gray-900 tracking-tight">Sua jornada hoje</h2>
-                        <p class="text-xs text-gray-500">Histórico de batidas no estabelecimento</p>
-                    </div>
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                        {{ count($this->todayPunches) }} {{ count($this->todayPunches) === 1 ? 'registro' : 'registros' }}
-                    </span>
+        <!-- Coluna Direita (Mobile: Abaixo do Scanner / Desktop: lg:col-span-7 xl:col-span-7): Contexto Operacional -->
+        <div class="lg:col-span-7 xl:col-span-7 space-y-4 sm:space-y-5">
+            
+            <!-- Card 1: Última Marcação (Conforme Wireframe 2 do Usuário) -->
+            <div class="bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-5 shadow-xs">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm sm:text-base font-bold text-gray-900 tracking-tight">Última marcação</h3>
+                    @if($this->latestPunch)
+                        <span class="inline-flex items-center gap-1 text-xs font-semibold {{ $this->latestPunch->location_valid === false ? 'text-amber-700' : 'text-emerald-700' }}">
+                            <svg class="w-3.5 h-3.5 {{ $this->latestPunch->location_valid === false ? 'text-amber-600' : 'text-emerald-600' }}" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                            </svg>
+                            <span>{{ $this->latestPunch->location_valid === false ? 'Com observação' : 'Confirmada' }}</span>
+                        </span>
+                    @else
+                        <span class="text-xs text-gray-400 font-medium">Nenhum registro</span>
+                    @endif
                 </div>
 
-                <!-- Lista de Registros Reais do Colaborador -->
-                @if($this->todayPunches->isEmpty())
-                    <div class="py-8 sm:py-12 text-center select-none">
-                        <div class="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-200/60 mx-auto mb-3 flex items-center justify-center text-slate-400">
-                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                            </svg>
+                @if($this->latestPunch)
+                    <div class="mt-2.5 pt-2 border-t border-gray-100 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm sm:text-base font-bold text-gray-900">
+                                {{ $this->latestPunch->direction === 'in' ? 'Entrada' : 'Saída' }} &middot; <span class="font-mono tabular-nums">{{ $this->latestPunch->occurred_at_local->format('H:i') }}</span>
+                            </span>
+                            <span class="text-[11px] text-gray-400 font-mono hidden sm:inline">
+                                (NSR #{{ str_pad($this->latestPunch->nsr, 9, '0', STR_PAD_LEFT) }})
+                            </span>
                         </div>
-                        <p class="text-xs sm:text-sm font-bold text-gray-800">Nenhuma marcação registrada hoje</p>
-                        <p class="text-[11px] sm:text-xs text-gray-500 mt-1 max-w-xs mx-auto">
-                            Ao confirmar a leitura do QR Code, seus registros diários e comprovantes serão exibidos aqui.
-                        </p>
+                        <div>
+                            @if($this->latestPunch->receipt)
+                                <a href="{{ route('receipts.pdf', ['code' => $this->latestPunch->receipt->verification_code]) }}"
+                                   target="_blank"
+                                   class="text-xs sm:text-sm font-bold text-gray-900 hover:text-indigo-600 transition inline-flex items-center gap-1 group">
+                                    <span>Comprovante</span>
+                                    <span class="text-gray-400 group-hover:text-indigo-600 font-normal">&nearr;</span>
+                                </a>
+                            @else
+                                <a href="{{ route('receipts.center') }}"
+                                   class="text-xs sm:text-sm font-bold text-gray-900 hover:text-indigo-600 transition inline-flex items-center gap-1 group">
+                                    <span>Comprovantes</span>
+                                    <span class="text-gray-400 group-hover:text-indigo-600 font-normal">&nearr;</span>
+                                </a>
+                            @endif
+                        </div>
                     </div>
                 @else
-                    <div class="space-y-2.5 my-2">
-                        @foreach($this->todayPunches as $punch)
-                            <div class="flex items-center justify-between py-2.5 px-3.5 rounded-xl bg-slate-50/80 border border-slate-200/70 text-xs sm:text-sm hover:bg-slate-100/60 transition">
-                                <div class="flex items-center gap-2.5">
-                                    <span class="inline-flex items-center justify-center w-6 h-6 rounded-lg text-[10px] font-bold {{ $punch->direction === 'in' ? 'bg-emerald-100 text-emerald-800' : 'bg-indigo-100 text-indigo-800' }}">
-                                        {{ $punch->direction === 'in' ? 'E' : 'S' }}
-                                    </span>
-                                    <div>
-                                        <p class="font-bold text-gray-900 leading-tight">
-                                            {{ $punch->direction === 'in' ? 'Entrada' : 'Saída' }}
-                                        </p>
-                                        <p class="font-mono text-[10px] text-gray-400">
-                                            NSR #{{ str_pad($punch->nsr, 9, '0', STR_PAD_LEFT) }}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div class="flex items-center gap-2.5 text-right">
-                                    <span class="font-mono text-base font-extrabold text-gray-900 tabular-nums">
-                                        {{ $punch->occurred_at_local->format('H:i') }}
-                                    </span>
-                                    @if($punch->receipt)
-                                        <a href="{{ route('receipts.pdf', ['code' => $punch->receipt->verification_code]) }}"
-                                           target="_blank"
-                                           title="Baixar comprovante fiscal (PDF)"
-                                           class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 border border-indigo-100 transition">
-                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-                                            </svg>
-                                        </a>
-                                    @endif
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
+                    <p class="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
+                        Você ainda não possui marcações neste período.
+                    </p>
                 @endif
             </div>
 
-            <!-- Rodapé do Card com Status e Acesso aos Comprovantes -->
-            <div class="pt-4 mt-3 border-t border-gray-100 flex items-center justify-between text-xs">
-                <div class="flex items-center gap-1.5 text-emerald-700 font-semibold">
-                    <svg class="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                    </svg>
-                    <span>Último registro confirmado</span>
+            <!-- Card 2: Sua Jornada Hoje (Registros Reais do Dia) -->
+            <div class="bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-5 shadow-xs flex flex-col justify-between">
+                <div>
+                    <div class="pb-3 mb-3 border-b border-gray-100 flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm sm:text-base font-bold text-gray-900 tracking-tight">Sua jornada hoje</h3>
+                            <p class="text-xs text-gray-500">Histórico de batidas no estabelecimento</p>
+                        </div>
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            {{ count($this->todayPunches) }} {{ count($this->todayPunches) === 1 ? 'registro' : 'registros' }}
+                        </span>
+                    </div>
+
+                    <!-- Conteúdo: Falha de carregamento vs Vazio vs Lista de Marcações -->
+                    @if($hasHistoryLoadError)
+                        <div class="py-6 sm:py-8 text-center select-none">
+                            <div class="w-10 h-10 rounded-xl bg-red-50 border border-red-100 mx-auto mb-2 flex items-center justify-center text-red-500">
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                                </svg>
+                            </div>
+                            <p class="text-xs sm:text-sm font-bold text-red-700">Não foi possível carregar seu histórico agora.</p>
+                            <p class="text-[11px] text-gray-500 mt-0.5">Tente atualizar a página em instantes.</p>
+                        </div>
+                    @elseif($this->todayPunches->isEmpty())
+                        <div class="py-6 sm:py-8 text-center select-none">
+                            <div class="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200/60 mx-auto mb-2.5 flex items-center justify-center text-slate-400">
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                </svg>
+                            </div>
+                            <p class="text-xs sm:text-sm font-bold text-gray-800">Você ainda não possui marcações neste período.</p>
+                            <p class="text-[11px] text-gray-500 mt-1 max-w-xs mx-auto">
+                                Nenhuma marcação registrada hoje. Ao confirmar a leitura do QR Code, seus registros diários e comprovantes serão exibidos aqui.
+                            </p>
+                        </div>
+                    @else
+                        <div class="space-y-2 my-2">
+                            @foreach($this->todayPunches as $punch)
+                                <div class="flex items-center justify-between py-2 px-3 rounded-xl bg-slate-50/80 border border-slate-200/70 text-xs sm:text-sm hover:bg-slate-100/60 transition">
+                                    <div class="flex items-center gap-2.5">
+                                        <span class="inline-flex items-center justify-center w-6 h-6 rounded-lg text-[10px] font-bold {{ $punch->direction === 'in' ? 'bg-emerald-100 text-emerald-800' : 'bg-indigo-100 text-indigo-800' }}">
+                                            {{ $punch->direction === 'in' ? 'E' : 'S' }}
+                                        </span>
+                                        <div>
+                                            <p class="font-bold text-gray-900 leading-tight">
+                                                {{ $punch->direction === 'in' ? 'Entrada' : 'Saída' }}
+                                            </p>
+                                            <p class="font-mono text-[10px] text-gray-400">
+                                                NSR #{{ str_pad($punch->nsr, 9, '0', STR_PAD_LEFT) }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2.5 text-right">
+                                        <span class="font-mono text-base font-extrabold text-gray-900 tabular-nums">
+                                            {{ $punch->occurred_at_local->format('H:i') }}
+                                        </span>
+                                        @if($punch->receipt)
+                                            <a href="{{ route('receipts.pdf', ['code' => $punch->receipt->verification_code]) }}"
+                                               target="_blank"
+                                               title="Baixar comprovante fiscal (PDF)"
+                                               class="inline-flex items-center justify-center w-7 h-7 rounded-lg text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 border border-indigo-100 transition">
+                                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                                                </svg>
+                                            </a>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
                 </div>
-                <a href="{{ route('receipts.center') }}" 
-                   class="font-semibold text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-1 py-1 px-2 rounded-lg hover:bg-indigo-50/50 transition">
-                    Ver comprovantes &rarr;
-                </a>
+
+                <!-- Rodapé do Card com Atalho para Central de Comprovantes -->
+                <div class="pt-3 mt-2 border-t border-gray-100 flex items-center justify-between text-xs">
+                    <span class="text-gray-500 font-medium">Registros oficiais REP-P</span>
+                    <a href="{{ route('receipts.center') }}" 
+                       class="font-semibold text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-1 py-1 px-1.5 rounded-lg hover:bg-indigo-50/50 transition">
+                        Ver todos os comprovantes &rarr;
+                    </a>
+                </div>
             </div>
         </div>
     </div>
