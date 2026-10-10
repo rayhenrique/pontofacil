@@ -1,6 +1,24 @@
 # Histórico de Versões (Changelog)
 
-## v2.5.1 (Atual)
+## v2.5.2 (Atual)
+- **Redefinição do Design System Oficial e Diretrizes UX/UI (`DESIGN.md`):**
+  - **Fonte Única da Verdade para UX e UI:**
+    - Substituição integral do documento `DESIGN.md` na raiz do projeto por uma nova especificação normativa que reflete a interface real do sistema.
+  - **Identidade Própria e Domínio de Ponto:**
+    - O dado de jornada (horários, entradas, saídas, NSR, comprovantes, saldos, espelho) é consolidado como o próprio elemento visual de design do PontoFácil.
+  - **Mobile-First Compulsório:**
+    - Referência mínima estrita em 320px sem overflow horizontal, touch targets mínimos de ~44px e independência de `:hover`.
+  - **Paleta Restrita e Semântica:**
+    - Índigo corporativo (marca), Slate/Gray (neutros), Emerald (ativo/saldo positivo), Amber (ocorrência/tolerância) e Red/Rose (erro/crítico). Uso de roxo/purple restrito e não decorativo.
+  - **Tipografia e Dados Tabulares:**
+    - `Instrument Sans` no sistema autenticado e `Plus Jakarta Sans` / `Inter` na landing, com `font-mono` e `tabular-nums` obrigatórios em dados cronológicos e fiscais.
+  - **Hierarquia de Radius, Sombras e Motion Seguro:**
+    - Padronização em `rounded-lg`, `rounded-xl` e `rounded-2xl`, eliminando excessos de `rounded-3xl` e `shadow-2xl`.
+    - Regra estrita de motion: conteúdo essencial nunca depende de JavaScript para renderizar visível (`opacity: 0` proibido por padrão).
+  - **Conformidade Normativa e Descarte de Padrões Legados:**
+    - Arquitetura REP-P + PTRP (Portaria 671 MTP), eliminação de referências legadas a "Glassmorphism Suave", fuso fixo de Maceió e promessas regulatórias antecipadas.
+
+## v2.5.1
 - **Revisão Final de UX Writing, Sobriedade e Acabamento da Landing Page:**
   - **Remoção de Expressões Genéricas e Hype de Marketing:**
     - Eliminação completa de clichês e termos superlativos ("nova era", "Comece agora mesmo", "Implantação Instantânea", "Poder Total", "segurança máxima", "inviolável", "100% seguro", "perpétuo").
