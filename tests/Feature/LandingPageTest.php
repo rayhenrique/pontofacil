@@ -31,7 +31,8 @@ class LandingPageTest extends TestCase
         $response = $this->get(route('landing'));
 
         $response->assertOk();
-        // Hero Section & Mockup da Tela Real do PontoFácil
+
+        // 1. Hero Section & Mockup da Tela Real do PontoFácil
         $response->assertSee('Ponto eletrônico simples para o colaborador');
         $response->assertSee('Gestão completa para a empresa');
         $response->assertSee('Controle de jornada digital • REP-P + PTRP');
@@ -45,16 +46,30 @@ class LandingPageTest extends TestCase
         $response->assertDontSee('somente dentro do raio');
         $response->assertDontSee('GPS obrigatório');
 
-        // Comparativo
-        $response->assertSee('O Jeito Antigo');
-        $response->assertSee('Com o PontoFácil');
+        // 2. Como Funciona (Passo a passo)
+        $response->assertSee('Como funciona o PontoFácil');
+        $response->assertSee('Aponte a câmera para o QR Code');
+        $response->assertSee('Confirme a jornada em 1 toque');
+        $response->assertSee('Comprovante imediato e espelho em dia');
 
-        // Recursos (Tríade) & Evidências de Auditoria
-        $response->assertSee('QR Code e Localização como Apoio à Validação');
+        // 3. Para o colaborador / Para a empresa
+        $response->assertSee('Para o Colaborador');
+        $response->assertSee('Para a Empresa e Gestão');
+        $response->assertSee('Rotina ágil sem filas nem complicação');
+        $response->assertSee('Fechamento sem estresse e conformidade fiscal');
+
+        // 4. Principais Recursos
+        $response->assertSee('Tudo o que sua gestão precisa em um único sistema');
         $response->assertSee('Espelho Automatizado em Tempo Real');
-        $response->assertSee('Trilha de Auditoria e Rastreabilidade');
-        $response->assertSee('Cerca virtual para análise de localização');
-        $response->assertSee('Evidências adicionais para auditoria');
+        $response->assertSee('Banco de Horas e Fechamento Ágil');
+        $response->assertSee('QR Code Dinâmico por Setor');
+        $response->assertSee('Relatórios e Integração com Folha');
+
+        // 5. Segurança e Rastreabilidade
+        $response->assertSee('Trilha de auditoria contínua e dados protegidos');
+        $response->assertSee('Chave de Integridade SHA-256');
+        $response->assertSee('Validação Pública de Comprovantes');
+        $response->assertSee('Evidências Adicionais de Localização');
 
         // Garantir que a localização nunca é apresentada como motivo para bloquear a marcação
         $response->assertDontSee('o registro só é aceito quando');
@@ -63,17 +78,51 @@ class LandingPageTest extends TestCase
         $response->assertDontSee('ponto bloqueado fora do raio');
         $response->assertDontSee('Bloqueia registros fora da filial');
 
-        // Demonstração Interativa
+        // 6. Portaria 671 / REP-P + PTRP
+        $response->assertSee('Portaria 671 / MTP');
+        $response->assertSee('Registrador Eletrônico por Programa');
+        $response->assertSee('Tratamento do Registro de Ponto');
+        $response->assertSee('Leiautes Oficiais do MTE');
+        $response->assertSee('Privacidade e Proteção de Dados');
+
+        // 7. Demonstração Interativa
+        $response->assertSee('Simplicidade na Ponta do Dedo');
         $response->assertSee('Visão do Colaborador');
         $response->assertSee('Visão do Gestor / RH');
         $response->assertSee('gsap-scanner-laser');
 
-        // Timeline
-        $response->assertSee('v1.5.0');
-        $response->assertSee('Estrutura Híbrida Inteligente de Setores');
-
-        // Footer & Copyright
+        // 8. CTA Final & Footer
+        $response->assertSee('Sua gestão de ponto pronta para a nova era');
+        $response->assertSee('Comece agora mesmo');
         $response->assertSee('KL Tecnologia');
+
+        // Validação da ordem estrita de renderização das 8 seções
+        $content = $response->getContent();
+        $posHero = strpos($content, 'id="hero"');
+        $posHowItWorks = strpos($content, 'id="como-funciona"');
+        $posComparison = strpos($content, 'id="para-empresas"');
+        $posFeatures = strpos($content, 'id="recursos"');
+        $posSecurity = strpos($content, 'id="seguranca"');
+        $posCompliance = strpos($content, 'id="portaria-671"');
+        $posPreview = strpos($content, 'id="demonstracao"');
+        $posCta = strpos($content, 'id="contato"');
+
+        $this->assertNotFalse($posHero, 'Seção Hero não encontrada');
+        $this->assertNotFalse($posHowItWorks, 'Seção Como Funciona não encontrada');
+        $this->assertNotFalse($posComparison, 'Seção Para Colaborador/Empresa não encontrada');
+        $this->assertNotFalse($posFeatures, 'Seção Recursos não encontrada');
+        $this->assertNotFalse($posSecurity, 'Seção Segurança não encontrada');
+        $this->assertNotFalse($posCompliance, 'Seção Portaria 671 não encontrada');
+        $this->assertNotFalse($posPreview, 'Seção Demonstração não encontrada');
+        $this->assertNotFalse($posCta, 'Seção CTA Final não encontrada');
+
+        $this->assertTrue($posHero < $posHowItWorks, 'Hero deve vir antes de Como Funciona');
+        $this->assertTrue($posHowItWorks < $posComparison, 'Como Funciona deve vir antes de Para Empresas');
+        $this->assertTrue($posComparison < $posFeatures, 'Para Empresas deve vir antes de Recursos');
+        $this->assertTrue($posFeatures < $posSecurity, 'Recursos deve vir antes de Segurança');
+        $this->assertTrue($posSecurity < $posCompliance, 'Segurança deve vir antes de Portaria 671');
+        $this->assertTrue($posCompliance < $posPreview, 'Portaria 671 deve vir antes de Demonstração');
+        $this->assertTrue($posPreview < $posCta, 'Demonstração deve vir antes de CTA Final');
     }
 
     public function test_landing_page_cta_buttons_link_to_login_route(): void

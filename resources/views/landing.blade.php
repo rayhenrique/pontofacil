@@ -4,25 +4,31 @@
     <!-- Navbar Flutuante -->
     <x-landing.navbar />
 
-    <!-- Conteúdo Principal -->
+    <!-- Conteúdo Principal na Nova Ordem -->
     <main class="flex-1">
-        <!-- Sec 2: Hero Section (A Nova Era do Ponto & Relógio ao Vivo) -->
+        <!-- 1. Hero -->
         <x-landing.hero />
 
-        <!-- Sec 3: O Conflito (Jeito Antigo vs. PontoFácil) -->
+        <!-- 2. Como funciona -->
+        <x-landing.how-it-works />
+
+        <!-- 3. Para o colaborador / Para a empresa -->
         <x-landing.comparison />
 
-        <!-- Sec 4: Tríade de Poder (Core Features da Portaria 671) -->
+        <!-- 4. Principais recursos -->
         <x-landing.features />
 
-        <!-- Sec 5: Demonstração Interativa (Tabs Colaborador vs Gestor) -->
-        <x-landing.interactive-preview />
+        <!-- 5. Segurança e rastreabilidade -->
+        <x-landing.security />
 
-        <!-- Sec 6: Timeline de Evolução (Histórico do Sistema) -->
-        <x-landing.timeline />
+        <!-- 6. Portaria 671 / REP-P + PTRP -->
+        <x-landing.compliance />
+
+        <!-- 7. Demonstração da interface -->
+        <x-landing.interactive-preview />
     </main>
 
-    <!-- Sec 7: CTA Final & Rodapé Executivo -->
+    <!-- 8. CTA final & Rodapé -->
     <x-landing.cta-footer />
 @endsection
 
@@ -69,40 +75,29 @@
                 clearProps: "all"
             }, "-=0.5");
 
-            // Animação dos Cards de Comparativo
-            gsap.from(".gsap-comparison-old", {
+            // 2. Animação de Como Funciona (Passos 1, 2, 3)
+            gsap.from(".gsap-step-card", {
                 scrollTrigger: {
-                    trigger: "#comparativo",
+                    trigger: "#como-funciona",
                     start: "top 80%",
                     once: true
                 },
-                x: -30,
-                opacity: 0.3,
-                duration: 0.8,
-                ease: "power2.out"
-            });
-
-            gsap.from(".gsap-comparison-new", {
-                scrollTrigger: {
-                    trigger: "#comparativo",
-                    start: "top 80%",
-                    once: true
-                },
-                scale: 0.96,
+                y: 35,
                 opacity: 0,
-                duration: 0.85,
-                ease: "back.out(1.15)",
+                duration: 0.75,
+                stagger: 0.18,
+                ease: "power3.out",
                 clearProps: "all"
             });
 
-            // Animação dos 3 Cards de Features com Stagger 0.2
-            gsap.from(".gsap-feature-card", {
+            // 3. Animação dos Cards de Colaborador vs Empresa
+            gsap.from(".gsap-comparison-card", {
                 scrollTrigger: {
-                    trigger: "#recursos",
+                    trigger: "#para-empresas",
                     start: "top 80%",
                     once: true
                 },
-                y: 40,
+                y: 35,
                 opacity: 0,
                 duration: 0.8,
                 stagger: 0.2,
@@ -110,18 +105,48 @@
                 clearProps: "all"
             });
 
-            // Animação da Timeline de Versões com Deslocamento X
-            gsap.from(".gsap-timeline-item", {
+            // 4. Animação dos 4 Cards de Recursos com Stagger 0.15
+            gsap.from(".gsap-feature-card", {
                 scrollTrigger: {
-                    trigger: "#evolucao",
+                    trigger: "#recursos",
                     start: "top 80%",
                     once: true
                 },
-                x: -30,
+                y: 35,
+                opacity: 0,
+                duration: 0.8,
+                stagger: 0.15,
+                ease: "power3.out",
+                clearProps: "all"
+            });
+
+            // 5. Animação dos 3 Pilares de Segurança
+            gsap.from(".gsap-security-card", {
+                scrollTrigger: {
+                    trigger: "#seguranca",
+                    start: "top 80%",
+                    once: true
+                },
+                y: 35,
                 opacity: 0,
                 duration: 0.75,
-                stagger: 0.2,
-                ease: "power2.out",
+                stagger: 0.18,
+                ease: "power3.out",
+                clearProps: "all"
+            });
+
+            // 6. Animação dos 4 Pilares da Portaria 671
+            gsap.from(".gsap-compliance-card", {
+                scrollTrigger: {
+                    trigger: "#portaria-671",
+                    start: "top 80%",
+                    once: true
+                },
+                y: 35,
+                opacity: 0,
+                duration: 0.75,
+                stagger: 0.15,
+                ease: "power3.out",
                 clearProps: "all"
             });
         });
@@ -145,6 +170,20 @@
                 clearProps: "all"
             });
 
+            gsap.from(".gsap-step-card", {
+                scrollTrigger: {
+                    trigger: "#como-funciona",
+                    start: "top 85%",
+                    once: true
+                },
+                opacity: 0,
+                y: 20,
+                duration: 0.5,
+                stagger: 0.12,
+                ease: "power2.out",
+                clearProps: "all"
+            });
+
             gsap.from(".gsap-feature-card", {
                 scrollTrigger: {
                     trigger: "#recursos",
@@ -154,21 +193,21 @@
                 opacity: 0,
                 y: 20,
                 duration: 0.5,
-                stagger: 0.15,
+                stagger: 0.12,
                 ease: "power2.out",
                 clearProps: "all"
             });
 
-            gsap.from(".gsap-timeline-item", {
+            gsap.from(".gsap-security-card", {
                 scrollTrigger: {
-                    trigger: "#evolucao",
+                    trigger: "#seguranca",
                     start: "top 85%",
                     once: true
                 },
                 opacity: 0,
-                x: -15,
+                y: 20,
                 duration: 0.5,
-                stagger: 0.15,
+                stagger: 0.12,
                 ease: "power2.out",
                 clearProps: "all"
             });

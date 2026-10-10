@@ -1,223 +1,152 @@
-<section id="comparativo" class="py-20 md:py-32 relative">
-    <div id="para-empresas" class="absolute -top-24 left-0 pointer-events-none"></div>
+<section id="para-empresas" class="py-10 sm:py-14 md:py-20 relative">
+    <div id="beneficios" class="absolute -top-24 left-0 pointer-events-none"></div>
+    <div id="comparativo" class="absolute -top-24 left-0 pointer-events-none"></div>
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         <!-- Cabeçalho da Seção -->
-        <div class="text-center max-w-3xl mx-auto mb-16 space-y-4">
+        <div class="text-center max-w-3xl mx-auto mb-10 sm:mb-14 space-y-3 sm:space-y-4">
             <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold uppercase tracking-wider">
-                <span>Transição Tecnológica</span>
+                <span>Benefícios Integrados</span>
             </div>
-            <h2 class="text-3xl sm:text-4xl md:text-5xl font-black text-slate-900 tracking-tight">
-                O Fim da Insegurança no <br class="hidden sm:inline" />
-                <span class="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                    Fechamento de Ponto
+            <h2 class="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
+                Para o colaborador. <br class="hidden sm:inline" />
+                <span class="bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 bg-clip-text text-transparent">
+                    Para a empresa.
                 </span>
             </h2>
-            <p class="text-base sm:text-lg text-slate-600 font-normal leading-relaxed">
-                Compare lado a lado o método arcaico que gera passivos trabalhistas com a tecnologia moderna do PontoFácil.
+            <p class="text-sm sm:text-base md:text-lg text-slate-600 font-normal leading-relaxed">
+                Simplicidade e autonomia para quem registra. Previsibilidade, agilidade e segurança jurídica para quem gerencia.
             </p>
         </div>
 
-        <!-- Grid Comparativo de 2 Colunas -->
-        <div class="grid lg:grid-cols-2 gap-8 items-stretch">
+        <!-- Grid de 2 Colunas: Colaborador vs Empresa -->
+        <div class="grid lg:grid-cols-2 gap-6 sm:gap-8 items-stretch max-w-6xl mx-auto">
             
-            <!-- Card Esquerdo: O Jeito Antigo -->
-            <div class="gsap-comparison-old bg-gradient-to-br from-rose-50/60 to-slate-100/60 border border-rose-200/80 rounded-3xl p-8 sm:p-10 flex flex-col justify-between relative overflow-hidden transition-all duration-300">
-                <!-- Marca d'água de alerta -->
-                <div class="absolute -right-8 -bottom-8 w-44 h-44 bg-rose-200/20 rounded-full blur-2xl pointer-events-none"></div>
-
+            <!-- Card 1: Para o Colaborador -->
+            <div class="gsap-comparison-card bg-white/90 backdrop-blur-xl border border-indigo-100/90 rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-10 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between">
                 <div class="space-y-6">
                     <div class="flex items-center justify-between">
-                        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-100 text-rose-800 text-xs font-bold tracking-wide">
-                            <svg class="w-3.5 h-3.5 text-rose-600" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold tracking-wide">
+                            <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
                             </svg>
-                            O Jeito Antigo
+                            Para o Colaborador
                         </div>
-                        <span class="text-xs font-semibold text-slate-600">Manual & Frágil</span>
+                        <span class="text-xs font-semibold text-slate-500">Simplicidade e Autonomia</span>
                     </div>
 
-                    <h3 class="text-2xl font-bold text-slate-800 tracking-tight">
-                        Planilhas Manuais & Relógios Físicos
-                    </h3>
+                    <div>
+                        <h3 class="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight mb-2">
+                            Rotina ágil sem filas nem complicação
+                        </h3>
+                        <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                            O colaborador registra sua jornada com autonomia, tem acesso transparente às suas horas e não depende de processos manuais.
+                        </p>
+                    </div>
 
-                    <p class="text-sm text-slate-600 leading-relaxed">
-                        Processos desarticulados, burocracia excessiva e vulnerabilidade a fraudes ou erros humanos no cálculo de horas.
-                    </p>
-
-                    <!-- Lista de Dores (Com Risco / X Vermelho) -->
-                    <ul class="space-y-4 pt-2">
+                    <!-- Lista de Vantagens do Colaborador -->
+                    <ul class="space-y-3.5 text-xs sm:text-sm text-slate-700">
                         <li class="flex items-start gap-3">
-                            <div class="shrink-0 w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 mt-0.5">
+                            <div class="shrink-0 w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mt-0.5">
                                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                                 </svg>
                             </div>
-                            <span class="text-sm text-slate-600 leading-snug">
-                                <strong class="text-slate-800 font-semibold line-through decoration-rose-400">Planilhas de Excel corrompidas:</strong> 
-                                Fórmulas quebradas e horas de trabalho refeitas no fim do mês.
-                            </span>
+                            <span><strong class="text-slate-900 font-bold">1 toque na câmera do celular:</strong> Leitura instantânea do QR Code no setor ou matriz.</span>
                         </li>
-
                         <li class="flex items-start gap-3">
-                            <div class="shrink-0 w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 mt-0.5">
+                            <div class="shrink-0 w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mt-0.5">
                                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                                 </svg>
                             </div>
-                            <span class="text-sm text-slate-600 leading-snug">
-                                <strong class="text-slate-800 font-semibold line-through decoration-rose-400">Ponto "amigo" e falta de rastreio:</strong> 
-                                Registros feitos por terceiros sem evidência de presença ou rastreabilidade.
-                            </span>
+                            <span><strong class="text-slate-900 font-bold">Sem baixar apps pesados:</strong> Funciona direto no navegador de qualquer smartphone moderno.</span>
                         </li>
-
                         <li class="flex items-start gap-3">
-                            <div class="shrink-0 w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 mt-0.5">
+                            <div class="shrink-0 w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mt-0.5">
                                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                                 </svg>
                             </div>
-                            <span class="text-sm text-slate-600 leading-snug">
-                                <strong class="text-slate-800 font-semibold line-through decoration-rose-400">Hardware caro e manutenção:</strong> 
-                                Relógios biométricos que travam bobina e exigem visitas técnicas frequentes.
-                            </span>
+                            <span><strong class="text-slate-900 font-bold">Comprovante eletrônico imediato:</strong> Recibo digital com carimbo de tempo oficial e código de validação.</span>
                         </li>
-
                         <li class="flex items-start gap-3">
-                            <div class="shrink-0 w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 mt-0.5">
+                            <div class="shrink-0 w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mt-0.5">
                                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                                 </svg>
                             </div>
-                            <span class="text-sm text-slate-600 leading-snug">
-                                <strong class="text-slate-800 font-semibold line-through decoration-rose-400">Dias inteiros perdidos pelo RH:</strong> 
-                                Fechamento lento com conferência manual de cada minuto e cartão físico.
-                            </span>
-                        </li>
-
-                        <li class="flex items-start gap-3">
-                            <div class="shrink-0 w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 mt-0.5">
-                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-                                </svg>
-                            </div>
-                            <span class="text-sm text-slate-600 leading-snug">
-                                <strong class="text-slate-800 font-semibold line-through decoration-rose-400">Alto risco trabalhista:</strong> 
-                                Falta de rastreabilidade jurídica com risco de autuações do MTP e ações judiciais.
-                            </span>
+                            <span><strong class="text-slate-900 font-bold">Transparência em tempo real:</strong> Consulta simples do espelho de ponto e saldo de horas a qualquer momento.</span>
                         </li>
                     </ul>
                 </div>
 
-                <div class="mt-8 pt-6 border-t border-rose-200/60 flex items-center gap-3 text-xs text-rose-800 font-medium bg-rose-100/50 p-3.5 rounded-xl">
-                    <svg class="w-5 h-5 shrink-0 text-rose-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
-                    </svg>
-                    <span>Resultado: Insegurança, passivos jurídicos e estresse constante de fechamento.</span>
+                <div class="pt-4 mt-6 border-t border-slate-100 text-xs text-indigo-600 font-semibold flex items-center gap-1.5">
+                    <span>Fim das filas no relógio de ponto físico</span>
                 </div>
             </div>
 
-            <!-- Card Direito: Com o PontoFácil -->
-            <div class="gsap-comparison-new bg-gradient-to-br from-white via-indigo-50/40 to-white border-2 border-indigo-500/40 rounded-3xl p-8 sm:p-10 shadow-xl shadow-indigo-950/5 flex flex-col justify-between relative overflow-hidden">
-                <!-- Efeito sutil de luz índigo -->
-                <div class="absolute -right-12 -top-12 w-48 h-48 bg-indigo-400/15 rounded-full blur-3xl pointer-events-none"></div>
-
+            <!-- Card 2: Para a Empresa e Gestão -->
+            <div class="gsap-comparison-card bg-white/90 backdrop-blur-xl border border-purple-100/90 rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-10 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between">
                 <div class="space-y-6">
                     <div class="flex items-center justify-between">
-                        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold tracking-wide">
-                            <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-50 text-purple-700 text-xs font-bold tracking-wide">
+                            <svg class="w-4 h-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
                             </svg>
-                            Com o PontoFácil
+                            Para a Empresa e Gestão
                         </div>
-                        <span class="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md">Portaria 671 (REP-P + PTRP)</span>
+                        <span class="text-xs font-semibold text-slate-500">Previsibilidade e Fechamento</span>
                     </div>
 
-                    <h3 class="text-2xl font-bold text-slate-900 tracking-tight">
-                        Precisão Digital em 1 Toque
-                    </h3>
+                    <div>
+                        <h3 class="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight mb-2">
+                            Fechamento sem estresse e conformidade fiscal
+                        </h3>
+                        <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                            Automatize o cálculo de horas, elimine custos com hardware e tenha relatórios de auditoria prontos para a fiscalização.
+                        </p>
+                    </div>
 
-                    <p class="text-sm text-slate-600 leading-relaxed">
-                        Validação física e geográfica em tempo real com espelho de ponto instantâneo e estrutura preparada para conformidade fiscal.
-                    </p>
-
-                    <!-- Lista de Vantagens (Check Verde) -->
-                    <ul class="space-y-4 pt-2">
+                    <!-- Lista de Vantagens da Empresa -->
+                    <ul class="space-y-3.5 text-xs sm:text-sm text-slate-700">
                         <li class="flex items-start gap-3">
-                            <div class="shrink-0 w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mt-0.5">
+                            <div class="shrink-0 w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mt-0.5">
                                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                                 </svg>
                             </div>
-                            <span class="text-sm text-slate-700 leading-snug">
-                                <strong class="text-slate-900 font-bold">1 toque na câmera do celular:</strong> 
-                                Validação instantânea via QR Code dinâmico exclusivo do setor ou matriz.
-                            </span>
+                            <span><strong class="text-slate-900 font-bold">Fechamento de folha em minutos:</strong> Horas normais, extras, noturnas e faltas calculadas automaticamente.</span>
                         </li>
-
                         <li class="flex items-start gap-3">
-                            <div class="shrink-0 w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mt-0.5">
+                            <div class="shrink-0 w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mt-0.5">
                                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                                 </svg>
                             </div>
-                            <span class="text-sm text-slate-700 leading-snug">
-                                <strong class="text-slate-900 font-bold">Cerca virtual para análise de localização:</strong> 
-                                Localização registrada como evidência probatória para apoiar a auditoria e a gestão, sem impedir o registro.
-                            </span>
+                            <span><strong class="text-slate-900 font-bold">Zero custo com manutenção de relógios:</strong> Sem troca de bobinas térmicas, quebra de equipamentos ou visitas técnicas.</span>
                         </li>
-
                         <li class="flex items-start gap-3">
-                            <div class="shrink-0 w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mt-0.5">
+                            <div class="shrink-0 w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mt-0.5">
                                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                                 </svg>
                             </div>
-                            <span class="text-sm text-slate-700 leading-snug">
-                                <strong class="text-slate-900 font-bold">Zero custo com aparelhos físicos:</strong> 
-                                Funciona direto no navegador do smartphone do colaborador. Sem compra de bobinas.
-                            </span>
+                            <span><strong class="text-slate-900 font-bold">Cerca virtual para análise de localização:</strong> Localização registrada como evidência probatória para apoiar a auditoria e a gestão.</span>
                         </li>
-
                         <li class="flex items-start gap-3">
-                            <div class="shrink-0 w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mt-0.5">
+                            <div class="shrink-0 w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mt-0.5">
                                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                                 </svg>
                             </div>
-                            <span class="text-sm text-slate-700 leading-snug">
-                                <strong class="text-slate-900 font-bold">Espelho calculado em tempo real:</strong> 
-                                Fechamento de folha em minutos, totalizando horas normais, extras e saldos.
-                            </span>
-                        </li>
-
-                        <li class="flex items-start gap-3">
-                            <div class="shrink-0 w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mt-0.5">
-                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                                </svg>
-                            </div>
-                            <span class="text-sm text-slate-700 leading-snug">
-                                <strong class="text-slate-900 font-bold">Trilha de auditoria permanente:</strong> 
-                                Carimbo temporal oficial auditado e comprovante eletrônico com hash SHA-256.
-                            </span>
+                            <span><strong class="text-slate-900 font-bold">Trilha de auditoria e compliance:</strong> Histórico protegido e geração oficial de arquivos para fiscalização do trabalho.</span>
                         </li>
                     </ul>
                 </div>
 
-                <div class="mt-8 pt-6 border-t border-indigo-100 flex items-center justify-between bg-indigo-50/70 p-4 rounded-xl">
-                    <div class="flex items-center gap-3 text-xs text-indigo-950 font-semibold">
-                        <svg class="w-5 h-5 shrink-0 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
-                        </svg>
-                        <span>Resultado: Fechamento em minutos com rastreabilidade e conformidade fiscal.</span>
-                    </div>
-                    <a href="{{ route('login') }}" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 group">
-                        <span>Acessar</span>
-                        <svg class="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
-                        </svg>
-                    </a>
+                <div class="pt-4 mt-6 border-t border-slate-100 text-xs text-purple-700 font-semibold flex items-center gap-1.5">
+                    <span>Redução drástica de passivos trabalhistas</span>
                 </div>
             </div>
 

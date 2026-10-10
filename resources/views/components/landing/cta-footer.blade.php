@@ -1,5 +1,5 @@
 <!-- CTA Final Full-Width Banner -->
-<section class="relative py-20 lg:py-28 overflow-hidden bg-gradient-to-br from-indigo-700 via-indigo-900 to-slate-950 text-white">
+<section id="contato" class="relative py-12 sm:py-16 lg:py-24 overflow-hidden bg-gradient-to-br from-indigo-700 via-indigo-900 to-slate-950 text-white">
     <!-- Efeitos de Luz e Formas de Fundo -->
     <div class="absolute -top-32 -left-32 w-96 h-96 bg-indigo-500/30 rounded-full blur-3xl pointer-events-none"></div>
     <div class="absolute -bottom-32 -right-32 w-96 h-96 bg-purple-500/25 rounded-full blur-3xl pointer-events-none"></div>

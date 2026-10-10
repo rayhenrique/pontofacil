@@ -1,8 +1,8 @@
-<section id="demonstracao" class="py-20 md:py-32 relative">
+<section id="demonstracao" class="py-10 sm:py-14 md:py-20 relative">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         <!-- Cabeçalho da Seção -->
-        <div class="text-center max-w-3xl mx-auto mb-14 space-y-4">
+        <div class="text-center max-w-3xl mx-auto mb-10 sm:mb-14 space-y-3 sm:space-y-4">
             <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold uppercase tracking-wider">
                 <span>Demonstração Interativa</span>
             </div>

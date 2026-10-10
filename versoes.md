@@ -36,6 +36,12 @@
     - Inconsistência do AEJ corrigida: certificado pendente nunca resulta em `isHomologated = true`.
   - **Pacote Fiscal MTE (README e Manifesto):**
     - README atualizado para referenciar o ledger central da ARP (`arp_events`), CRC-16/KERMIT, SHA-256 Tipo 7 e o modo não homologado de desenvolvimento.
+  - **Reorganização Estrutural da Landing Page (Mobile-First & Progressão Didática):**
+    - **Sequência em 8 Seções:** 1. Hero (`#hero`), 2. Como funciona (`#como-funciona`), 3. Para o colaborador / Para a empresa (`#para-empresas`), 4. Principais recursos (`#recursos`), 5. Segurança e rastreabilidade (`#seguranca`), 6. Portaria 671 / REP-P + PTRP (`#portaria-671`), 7. Demonstração da interface (`#demonstracao`) e 8. CTA final (`#contato`).
+    - **Didática de Apresentação:** Explicar primeiro o produto (Hero + Como funciona), depois os benefícios para ambas as partes (Colaborador vs Empresa + Recursos centrais) e somente depois os detalhes técnicos e fiscais (Segurança + Portaria 671).
+    - **Compactação e Otimização Mobile:** Espaçamentos verticais calibrados para dispositivos móveis (`py-10 sm:py-14 md:py-20`), eliminando áreas vazias excessivas e melhorando a progressão visual em telas pequenas (320px a 430px).
+    - **Micro-animações GSAP:** Integração com ScrollTrigger para os novos blocos com staggers suaves em desktop e carregamento leve em mobile.
+    - **Preservação Arquitetural:** Zero alterações de backend, controllers ou rotas. Componentes legados mantidos intactos no repositório.
   - **Congelamento Documental das Referências Oficiais MTE (31/07/2026):**
     - Os leiautes oficiais de referência usados na implementação foram congelados em `ref/mte/2026-07-31/` (`afd.pdf` e `aej.pdf`).
     - Hashes SHA-256 imutáveis registrados em `SHA256SUMS.txt` garantem rastreabilidade documental contra eventuais substituições silenciosas de conteúdo na mesma URL do portal `gov.br`.
