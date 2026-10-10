@@ -65,6 +65,11 @@
       - **Apresentação Adequada à Legislação:** Revisão completa dos textos da Landing Page para assegurar que a geolocalização seja apresentada estritamente como evidência probatória adicional e apoio à auditoria fiscal e gestão, e nunca como motivo para bloquear ou impedir a marcação do colaborador.
       - **Eliminação de Termos Restritivos:** Remoção de expressões como "o registro só é aceito quando...", "fim das fraudes de localização", "cerca virtual obrigatória", "ponto bloqueado fora do raio" e "bloqueia registros fora da filial".
       - **Padronização Conceitual:** Adoção uniforme de terminologias de integridade: "Localização registrada como evidência", "Cerca virtual para análise de localização", "Evidências adicionais para auditoria" e "QR Code e localização como apoio à validação".
+    - **Refatoração Mobile-First da Navbar Institucional:**
+      - **Desktop Otimizado:** Marca PontoFácil com badge discreto "REP-P + PTRP", links de navegação estruturados ("Recursos", "Para empresas", "Segurança", "Portaria 671" e "Verificar comprovante") e botão de acesso direto "Entrar".
+      - **Experiência Mobile Desobstruída:** Logo alinhado à esquerda e acionador hambúrguer à direita, eliminando botões grandes intrusivos na barra superior mobile para garantir respiro visual em 320px–430px.
+      - **Drawer de Navegação Completo:** Menu móvel expansivo com links de toque confortável (`min-h-[44px]`), atalho direto para "Verificar comprovante", fechamento automático após navegação e CTA de largura total "Entrar no sistema" (`min-h-[48px]`).
+      - **Saneamento Terminológico:** Remoção definitiva de menções legadas a "SaaS REP-A", preservando a identidade visual corporativa branco + slate + índigo.
   - **Suíte de Testes Expandida:** `172 testes e 923 asserções 100% aprovados`.
 
 ## v2.4.0

@@ -84,6 +84,26 @@ class LandingPageTest extends TestCase
         $response->assertSee(route('login'));
     }
 
+    public function test_landing_page_navbar_has_mobile_first_links_and_no_saas_rep_a(): void
+    {
+        $response = $this->get(route('landing'));
+
+        $response->assertOk();
+        // Links desktop e mobile
+        $response->assertSee('PontoFácil');
+        $response->assertSee('REP-P + PTRP');
+        $response->assertSee('Recursos');
+        $response->assertSee('Para empresas');
+        $response->assertSee('Segurança');
+        $response->assertSee('Portaria 671');
+        $response->assertSee('Verificar comprovante');
+        $response->assertSee('Entrar');
+        $response->assertSee('Entrar no sistema');
+
+        // Ausência de termos obsoletos
+        $response->assertDontSee('SaaS REP-A');
+    }
+
     public function test_login_page_contains_link_to_landing(): void
     {
         $response = $this->get(route('login'));

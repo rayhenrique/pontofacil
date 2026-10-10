@@ -1,4 +1,5 @@
 <section id="recursos" class="py-20 md:py-32 relative">
+    <div id="seguranca" class="absolute -top-24 left-0 pointer-events-none"></div>
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         <!-- Cabeçalho da Seção -->
