@@ -207,6 +207,17 @@
   - [x] **21.17 Auditoria Estruturada:**
     - [x] Eventos forenses: `period.closed`, `period.reopened`, `period.snapshot_generated`, `aej.generated`, `aej.validated`, `fiscal_package.generated`.
 
+- [x] **Fase 22: Reformulação Visual, Otimização Mobile-First & Acessibilidade da Landing Page (v2.5.1)**
+  - [x] Reorganização estrutural em 8 seções com progressão didática (Hero, Como funciona, Colaborador x Empresa, Recursos, Segurança, Portaria 671, Demonstração e CTA).
+  - [x] Nova seção "Como funciona" em 4 etapas objetivas e intuitivas.
+  - [x] Nova seção "Colaborador x Empresa" mobile-first com abas acessíveis e desktop em duas colunas.
+  - [x] Mockup do Hero fiel à interface real do produto com relógio digital em tempo real.
+  - [x] Redução de excessos visuais, eliminação de `shadow-2xl`, atenuação de glows e alto contraste tipográfico.
+  - [x] Calibração responsiva rigorosa de 320px a 1440px com zero overflow horizontal.
+  - [x] Revisão completa de SEO, metadados Open Graph e sincronia com Twitter Cards.
+  - [x] Acessibilidade WCAG 2.1 AA (skip link, `prefers-reduced-motion`, semântica ARIA e touch targets de 44px+).
+  - [x] Remoção da timeline técnica da página pública e centralização do changelog em `versoes.md`.
+
 - [ ] **Fase 21B: Compliance Externo & Assinatura Digital Oficial — Dependências Externas**
   - [ ] Configurar certificado digital válido ICP-Brasil em storage seguro.
   - [ ] Implementar `IcpBrasilSigningService`.

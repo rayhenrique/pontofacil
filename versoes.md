@@ -1,6 +1,41 @@
 # Histórico de Versões (Changelog)
 
-## v2.5.0 (Atual)
+## v2.5.1 (Atual)
+- **Reformulação Visual, Otimização Mobile-First e Acessibilidade (Landing Page Comercial):**
+  - **Reorganização Didática em 8 Seções Estruturadas:**
+    - Sequência lógica orientada a conversão e clareza: 1. Hero com interface real (`#hero`), 2. Como funciona (`#como-funciona`), 3. Para o colaborador / Para a empresa (`#para-empresas`), 4. Principais recursos (`#recursos`), 5. Segurança e rastreabilidade (`#seguranca`), 6. Estrutura preparada para a Portaria 671 (`#portaria-671`), 7. Demonstração da interface (`#demonstracao`) e 8. CTA final (`#contato`).
+    - Apresentação didática explicando primeiro o produto, depois os benefícios e somente depois os detalhes técnicos e fiscais.
+  - **Nova Seção 'Como funciona' em 4 Etapas:**
+    - Fluxo ponta a ponta simples e intuitivo (1. Colaborador registra o ponto, 2. Sistema gera registro e comprovante, 3. Gestores acompanham jornadas e ocorrências, 4. RH trata ajustes, banco de horas e fechamento) com cards verticais mobile-first, 4 colunas em desktop e sem termos jurídicos exagerados.
+  - **Nova Seção 'Colaborador x Empresa' (Para quem registra vs Para quem gerencia):**
+    - Seletor de abas mobile-first para telas pequenas (< 1024px) e duas colunas amplas no desktop.
+    - Destaque claro dos 5 recursos do colaborador e dos 6 pilares de gestão da empresa.
+  - **Hero Mockup Fiel à Interface Real do Produto:**
+    - Simulação demonstrativa interativa do painel do colaborador com saudação personalizada, relógio digital com segundos em tempo real, status da jornada, último registro e geração imediata de comprovante após a marcação.
+    - Geolocalização apresentada estritamente como evidência e apoio à validação, sem bloqueio de ponto por GPS.
+  - **Redução de Excesso Visual e Atenuação Gráfica:**
+    - Eliminação completa de `shadow-2xl` na landing comercial pública, adotando sombras suaves e contemporâneas (`shadow-xs`, `shadow-sm`, `shadow-md`).
+    - Substituição de gradientes decorativos em textos por cores sólidas de alto contraste (`text-indigo-600` e `text-indigo-400`).
+    - Atenuação drástica de halos neon, grade pontilhada e esferas `blur-3xl`.
+  - **Calibração Mobile-First Estrita (320px a 1440px):**
+    - Espaçamentos verticais adaptativos (`py-12 sm:py-14 md:py-16 lg:py-20`), eliminando áreas vazias excessivas.
+    - Cards padronizados com `p-5 sm:p-6` e títulos contidos em até `text-4xl` no celular.
+    - Zero overflow horizontal verificado em todas as resoluções de tela (320px, 360px, 390px, 430px, 768px, 1024px e 1440px).
+  - **Revisão de SEO, Metadados e Open Graph:**
+    - Título objetivo: `<title>PontoFácil | Controle de Ponto e Gestão de Jornada</title>`.
+    - Meta description e cards de compartilhamento Open Graph / Twitter sincronizados.
+    - Keywords coerentes sem keyword stuffing e remoção total de menções a REP-A, homologação antecipada ou promessas de conformidade absoluta.
+  - **Acessibilidade WCAG 2.1 AA & Navegação por Teclado:**
+    - Skip link funcional (`href="#hero"`) para leitores de tela e usuários de teclado.
+    - Respeito à preferência `prefers-reduced-motion` no CSS e script GSAP.
+    - Anéis de foco visível (`focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-indigo-600`) em todos os elementos interativos.
+    - Semântica ARIA completa (`role="tablist"`, `role="tab"`, `role="tabpanel"`, `aria-expanded`, `aria-controls`, `aria-label`).
+    - Fechamento do menu mobile via tecla `Escape`.
+    - Áreas de toque confortáveis (mínimo de 44x44px em botões e links).
+  - **Preservação Arquitetural & Remoção da Timeline Comercial:**
+    - A timeline técnica de versões foi removida da landing comercial pública por se tratar de informação técnica interna, preservando o histórico integral neste changelog e na área administrativa.
+
+## v2.5.0
 - **Conformidade MTE 31/07/2026: AFD REP-P Oficial & AEJ do PTRP (Portaria 671/2021 MTP):**
   - **AFD REP-P Oficial (Leiaute MTE 31/07/2026):**
     - **Nomenclatura Oficial:** Implementada a regra do item 10.3 do MTE (`AFD_{inpi}_{cnpj}_REP_P.txt`) quando houver registro no INPI; mantém nomenclatura de prévia/desenvolvimento (`AFD_{cnpj}_{inicio}_{fim}.txt`) enquanto o INPI estiver pendente, sem bloquear a geração.
@@ -36,36 +71,6 @@
     - Inconsistência do AEJ corrigida: certificado pendente nunca resulta em `isHomologated = true`.
   - **Pacote Fiscal MTE (README e Manifesto):**
     - README atualizado para referenciar o ledger central da ARP (`arp_events`), CRC-16/KERMIT, SHA-256 Tipo 7 e o modo não homologado de desenvolvimento.
-  - **Reorganização Estrutural da Landing Page (Mobile-First & Progressão Didática):**
-    - **Sequência em 8 Seções:** 1. Hero (`#hero`), 2. Como funciona (`#como-funciona`), 3. Para o colaborador / Para a empresa (`#para-empresas`), 4. Principais recursos (`#recursos`), 5. Segurança e rastreabilidade (`#seguranca`), 6. Portaria 671 / REP-P + PTRP (`#portaria-671`), 7. Demonstração da interface (`#demonstracao`) e 8. CTA final (`#contato`).
-    - **Didática de Apresentação:** Explicar primeiro o produto (Hero + Como funciona), depois os benefícios para ambas as partes (Colaborador vs Empresa + Recursos centrais) e somente depois os detalhes técnicos e fiscais (Segurança + Portaria 671).
-    - **Compactação e Otimização Mobile:** Espaçamentos verticais calibrados para dispositivos móveis (`py-10 sm:py-14 md:py-20`), eliminando áreas vazias excessivas e melhorando a progressão visual em telas pequenas (320px a 430px).
-    - **Nova Seção 'Como funciona' em 4 Etapas:** Fluxo end-to-end simples e didático (1. Colaborador registra o ponto, 2. O sistema gera o registro e o comprovante, 3. Gestores acompanham jornadas e ocorrências, 4. RH trata ajustes, banco de horas e fechamento) com cards verticais mobile-first, 4 colunas no desktop, ícones limpos e linguagem acessível sem diagramas complexos ou afirmações jurídicas absolutas.
-    - **Seção 'Colaborador x Empresa' (Para quem registra vs Para quem gerencia):** Divisão mobile-first com seletor de tabs acessível em telas menores (< 1024px) e duas colunas amplas no desktop, eliminando colunas estreitas no mobile. Destaca os 5 recursos centrais do colaborador (registrar ponto, visualizar histórico, receber comprovantes, consultar espelho, solicitar ajustes) e os 6 pilares de gestão da empresa (acompanhar jornadas, tratar ocorrências, banco de horas, fechamento, relatórios, auditoria).
-    - **Micro-animações GSAP:** Integração com ScrollTrigger para os novos blocos com staggers suaves em desktop e carregamento leve em mobile.
-    - **Redução de Excesso Visual e Calibração Mobile-First (Identidade Índigo / Branco / Slate):**
-      - **Atenuação de Gradientes & Alto Contraste:** Substituição de textos decorativos com gradient-clip por cores sólidas de alto contraste (`text-indigo-600` e `text-indigo-400`), proporcionando leitura nítida sob qualquer condição de brilho e luz solar no celular.
-      - **Eliminação de `shadow-2xl`:** Todas as sombras pesadas da landing comercial foram substituídas por sombras suaves, elegantes e contemporâneas (`shadow-xs`, `shadow-sm`, `shadow-md`), mantendo as bordas estruturais nítidas (`border-slate-200/90`).
-      - **Remoção de Glows Fortes e Halos Neon:** Redução drástica das manchas ambientais de fundo (opacidades reduzidas de 80% para 25-35%, grade pontilhada atenuada para 35%), eliminação de esferas `blur-3xl` invasivas e suavização da linha do scanner interativo (`shadow-[0_0_8px_#22d3ee]`).
-      - **Espaçamentos Otimizados Mobile-First:** Seções padronizadas com `py-12` ou `py-14` no mobile, expandindo para `py-16` e `py-20` apenas em telas maiores (`md`/`lg`), eliminando áreas vazias e melhorando o ritmo de leitura.
-      - **Padding de Cards:** Cards padronizados em `p-5` ou `p-6` no mobile, maximizando a área útil sem sensação de aperto.
-      - **Hierarquia Tipográfica Mobile:** Títulos principais contidos em até `text-4xl` no celular, evitando quebras de linha excessivas em telas pequenas (< 400px).
-      - **Grid Responsivo Estrito & Zero Overflow:** Progressão de 1 coluna no mobile evoluindo para 2 ou mais colunas apenas quando há espaço real; ausência total de overflow horizontal (`scrollWidth === innerWidth` verificado em 375px e 1280px).
-      - **Protagonismo da Interface Real:** O mockup do Hero e as prévias interativas espelham a interface autêntica do PontoFácil (saudação, relógio em tempo real, status da jornada, último registro e comprovante após a marcação).
-    - **Revisão de SEO, Metadados e Open Graph:**
-      - **Título Otimizado:** `<title>PontoFácil | Controle de Ponto e Gestão de Jornada</title>`, alinhado à proposta central do produto.
-      - **Meta Description & Open Graph:** Descrição concisa e objetiva: *"Sistema de controle de ponto e gestão de jornada com registro pelo celular, comprovantes, espelho de ponto, banco de horas, tratamentos e trilha de auditoria."*.
-      - **Keywords Coerentes (Sem Keyword Stuffing):** `ponto eletrônico, controle de jornada, REP-P, PTRP, Portaria 671, banco de horas, espelho de ponto, controle de ponto`.
-      - **Cards de Compartilhamento Social:** Tags Open Graph (`og:type`, `og:title`, `og:description`, `og:url`, `og:locale`) e Twitter Cards (`twitter:card`, `twitter:title`, `twitter:description`) sincronizadas.
-      - **Saneamento Terminológico:** Removidas menções a REP-A, homologação estatal precoce, promessas de conformidade absoluta e menções a GPS como fator de bloqueio.
-    - **Acessibilidade e Responsividade Final (WCAG 2.1 AA & Multi-Device 320px–1440px):**
-      - **Skip Link Operacional:** Inclusão de atalho `"Pular para o conteúdo principal"` (`href="#hero"`) com classes acessíveis `sr-only focus:not-sr-only`, permitindo salto direto de navegação por teclado e leitores de tela.
-      - **Respeito a `prefers-reduced-motion`:** Implementação de media query CSS anulando durações de animação/transição para usuários sensíveis a movimento e interceptação antecipada no script GSAP/ScrollTrigger (evitando loops infinitos e movimentações bruscas).
-      - **Navegação por Teclado & Foco Visível:** Todos os elementos interativos (links, botões, drawers e seletores de abas) possuem anéis de foco evidentes (`focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-indigo-600`) e suporte a fechamento de modais/menus com a tecla `Escape`.
-      - **Semântica ARIA Completa:** Menu mobile com `aria-expanded`, `aria-controls` e `aria-label` dinâmicos; seletores de abas estruturados formalmente com `role="tablist"`, `role="tab"`, `aria-selected` e `role="tabpanel"`; botões de simulação e validação com `aria-label` descritivos.
-      - **Auditoria de Viewports (320px, 360px, 390px, 430px, 768px, 1024px e Desktop):** Calibração de elementos rígidos em telas ultracompactas (como 320px do iPhone 5/SE), garantindo que mockups, relógio digital (`text-3xl min-[340px]:text-4xl`), scanners QR Code e cards não sofram cortes e mantenham zero overflow horizontal (`hasOverflow = false`).
-      - **Áreas de Toque Mínimas (Touch Targets):** Todos os botões e links de navegação respeitam a área confortável de toque de no mínimo 44x44px (`min-h-[44px]` ou `min-h-[48px]`).
-  - **Preservação Arquitetural & Remoção da Timeline Comercial:** A timeline técnica de versões foi removida da landing comercial pública por se tratar de informação técnica interna. O histórico completo segue rigorosamente preservado neste documento (`versoes.md`), na documentação e no modal interno do sistema (`components/help.blade.php`). Foram eliminados links (`#evolucao`), IDs e animações GSAP residuais da landing, mantendo a página enxuta e focada na proposta de valor.
   - **Congelamento Documental das Referências Oficiais MTE (31/07/2026):**
     - Os leiautes oficiais de referência usados na implementação foram congelados em `ref/mte/2026-07-31/` (`afd.pdf` e `aej.pdf`).
     - Hashes SHA-256 imutáveis registrados em `SHA256SUMS.txt` garantem rastreabilidade documental contra eventuais substituições silenciosas de conteúdo na mesma URL do portal `gov.br`.
