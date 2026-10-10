@@ -1,4 +1,4 @@
-<section id="como-funciona" class="py-10 sm:py-14 md:py-20 relative">
+<section id="como-funciona" class="py-12 sm:py-14 md:py-16 lg:py-20 relative">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         <!-- Cabeçalho da Seção -->
@@ -6,7 +6,7 @@
             <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold uppercase tracking-wider">
                 <span>Passo a Passo</span>
             </div>
-            <h2 class="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
+            <h2 class="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
                 Como funciona o PontoFácil
             </h2>
             <p class="text-sm sm:text-base md:text-lg text-slate-600 font-normal leading-relaxed">
@@ -18,10 +18,10 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 lg:gap-6 max-w-7xl mx-auto">
             
             <!-- Etapa 1: Colaborador registra o ponto -->
-            <div class="gsap-step-card bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-xs hover:shadow-md hover:border-indigo-200 transition-all duration-200 flex flex-col justify-between group">
+            <div class="gsap-step-card bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between group">
                 <div class="space-y-3.5">
                     <div class="flex items-center justify-between">
-                        <span class="text-2xl sm:text-3xl font-black text-indigo-600/25 font-mono-numbers group-hover:text-indigo-600/40 transition-colors">
+                        <span class="text-2xl sm:text-3xl font-black text-slate-300 font-mono-numbers group-hover:text-indigo-600/50 transition-colors">
                             01
                         </span>
                         <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm shadow-2xs">
@@ -47,10 +47,10 @@
             </div>
 
             <!-- Etapa 2: O sistema gera o registro e o comprovante -->
-            <div class="gsap-step-card bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-xs hover:shadow-md hover:border-indigo-200 transition-all duration-200 flex flex-col justify-between group">
+            <div class="gsap-step-card bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between group">
                 <div class="space-y-3.5">
                     <div class="flex items-center justify-between">
-                        <span class="text-2xl sm:text-3xl font-black text-indigo-600/25 font-mono-numbers group-hover:text-indigo-600/40 transition-colors">
+                        <span class="text-2xl sm:text-3xl font-black text-slate-300 font-mono-numbers group-hover:text-emerald-600/50 transition-colors">
                             02
                         </span>
                         <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm shadow-2xs">
@@ -76,10 +76,10 @@
             </div>
 
             <!-- Etapa 3: Gestores acompanham jornadas e ocorrências -->
-            <div class="gsap-step-card bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-xs hover:shadow-md hover:border-indigo-200 transition-all duration-200 flex flex-col justify-between group">
+            <div class="gsap-step-card bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between group">
                 <div class="space-y-3.5">
                     <div class="flex items-center justify-between">
-                        <span class="text-2xl sm:text-3xl font-black text-indigo-600/25 font-mono-numbers group-hover:text-indigo-600/40 transition-colors">
+                        <span class="text-2xl sm:text-3xl font-black text-slate-300 font-mono-numbers group-hover:text-indigo-600/50 transition-colors">
                             03
                         </span>
                         <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm shadow-2xs">
@@ -105,10 +105,10 @@
             </div>
 
             <!-- Etapa 4: RH trata ajustes, banco de horas e fechamento -->
-            <div class="gsap-step-card bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-xs hover:shadow-md hover:border-indigo-200 transition-all duration-200 flex flex-col justify-between group">
+            <div class="gsap-step-card bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between group">
                 <div class="space-y-3.5">
                     <div class="flex items-center justify-between">
-                        <span class="text-2xl sm:text-3xl font-black text-indigo-600/25 font-mono-numbers group-hover:text-indigo-600/40 transition-colors">
+                        <span class="text-2xl sm:text-3xl font-black text-slate-300 font-mono-numbers group-hover:text-purple-600/50 transition-colors">
                             04
                         </span>
                         <div class="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-sm shadow-2xs">

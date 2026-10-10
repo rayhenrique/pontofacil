@@ -1,12 +1,11 @@
 <!-- CTA Final Full-Width Banner -->
-<section id="contato" class="relative py-12 sm:py-16 lg:py-24 overflow-hidden bg-gradient-to-br from-indigo-700 via-indigo-900 to-slate-950 text-white">
-    <!-- Efeitos de Luz e Formas de Fundo -->
-    <div class="absolute -top-32 -left-32 w-96 h-96 bg-indigo-500/30 rounded-full blur-3xl pointer-events-none"></div>
-    <div class="absolute -bottom-32 -right-32 w-96 h-96 bg-purple-500/25 rounded-full blur-3xl pointer-events-none"></div>
+<section id="contato" class="relative py-12 sm:py-14 md:py-16 lg:py-20 overflow-hidden bg-slate-950 text-white border-t border-slate-900">
+    <!-- Efeito Sutil de Fundo -->
+    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-indigo-900/20 rounded-full blur-3xl pointer-events-none"></div>
     
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center space-y-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center space-y-6 sm:space-y-8">
         
-        <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-indigo-200 text-xs font-bold uppercase tracking-wider">
+        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-indigo-300 text-xs font-bold uppercase tracking-wider">
             <span class="flex h-2 w-2 relative">
                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
@@ -14,29 +13,29 @@
             <span>Implantação Instantânea</span>
         </div>
 
-        <h2 class="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight max-w-4xl mx-auto leading-[1.1]">
+        <h2 class="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight max-w-4xl mx-auto leading-[1.15]">
             Sua gestão de ponto pronta para a nova era. <br class="hidden sm:inline" />
-            <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 via-white to-indigo-200">
+            <span class="text-indigo-400">
                 Comece agora mesmo.
             </span>
         </h2>
 
-        <p class="text-base sm:text-xl text-indigo-100/90 max-w-2xl mx-auto font-normal leading-relaxed">
+        <p class="text-sm sm:text-base md:text-lg text-slate-300 max-w-2xl mx-auto font-normal leading-relaxed">
             Elimine o retrabalho manual com planilhas, ganhe segurança e rastreabilidade na apuração de horas e proporcione a melhor experiência para seus colaboradores.
         </p>
 
         <!-- CTA Principal -->
-        <div class="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
+        <div class="pt-2 sm:pt-4 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
             <a href="{{ Auth::check() ? route('home') : route('login') }}" 
-               class="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-9 py-4 rounded-2xl bg-white hover:bg-slate-100 text-indigo-900 font-extrabold text-base shadow-2xl hover:shadow-white/20 transition-all duration-200 transform hover:-translate-y-1">
+               class="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl bg-white hover:bg-slate-100 text-indigo-950 font-extrabold text-sm sm:text-base shadow-sm hover:shadow-md transition-all duration-200 transform hover:-translate-y-0.5">
                 <span>{{ Auth::check() ? 'Ir para o Sistema' : 'Entrar no Sistema' }}</span>
-                <svg class="w-5 h-5 text-indigo-700" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5 text-indigo-700" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
                 </svg>
             </a>
 
             <a href="#hero" 
-               class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-4 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-semibold text-base border border-white/20 backdrop-blur-md transition-all duration-200">
+               class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-200 font-semibold text-sm sm:text-base border border-slate-800 transition-all duration-200">
                 <span>Voltar ao Início</span>
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" />
@@ -73,12 +72,12 @@
 <footer class="bg-slate-950 text-slate-400 text-xs py-14 border-t border-slate-900">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
         
-        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6 sm:gap-8">
             
             <!-- Coluna Marca -->
-            <div class="col-span-2 space-y-4">
+            <div class="sm:col-span-2 space-y-4">
                 <div class="flex items-center gap-2.5">
-                    <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white flex items-center justify-center shadow-md">
+                    <div class="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                         </svg>

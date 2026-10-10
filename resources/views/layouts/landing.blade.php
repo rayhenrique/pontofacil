@@ -44,22 +44,19 @@
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-900 antialiased relative overflow-x-hidden selection:bg-indigo-600 selection:text-white">
 
-    <!-- Simulação Mesh Gradient: Efeitos visuais suaves de fundo -->
+    <!-- Fundo Visual Limpo e Sóbrio com Alto Contraste -->
     <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <!-- Mancha 1: Topo Central -->
-        <div class="absolute -top-40 left-1/2 -translate-x-1/2 w-[720px] h-[560px] bg-gradient-to-tr from-indigo-300/40 via-indigo-200/30 to-purple-200/35 rounded-full blur-3xl opacity-80"></div>
+        <!-- Mancha 1: Topo Central Discreta -->
+        <div class="absolute -top-40 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-indigo-100/40 rounded-full blur-3xl opacity-35"></div>
         
-        <!-- Mancha 2: Direita / Meio Superior -->
-        <div class="absolute top-[600px] -right-48 w-[640px] h-[640px] bg-indigo-100/50 rounded-full blur-3xl opacity-70"></div>
+        <!-- Mancha 2: Direita Discreta -->
+        <div class="absolute top-[800px] -right-48 w-[500px] h-[500px] bg-slate-200/35 rounded-full blur-3xl opacity-30"></div>
         
-        <!-- Mancha 3: Esquerda / Seção Central -->
-        <div class="absolute top-[1600px] -left-48 w-[580px] h-[580px] bg-purple-100/40 rounded-full blur-3xl opacity-60"></div>
-        
-        <!-- Mancha 4: Fundo Inferior -->
-        <div class="absolute top-[2600px] left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-indigo-200/30 rounded-full blur-3xl opacity-50"></div>
+        <!-- Mancha 3: Inferior Suave -->
+        <div class="absolute top-[2200px] left-1/2 -translate-x-1/2 w-[600px] h-[500px] bg-indigo-50/50 rounded-full blur-3xl opacity-25"></div>
 
         <!-- Grade Sutil de Pontos Tecnológicos -->
-        <div class="absolute inset-0 bg-[radial-gradient(#c7d2fe_1px,transparent_1px)] [background-size:24px_24px] [mask-image:radial-gradient(ellipse_70%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-60"></div>
+        <div class="absolute inset-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px] [mask-image:radial-gradient(ellipse_70%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-35"></div>
     </div>
 
     <!-- Conteúdo da Página -->

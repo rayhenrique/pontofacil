@@ -17,9 +17,9 @@
                 </div>
 
                 <!-- Título Objetivo (3-4 linhas no mobile) -->
-                <h1 class="gsap-hero-element text-2xl min-[360px]:text-[28px] sm:text-4xl lg:text-5xl xl:text-6xl font-black text-slate-900 tracking-tight leading-[1.2] sm:leading-[1.15]">
+                <h1 class="gsap-hero-element text-2xl min-[360px]:text-[26px] sm:text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-[1.2] sm:leading-[1.15]">
                     Ponto eletrônico simples para o colaborador. <br class="hidden sm:inline" />
-                    <span class="bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 bg-clip-text text-transparent">
+                    <span class="text-indigo-600">
                         Gestão completa para a empresa.
                     </span>
                 </h1>
@@ -32,7 +32,7 @@
                 <!-- CTAs (Largura total no mobile, flex-row em telas maiores) -->
                 <div class="gsap-hero-element flex flex-col sm:flex-row items-stretch sm:items-center justify-center lg:justify-start gap-3 pt-1">
                     <a href="{{ Auth::check() ? route('home') : route('login') }}" 
-                       class="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 sm:px-7 sm:py-4 rounded-xl sm:rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-sm sm:text-base shadow-lg shadow-indigo-600/25 hover:shadow-xl hover:shadow-indigo-600/35 transition-all duration-200 transform active:scale-[0.99] sm:hover:-translate-y-0.5">
+                       class="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 sm:px-7 sm:py-4 rounded-xl sm:rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-sm sm:text-base shadow-sm hover:shadow-md transition-all duration-200 transform active:scale-[0.99] sm:hover:-translate-y-0.5">
                         <span>{{ Auth::check() ? 'Ir para o Sistema' : 'Entrar no PontoFácil' }}</span>
                         <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
@@ -40,7 +40,7 @@
                     </a>
 
                     <a href="#recursos" 
-                       class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3.5 sm:px-6 sm:py-4 rounded-xl sm:rounded-2xl bg-white hover:bg-slate-50 text-slate-700 hover:text-indigo-600 font-semibold text-sm sm:text-base border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all duration-200">
+                       class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3.5 sm:px-6 sm:py-4 rounded-xl sm:rounded-2xl bg-white hover:bg-slate-50 text-slate-700 hover:text-indigo-600 font-semibold text-sm sm:text-base border border-slate-200 shadow-2xs hover:shadow-xs transition-all duration-200">
                         <span>Conhecer os recursos</span>
                         <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
@@ -76,9 +76,6 @@
             <div class="lg:col-span-5 flex justify-center w-full">
                 <div class="gsap-hero-mockup w-full max-w-sm sm:max-w-md relative">
                     
-                    <!-- Brilho Traseiro Suave -->
-                    <div class="absolute -inset-1 bg-gradient-to-tr from-indigo-500/25 to-purple-500/15 rounded-3xl blur-lg opacity-70"></div>
-
                     <!-- Mockup de Tela Real do PontoFácil -->
                     <div x-data="{
                             time: '',
@@ -109,7 +106,7 @@
                             }
                          }"
                          x-init="updateClock(); setInterval(() => updateClock(), 1000)"
-                         class="relative bg-white/95 backdrop-blur-xl border border-slate-200/80 p-4 min-[360px]:p-5 sm:p-6 rounded-2xl sm:rounded-3xl shadow-xl shadow-indigo-950/5 space-y-3.5 sm:space-y-4">
+                         class="relative bg-white border border-slate-200/90 p-4 min-[360px]:p-5 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm sm:shadow-md space-y-3.5 sm:space-y-4">
                         
                         <!-- Barra de Status do Sistema / App -->
                         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -170,8 +167,8 @@
                             <button @click="simulatePunch()" 
                                     :disabled="registered"
                                     type="button" 
-                                    class="w-full py-3.5 sm:py-4 px-5 rounded-xl sm:rounded-2xl font-bold text-sm sm:text-base text-white shadow-lg transition-all duration-200 flex items-center justify-center gap-2.5 cursor-pointer touch-manipulation"
-                                    :class="registered ? 'bg-emerald-600 shadow-emerald-600/30' : 'bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 shadow-indigo-600/25 active:scale-98'">
+                                    class="w-full py-3.5 sm:py-4 px-5 rounded-xl sm:rounded-2xl font-bold text-sm sm:text-base text-white shadow-sm transition-all duration-200 flex items-center justify-center gap-2.5 cursor-pointer touch-manipulation"
+                                    :class="registered ? 'bg-emerald-600' : 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 active:scale-98'">
                                 <svg x-show="!registered" class="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                                 </svg>

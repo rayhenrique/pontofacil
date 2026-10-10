@@ -1,4 +1,4 @@
-<section id="para-empresas" class="py-10 sm:py-14 md:py-20 relative">
+<section id="para-empresas" class="py-12 sm:py-14 md:py-16 lg:py-20 relative">
     <div id="beneficios" class="absolute -top-24 left-0 pointer-events-none"></div>
     <div id="comparativo" class="absolute -top-24 left-0 pointer-events-none"></div>
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -8,9 +8,9 @@
             <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold uppercase tracking-wider">
                 <span>Colaborador x Empresa</span>
             </div>
-            <h2 class="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
+            <h2 class="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
                 Para quem registra. <br class="hidden sm:inline" />
-                <span class="bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 bg-clip-text text-transparent">
+                <span class="text-indigo-600">
                     Para quem gerencia.
                 </span>
             </h2>
@@ -56,7 +56,7 @@
                 
                 <!-- Card 1: Para quem registra (Colaborador) -->
                 <div :class="(!isMobile || tab === 'registra') ? 'flex' : 'hidden lg:flex'"
-                     class="gsap-comparison-card bg-white/95 backdrop-blur-xl border border-indigo-100 rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-9 shadow-sm hover:shadow-md transition-all duration-200 flex-col justify-between">
+                     class="gsap-comparison-card bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-8 shadow-xs hover:border-slate-300 transition-all duration-200 flex-col justify-between">
                     <div class="space-y-5">
                         
                         <!-- Cabeçalho do Card -->
@@ -158,7 +158,7 @@
 
                 <!-- Card 2: Para quem gerencia (Empresa, Gestores e RH) -->
                 <div :class="(!isMobile || tab === 'gerencia') ? 'flex' : 'hidden lg:flex'"
-                     class="gsap-comparison-card bg-white/95 backdrop-blur-xl border border-purple-100 rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-9 shadow-sm hover:shadow-md transition-all duration-200 flex-col justify-between">
+                     class="gsap-comparison-card bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-8 shadow-xs hover:border-slate-300 transition-all duration-200 flex-col justify-between">
                     <div class="space-y-5">
                         
                         <!-- Cabeçalho do Card -->

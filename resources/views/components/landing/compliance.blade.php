@@ -1,12 +1,12 @@
-<section id="portaria-671" class="py-10 sm:py-14 md:py-20 relative bg-slate-50/60 border-y border-slate-200/60">
+<section id="portaria-671" class="py-12 sm:py-14 md:py-16 lg:py-20 relative bg-slate-50/60 border-y border-slate-200/60">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         <!-- Cabeçalho Sóbrio da Seção -->
-        <div class="text-center max-w-3xl mx-auto mb-10 sm:mb-14 space-y-2.5 sm:space-y-3">
+        <div class="text-center max-w-3xl mx-auto mb-8 sm:mb-12 space-y-2.5 sm:space-y-3">
             <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-200/80 border border-slate-300/80 text-slate-700 text-xs font-bold uppercase tracking-wider">
                 <span>Portaria 671 / MTP</span>
             </div>
-            <h2 class="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
+            <h2 class="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
                 Estrutura preparada para a Portaria 671
             </h2>
             <p class="text-sm sm:text-base md:text-lg text-slate-600 font-normal leading-relaxed">
@@ -15,7 +15,7 @@
         </div>
 
         <!-- Grid de 6 Pilares Técnicos e Sóbrios -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6 max-w-6xl mx-auto">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 lg:gap-6 max-w-6xl mx-auto">
             
             <!-- 1. REP-P: Eventos Brutos -->
             <div class="gsap-compliance-card bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">

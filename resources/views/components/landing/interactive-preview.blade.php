@@ -1,32 +1,32 @@
-<section id="demonstracao" class="py-10 sm:py-14 md:py-20 relative">
+<section id="demonstracao" class="py-12 sm:py-14 md:py-16 lg:py-20 relative">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         <!-- Cabeçalho da Seção -->
-        <div class="text-center max-w-3xl mx-auto mb-10 sm:mb-14 space-y-3 sm:space-y-4">
+        <div class="text-center max-w-3xl mx-auto mb-8 sm:mb-12 space-y-2.5 sm:space-y-3">
             <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold uppercase tracking-wider">
                 <span>Demonstração Interativa</span>
             </div>
-            <h2 class="text-3xl sm:text-4xl md:text-5xl font-black text-slate-900 tracking-tight">
+            <h2 class="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
                 Simplicidade na Ponta do Dedo. <br class="hidden sm:inline" />
-                <span class="bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 bg-clip-text text-transparent">
+                <span class="text-indigo-600">
                     Poder Total na Gestão.
                 </span>
             </h2>
-            <p class="text-base sm:text-lg text-slate-600 font-normal leading-relaxed">
+            <p class="text-sm sm:text-base md:text-lg text-slate-600 font-normal leading-relaxed">
                 Alterne entre a experiência ultrarrápida do colaborador e a visão completa de auditoria do gestor de RH.
             </p>
         </div>
 
         <!-- Container com Alpine.js para as Tabs -->
-        <div x-data="{ tab: 'colaborador' }" class="max-w-5xl mx-auto space-y-8">
+        <div x-data="{ tab: 'colaborador' }" class="max-w-5xl mx-auto space-y-6 sm:space-y-8">
             
             <!-- Botões Seletor de Tabs -->
             <div class="flex justify-center">
-                <div class="inline-flex p-1.5 rounded-2xl bg-slate-200/70 backdrop-blur-md border border-slate-300/60 shadow-inner">
+                <div class="inline-flex p-1.5 rounded-2xl bg-slate-200/80 border border-slate-300/60 shadow-inner">
                     <button @click="tab = 'colaborador'" 
                             type="button" 
                             :class="tab === 'colaborador' ? 'bg-white text-indigo-600 shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 font-semibold'"
-                            class="flex items-center gap-2.5 px-6 py-3 rounded-xl text-sm transition-all duration-200 focus:outline-hidden">
+                            class="flex items-center gap-2.5 px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm transition-all duration-200 focus:outline-hidden">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
                         </svg>
@@ -37,7 +37,7 @@
                     <button @click="tab = 'gestor'" 
                             type="button" 
                             :class="tab === 'gestor' ? 'bg-white text-indigo-600 shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 font-semibold'"
-                            class="flex items-center gap-2.5 px-6 py-3 rounded-xl text-sm transition-all duration-200 focus:outline-hidden">
+                            class="flex items-center gap-2.5 px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm transition-all duration-200 focus:outline-hidden">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.143 2.143L15.75 6" />
                         </svg>
@@ -53,13 +53,13 @@
                  x-transition:enter="transition ease-out duration-300"
                  x-transition:enter-start="opacity-0 transform scale-98"
                  x-transition:enter-end="opacity-100 transform scale-100"
-                 class="bg-white/90 backdrop-blur-xl border border-slate-200/80 rounded-3xl p-6 sm:p-10 shadow-xl shadow-indigo-950/5">
+                 class="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-5 sm:p-8 md:p-10 shadow-xs">
                 
                 <div class="grid md:grid-cols-12 gap-8 items-center">
                     
                     <!-- Coluna do Scanner Visual Interativo -->
                     <div class="md:col-span-6 flex justify-center">
-                        <div class="w-full max-w-xs bg-slate-900 rounded-[36px] p-4 shadow-2xl border-4 border-slate-800 relative">
+                        <div class="w-full max-w-xs bg-slate-900 rounded-[32px] p-3.5 sm:p-4 shadow-lg border-2 border-slate-700 relative">
                             
                             <!-- Notch / Speaker do Celular -->
                             <div class="w-32 h-4 bg-slate-800 rounded-full mx-auto mb-3 flex items-center justify-center">
@@ -125,7 +125,7 @@
                                     </div>
 
                                     <!-- LINHA LASER GSAP: Anime esta linha subindo e descendo -->
-                                    <div class="gsap-scanner-laser absolute inset-x-2 top-2 h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_16px_#22d3ee] z-20 pointer-events-none"></div>
+                                    <div class="gsap-scanner-laser absolute inset-x-2 top-2 h-0.5 bg-cyan-400 shadow-[0_0_8px_#22d3ee] z-20 pointer-events-none"></div>
 
                                     <!-- Feedback Central Flutuante -->
                                     <div class="absolute bottom-2.5 px-3 py-1 rounded-full bg-slate-950/80 backdrop-blur-xs border border-cyan-500/40 text-[10px] font-semibold text-cyan-300">
@@ -138,7 +138,7 @@
                                     <div class="text-[11px] text-center text-slate-300 font-medium">
                                         📍 Setor TI • Evidência de local registrada
                                     </div>
-                                    <div class="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 text-white font-bold text-xs text-center shadow-md">
+                                    <div class="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-xs text-center shadow-xs">
                                         Registrar Ponto (1 Toque)
                                     </div>
                                 </div>
@@ -213,7 +213,7 @@
                  x-transition:enter="transition ease-out duration-300"
                  x-transition:enter-start="opacity-0 transform scale-98"
                  x-transition:enter-end="opacity-100 transform scale-100"
-                 class="bg-white/90 backdrop-blur-xl border border-slate-200/80 rounded-3xl p-6 sm:p-10 shadow-xl shadow-indigo-950/5">
+                 class="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-5 sm:p-8 md:p-10 shadow-xs">
                 
                 <div class="space-y-8">
                     <!-- Header do Dashboard do Gestor -->

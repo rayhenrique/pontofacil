@@ -128,6 +128,7 @@ class LandingPageTest extends TestCase
         $response->assertSee('Sua gestão de ponto pronta para a nova era');
         $response->assertSee('Comece agora mesmo');
         $response->assertSee('KL Tecnologia');
+        $response->assertDontSee('shadow-2xl');
 
         // Garantir que a timeline técnica de versões não está presente na landing page comercial
         $response->assertDontSee('id="evolucao"', false);

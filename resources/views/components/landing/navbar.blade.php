@@ -6,7 +6,7 @@
         <div class="flex items-center justify-between h-16 sm:h-20">
             <!-- Brand Logo à Esquerda -->
             <a href="#hero" class="flex items-center gap-2.5 sm:gap-3 group focus:outline-hidden shrink-0">
-                <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-indigo-700 via-indigo-600 to-indigo-500 text-white flex items-center justify-center shadow-md shadow-indigo-600/20 group-hover:scale-105 transition-transform duration-200 shrink-0">
+                <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-sm group-hover:bg-indigo-700 transition-colors duration-200 shrink-0">
                     <svg class="w-5 h-5 sm:w-5.5 sm:h-5.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                     </svg>
@@ -73,7 +73,7 @@
          x-transition:leave-start="opacity-100 translate-y-0"
          x-transition:leave-end="opacity-0 -translate-y-4"
          @click.outside="mobileMenuOpen = false"
-         class="lg:hidden bg-white/98 backdrop-blur-2xl border-b border-slate-200/80 shadow-2xl px-4 pt-3 pb-6 space-y-3">
+         class="lg:hidden bg-white border-b border-slate-200 shadow-lg px-4 pt-3 pb-6 space-y-3">
         
         <!-- Mobile Navigation Links com touch target confortável (min 44px) -->
         <nav class="flex flex-col space-y-1">
