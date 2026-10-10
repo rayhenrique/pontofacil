@@ -3,10 +3,8 @@
         
         <!-- Cabeçalho Sóbrio da Seção -->
         <div class="text-center max-w-3xl mx-auto mb-8 sm:mb-12 space-y-2.5 sm:space-y-3">
-            <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-200/80 border border-slate-300/80 text-slate-700 text-xs font-bold uppercase tracking-wider">
-                <span>Portaria 671 / MTP</span>
-            </div>
-            <h2 class="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
+            <p class="text-xs font-bold uppercase tracking-widest text-indigo-600">05 — Portaria 671 / MTP</p>
+            <h2 class="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 tracking-tight">
                 Estrutura preparada para a Portaria 671
             </h2>
             <p class="text-sm sm:text-base md:text-lg text-slate-600 font-normal leading-relaxed">
@@ -18,10 +16,10 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 lg:gap-6 max-w-6xl mx-auto">
             
             <!-- 1. REP-P: Eventos Brutos -->
-            <div class="gsap-compliance-card bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
+            <div class="gsap-compliance-card bg-white border border-slate-200/90 rounded-xl p-5 sm:p-6 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
                 <div class="space-y-3">
                     <div class="flex items-center justify-between">
-                        <span class="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold w-fit">
+                        <span class="px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 text-xs font-bold w-fit">
                             REP-P
                         </span>
                         <span class="text-[11px] font-medium text-slate-500">Coleta Fiel</span>
@@ -40,10 +38,10 @@
             </div>
 
             <!-- 2. PTRP: Tratamento de Jornada -->
-            <div class="gsap-compliance-card bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
+            <div class="gsap-compliance-card bg-white border border-slate-200/90 rounded-xl p-5 sm:p-6 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
                 <div class="space-y-3">
                     <div class="flex items-center justify-between">
-                        <span class="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold w-fit">
+                        <span class="px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 text-xs font-bold w-fit">
                             PTRP
                         </span>
                         <span class="text-[11px] font-medium text-slate-500">Apuração</span>
@@ -62,10 +60,10 @@
             </div>
 
             <!-- 3. Registros de ponto não são alterados pelo tratamento -->
-            <div class="gsap-compliance-card bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
+            <div class="gsap-compliance-card bg-white border border-slate-200/90 rounded-xl p-5 sm:p-6 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
                 <div class="space-y-3">
                     <div class="flex items-center justify-between">
-                        <span class="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 text-xs font-bold w-fit">
+                        <span class="px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 text-xs font-bold w-fit">
                             Integridade
                         </span>
                         <span class="text-[11px] font-medium text-slate-500">Desacoplamento</span>
@@ -78,16 +76,16 @@
                     </p>
                 </div>
                 <div class="pt-3 mt-4 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-semibold text-slate-600">
-                    <span class="w-1.5 h-1.5 rounded-full bg-purple-600"></span>
+                    <span class="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
                     <span>Preservação perpétua da marcação original</span>
                 </div>
             </div>
 
             <!-- 4. Comprovantes após a marcação -->
-            <div class="gsap-compliance-card bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
+            <div class="gsap-compliance-card bg-white border border-slate-200/90 rounded-xl p-5 sm:p-6 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
                 <div class="space-y-3">
                     <div class="flex items-center justify-between">
-                        <span class="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-bold w-fit">
+                        <span class="px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 text-xs font-bold w-fit">
                             Recibo
                         </span>
                         <span class="text-[11px] font-medium text-slate-500">Transparência</span>
@@ -106,10 +104,10 @@
             </div>
 
             <!-- 5. Trilhas de Auditoria -->
-            <div class="gsap-compliance-card bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
+            <div class="gsap-compliance-card bg-white border border-slate-200/90 rounded-xl p-5 sm:p-6 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
                 <div class="space-y-3">
                     <div class="flex items-center justify-between">
-                        <span class="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-xs font-bold w-fit">
+                        <span class="px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 text-xs font-bold w-fit">
                             Auditoria
                         </span>
                         <span class="text-[11px] font-medium text-slate-500">Rastreabilidade</span>
@@ -122,16 +120,16 @@
                     </p>
                 </div>
                 <div class="pt-3 mt-4 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-semibold text-slate-600">
-                    <span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                    <span class="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
                     <span>NSR contínuo e histórico cronológico</span>
                 </div>
             </div>
 
             <!-- 6. INPI e ICP-Brasil como etapas complementares -->
-            <div class="gsap-compliance-card bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
+            <div class="gsap-compliance-card bg-white border border-slate-200/90 rounded-xl p-5 sm:p-6 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
                 <div class="space-y-3">
                     <div class="flex items-center justify-between">
-                        <span class="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 text-xs font-bold w-fit">
+                        <span class="px-2.5 py-1 rounded-md bg-amber-50 text-amber-700 text-xs font-bold w-fit">
                             Regulatório
                         </span>
                         <span class="text-[11px] font-medium text-slate-500">Transparência</span>
@@ -153,7 +151,7 @@
 
         <!-- Nota Técnica de Sobriedade e Transparência Regulatória -->
         <div class="mt-8 sm:mt-12 max-w-4xl mx-auto">
-            <div class="bg-slate-100/90 border border-slate-200 rounded-2xl p-4 sm:p-6 text-slate-600 text-xs sm:text-sm leading-relaxed">
+            <div class="bg-slate-100/90 border border-slate-200 rounded-xl p-4 sm:p-6 text-slate-600 text-xs sm:text-sm leading-relaxed">
                 <div class="flex items-start gap-3">
                     <svg class="w-5 h-5 text-slate-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />

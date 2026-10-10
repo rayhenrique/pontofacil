@@ -3,17 +3,13 @@
         
         <!-- Cabeçalho da Seção -->
         <div class="text-center max-w-3xl mx-auto mb-8 sm:mb-12 space-y-2.5 sm:space-y-3">
-            <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold uppercase tracking-wider">
-                <span>Demonstração Interativa</span>
-            </div>
-            <h2 class="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
+            <p class="text-xs font-bold uppercase tracking-widest text-indigo-600">06 — Demonstração da interface</p>
+            <h2 class="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 tracking-tight">
                 Simplicidade na Ponta do Dedo. <br class="hidden sm:inline" />
-                <span class="text-indigo-600">
-                    Poder Total na Gestão.
-                </span>
+                <span class="text-indigo-600">Poder total na gestão.</span>
             </h2>
             <p class="text-sm sm:text-base md:text-lg text-slate-600 font-normal leading-relaxed">
-                Alterne entre a experiência ultrarrápida do colaborador e a visão completa de auditoria do gestor de RH.
+                Alterne entre a experiência ágil do colaborador e a visão completa de auditoria do gestor de RH.
             </p>
         </div>
 
@@ -22,7 +18,7 @@
             
             <!-- Botões Seletor de Tabs -->
             <div class="flex justify-center">
-                <div class="inline-flex p-1.5 rounded-2xl bg-slate-200/80 border border-slate-300/60 shadow-inner"
+                <div class="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200"
                      role="tablist"
                      aria-label="Demonstração interativa do sistema">
                     <button @click="tab = 'colaborador'" 
@@ -31,8 +27,8 @@
                             :aria-selected="tab === 'colaborador'"
                             aria-controls="panel-preview-colaborador"
                             type="button" 
-                            :class="tab === 'colaborador' ? 'bg-white text-indigo-600 shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 font-semibold'"
-                            class="flex items-center gap-2.5 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 min-h-[44px] cursor-pointer">
+                            :class="tab === 'colaborador' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900 font-semibold'"
+                            class="flex items-center gap-2.5 px-4 sm:px-6 py-2.5 rounded-lg text-xs sm:text-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 min-h-[44px] cursor-pointer">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
                         </svg>
@@ -46,13 +42,13 @@
                             :aria-selected="tab === 'gestor'"
                             aria-controls="panel-preview-gestor"
                             type="button" 
-                            :class="tab === 'gestor' ? 'bg-white text-indigo-600 shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 font-semibold'"
-                            class="flex items-center gap-2.5 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 min-h-[44px] cursor-pointer">
+                            :class="tab === 'gestor' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900 font-semibold'"
+                            class="flex items-center gap-2.5 px-4 sm:px-6 py-2.5 rounded-lg text-xs sm:text-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 min-h-[44px] cursor-pointer">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.143 2.143L15.75 6" />
                         </svg>
                         <span>Visão do Gestor / RH</span>
-                        <span class="hidden sm:inline-block text-[11px] px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 font-bold">Painel Total</span>
+                        <span class="hidden sm:inline-block text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold">Painel Total</span>
                     </button>
                 </div>
             </div>
@@ -66,7 +62,7 @@
                  x-transition:enter="transition ease-out duration-300"
                  x-transition:enter-start="opacity-0 transform scale-98"
                  x-transition:enter-end="opacity-100 transform scale-100"
-                 class="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 min-[360px]:p-6 sm:p-8 md:p-10 shadow-xs">
+                 class="bg-white border border-slate-200/90 rounded-2xl p-4 min-[360px]:p-6 sm:p-8 md:p-10 shadow-xs">
                 
                 <div class="grid md:grid-cols-12 gap-8 items-center">
                     
@@ -162,11 +158,9 @@
 
                     <!-- Explicação da Experiência do Colaborador -->
                     <div class="md:col-span-6 space-y-6">
-                        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold">
-                            <span>Experiência Sem Atrito</span>
-                        </div>
+                        <p class="text-xs font-bold uppercase tracking-wider text-indigo-600">Experiência ágil</p>
                         
-                        <h3 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+                        <h3 class="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
                             Bata o ponto em menos de 2 segundos, de qualquer aparelho.
                         </h3>
 
@@ -229,14 +223,14 @@
                  x-transition:enter="transition ease-out duration-300"
                  x-transition:enter-start="opacity-0 transform scale-98"
                  x-transition:enter-end="opacity-100 transform scale-100"
-                 class="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 min-[360px]:p-6 sm:p-8 md:p-10 shadow-xs">
+                 class="bg-white border border-slate-200/90 rounded-2xl p-4 min-[360px]:p-6 sm:p-8 md:p-10 shadow-xs">
                 
                 <div class="space-y-8">
                     <!-- Header do Dashboard do Gestor -->
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-6">
                         <div>
                             <div class="flex items-center gap-2.5">
-                                <span class="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                <span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
                                 <h3 class="text-xl font-bold text-slate-900">Painel Geral de Monitoramento • RH</h3>
                             </div>
                             <p class="text-xs text-slate-500 mt-1">
@@ -247,7 +241,7 @@
                             <span class="px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold">
                                 Folha do Mês: 99.4% Concluída
                             </span>
-                            <a href="{{ route('login') }}" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-sm">
+                            <a href="{{ route('login') }}" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs">
                                 Exportar Relatório
                             </a>
                         </div>
@@ -255,27 +249,27 @@
 
                     <!-- Métricas Principais (Cards de KPI) -->
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1">
+                        <div class="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-1">
                             <div class="text-xs font-semibold text-slate-500">Colaboradores Ativos</div>
-                            <div class="text-2xl font-black text-slate-900">48 <span class="text-xs font-normal text-slate-400">/ 50</span></div>
+                            <div class="text-2xl font-bold text-slate-900">48 <span class="text-xs font-normal text-slate-400">/ 50</span></div>
                             <div class="text-[11px] text-emerald-600 font-semibold">96% presentes hoje</div>
                         </div>
 
-                        <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1">
+                        <div class="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-1">
                             <div class="text-xs font-semibold text-slate-500">Horas Computadas</div>
-                            <div class="text-2xl font-black text-slate-900">384h <span class="text-xs font-normal text-slate-400">15m</span></div>
+                            <div class="text-2xl font-bold text-slate-900">384h <span class="text-xs font-normal text-slate-400">15m</span></div>
                             <div class="text-[11px] text-indigo-600 font-semibold">Cálculo automatizado</div>
                         </div>
 
-                        <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1">
+                        <div class="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-1">
                             <div class="text-xs font-semibold text-slate-500">Ajustes Pendentes</div>
-                            <div class="text-2xl font-black text-emerald-600">0</div>
+                            <div class="text-2xl font-bold text-emerald-600">0</div>
                             <div class="text-[11px] text-emerald-600 font-semibold">Tudo conciliado</div>
                         </div>
 
-                        <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1">
+                        <div class="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-1">
                             <div class="text-xs font-semibold text-slate-500">Conformidade 671</div>
-                            <div class="text-2xl font-black text-indigo-600">100%</div>
+                            <div class="text-2xl font-bold text-indigo-600">100%</div>
                             <div class="text-[11px] text-indigo-600 font-semibold">Hash SHA-256 ativo</div>
                         </div>
                     </div>
@@ -287,7 +281,7 @@
                             <span class="text-slate-400 font-normal">Atualizado há 1 segundo</span>
                         </div>
 
-                        <div class="overflow-x-auto border border-slate-200/70 rounded-2xl">
+                        <div class="overflow-x-auto border border-slate-200/70 rounded-xl">
                             <table class="w-full text-left text-xs">
                                 <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200/70">
                                     <tr>
@@ -306,7 +300,7 @@
                                         <td class="py-3 px-4 font-mono font-bold text-slate-900">08:02:14</td>
                                         <td class="py-3 px-4 text-emerald-600 font-semibold">Entrada Manhã</td>
                                         <td class="py-3 px-4">QR Setor + GPS (4m)</td>
-                                        <td class="py-3 px-4 text-right"><span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">Auditado</span></td>
+                                        <td class="py-3 px-4 text-right"><span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px]">Auditado</span></td>
                                     </tr>
                                     <tr class="hover:bg-indigo-50/30 transition-colors">
                                         <td class="py-3 px-4 font-semibold text-slate-900">Mariana Silva</td>
@@ -314,7 +308,7 @@
                                         <td class="py-3 px-4 font-mono font-bold text-slate-900">08:15:30</td>
                                         <td class="py-3 px-4 text-emerald-600 font-semibold">Entrada Manhã</td>
                                         <td class="py-3 px-4">QR Setor + GPS (12m)</td>
-                                        <td class="py-3 px-4 text-right"><span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">Auditado</span></td>
+                                        <td class="py-3 px-4 text-right"><span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px]">Auditado</span></td>
                                     </tr>
                                     <tr class="hover:bg-indigo-50/30 transition-colors">
                                         <td class="py-3 px-4 font-semibold text-slate-900">Roberto Alves</td>
@@ -322,7 +316,7 @@
                                         <td class="py-3 px-4 font-mono font-bold text-slate-900">12:01:05</td>
                                         <td class="py-3 px-4 text-amber-600 font-semibold">Saída Almoço</td>
                                         <td class="py-3 px-4">QR Matriz + GPS (7m)</td>
-                                        <td class="py-3 px-4 text-right"><span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">Auditado</span></td>
+                                        <td class="py-3 px-4 text-right"><span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px]">Auditado</span></td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -330,8 +324,8 @@
                     </div>
 
                     <!-- Barra de Informações Jurídicas -->
-                    <div class="bg-indigo-50/70 border border-indigo-100 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
-                        <div class="flex items-center gap-3 text-indigo-950 font-medium">
+                    <div class="bg-slate-50 border border-slate-200/90 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
+                        <div class="flex items-center gap-3 text-slate-800 font-medium">
                             <svg class="w-5 h-5 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
                             </svg>

@@ -38,6 +38,14 @@
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
 
     <style>
+        :root {
+            --brand-50: #eef2ff;
+            --brand-100: #e0e7ff;
+            --brand-500: #6366f1;
+            --brand-600: #4f46e5;
+            --brand-700: #4338ca;
+            --brand-950: #1e1b4b;
+        }
         [x-cloak] { display: none !important; }
         body {
             font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -61,23 +69,17 @@
 
     <!-- Link de Acessibilidade: Pular para o Conteúdo Principal -->
     <a href="#hero" 
-       class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2.5 focus:bg-indigo-600 focus:text-white focus:rounded-xl focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 text-sm font-semibold">
+       class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2.5 focus:bg-indigo-600 focus:text-white focus:rounded-xl focus:shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 text-sm font-semibold">
         Pular para o conteúdo principal
     </a>
 
     <!-- Fundo Visual Limpo e Sóbrio com Alto Contraste -->
     <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <!-- Mancha 1: Topo Central Discreta -->
-        <div class="absolute -top-40 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-indigo-100/40 rounded-full blur-3xl opacity-35"></div>
-        
-        <!-- Mancha 2: Direita Discreta -->
-        <div class="absolute top-[800px] -right-48 w-[500px] h-[500px] bg-slate-200/35 rounded-full blur-3xl opacity-30"></div>
-        
-        <!-- Mancha 3: Inferior Suave -->
-        <div class="absolute top-[2200px] left-1/2 -translate-x-1/2 w-[600px] h-[500px] bg-indigo-50/50 rounded-full blur-3xl opacity-25"></div>
+        <!-- Mancha Topo Sutil -->
+        <div class="absolute -top-40 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-indigo-50/70 rounded-full blur-3xl opacity-30"></div>
 
-        <!-- Grade Sutil de Pontos Tecnológicos -->
-        <div class="absolute inset-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px] [mask-image:radial-gradient(ellipse_70%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-35"></div>
+        <!-- Grade Quase Imperceptível de Pontos -->
+        <div class="absolute inset-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px] [mask-image:radial-gradient(ellipse_60%_40%_at_50%_0%,#000_60%,transparent_100%)] opacity-20"></div>
     </div>
 
     <!-- Conteúdo da Página -->

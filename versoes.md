@@ -1,6 +1,24 @@
 # Histórico de Versões (Changelog)
 
 ## v2.5.1 (Atual)
+- **Refinamento de Direção de Arte e Identidade Visual (Landing Page):**
+  - **Identidade Corporativa e Sóbria:**
+    - Redução significativa da estética genérica de template SaaS / IA, alinhando a landing page a um padrão visual de software corporativo maduro (Linear na disciplina visual, Stripe na sobriedade e clareza para RH).
+  - **Simplificação da Paleta e Tokens de Marca:**
+    - Centralização da identidade visual via tokens CSS (`--brand-50` a `--brand-950`).
+    - Paleta estrita: Índigo (marca PontoFácil), Slate (neutros/textos), Emerald (sucesso/validação pública), Amber (atenção/regulatório MTP) e Red (erros).
+    - Eliminação completa de uso decorativo de roxo/purple em seções e cards.
+  - **Eliminação de Gradientes de Texto:**
+    - Remoção de `bg-gradient-to-r`, `bg-clip-text` e `text-transparent` em títulos da landing, aplicando `slate-900` para títulos e `indigo-600` / `indigo-400` sólido para destaque.
+  - **Substituição de Pills Repetitivos por Labels Editoriais:**
+    - Seções agora identificadas com numeração e tipografia editorial discreta (`01 — COMO FUNCIONA`, `02 — COLABORADOR X EMPRESA`, `03 — RECURSOS PRINCIPAIS`, `04 — SEGURANÇA E RASTREABILIDADE`, `05 — PORTARIA 671 / MTP`, `06 — DEMONSTRAÇÃO DA INTERFACE`).
+  - **Hierarquia de Bordas (Radius) e Sombras (Shadows):**
+    - Padronização de botões (`rounded-lg`/`rounded-xl`), cards (`rounded-xl`) e containers (`rounded-2xl`), eliminando o uso disperso de `rounded-3xl`.
+    - Substituição de sombras pesadas (`shadow-xl`/`shadow-2xl`) por bordas refinadas `border-slate-200/90` e sombras sutis (`shadow-xs`/`shadow-sm`), reservando destaque para o mockup central.
+  - **Navegação Desktop Sóbria e Minimalista:**
+    - Remoção dos 4 ícones inline dos links de navegação no desktop (`Recursos`, `Para empresas`, `Segurança`, `Portaria 671`), preservando os ícones funcionais em *Verificar comprovante* e *Entrar*. Menu mobile com ícones monocromáticos em `currentColor`.
+  - **Moderação Tipográfica:**
+    - Remoção de `font-black`, priorizando `font-bold` e reservando `font-extrabold` estritamente para títulos principais (Hero e CTA).
 - **Reformulação Visual, Otimização Mobile-First e Acessibilidade (Landing Page Comercial):**
   - **Reorganização Didática em 8 Seções Estruturadas:**
     - Sequência lógica orientada a conversão e clareza: 1. Hero com interface real (`#hero`), 2. Como funciona (`#como-funciona`), 3. Para o colaborador / Para a empresa (`#para-empresas`), 4. Principais recursos (`#recursos`), 5. Segurança e rastreabilidade (`#seguranca`), 6. Estrutura preparada para a Portaria 671 (`#portaria-671`), 7. Demonstração da interface (`#demonstracao`) e 8. CTA final (`#contato`).

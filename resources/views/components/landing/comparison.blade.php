@@ -5,10 +5,10 @@
         
         <!-- Cabeçalho da Seção -->
         <div class="text-center max-w-3xl mx-auto mb-8 sm:mb-12 space-y-2.5 sm:space-y-3">
-            <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold uppercase tracking-wider">
-                <span>Colaborador x Empresa</span>
-            </div>
-            <h2 class="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
+            <p class="text-xs font-bold uppercase tracking-widest text-indigo-600">
+                02 — Colaborador x Empresa
+            </p>
+            <h2 class="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 tracking-tight">
                 Para quem registra. <br class="hidden sm:inline" />
                 <span class="text-indigo-600">
                     Para quem gerencia.
@@ -51,9 +51,9 @@
                             :aria-selected="tab === 'gerencia'"
                             aria-controls="panel-gerencia"
                             type="button" 
-                            :class="tab === 'gerencia' ? 'bg-white text-purple-700 shadow-sm font-bold' : 'text-slate-600 font-semibold'"
-                            class="flex-1 py-3 px-3.5 rounded-xl text-xs min-[380px]:text-sm transition-all duration-200 text-center min-h-[48px] flex items-center justify-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600">
-                        <svg class="w-4 h-4 text-purple-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            :class="tab === 'gerencia' ? 'bg-white text-indigo-700 shadow-sm font-bold' : 'text-slate-600 font-semibold'"
+                            class="flex-1 py-3 px-3.5 rounded-xl text-xs min-[380px]:text-sm transition-all duration-200 text-center min-h-[48px] flex items-center justify-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600">
+                        <svg class="w-4 h-4 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
                         </svg>
                         <span>Para quem gerencia</span>
@@ -69,7 +69,7 @@
                      id="panel-registra"
                      role="tabpanel"
                      aria-labelledby="tab-registra"
-                     class="gsap-comparison-card bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-8 shadow-xs hover:border-slate-300 transition-all duration-200 flex-col justify-between">
+                     class="gsap-comparison-card bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 md:p-8 shadow-xs hover:border-slate-300 transition-all duration-200 flex-col justify-between">
                     <div class="space-y-5">
                         
                         <!-- Cabeçalho do Card -->
@@ -174,13 +174,13 @@
                      id="panel-gerencia"
                      role="tabpanel"
                      aria-labelledby="tab-gerencia"
-                     class="gsap-comparison-card bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-8 shadow-xs hover:border-slate-300 transition-all duration-200 flex-col justify-between">
+                     class="gsap-comparison-card bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 md:p-8 shadow-xs hover:border-slate-300 transition-all duration-200 flex-col justify-between">
                     <div class="space-y-5">
                         
                         <!-- Cabeçalho do Card -->
                         <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-                            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 text-xs sm:text-sm font-bold tracking-tight">
-                                <svg class="w-4 h-4 text-purple-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 text-xs sm:text-sm font-bold tracking-tight">
+                                <svg class="w-4 h-4 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
                                 </svg>
                                 <span>Para quem gerencia</span>
@@ -202,7 +202,7 @@
                             
                             <!-- 1. Acompanhar jornadas -->
                             <li class="flex items-start gap-3">
-                                <div class="shrink-0 w-6 h-6 rounded-lg bg-purple-100/80 text-purple-700 flex items-center justify-center font-bold mt-0.5">
+                                <div class="shrink-0 w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold mt-0.5">
                                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                                     </svg>
@@ -215,7 +215,7 @@
 
                             <!-- 2. Tratar ocorrências -->
                             <li class="flex items-start gap-3">
-                                <div class="shrink-0 w-6 h-6 rounded-lg bg-purple-100/80 text-purple-700 flex items-center justify-center font-bold mt-0.5">
+                                <div class="shrink-0 w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold mt-0.5">
                                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                                     </svg>
@@ -228,7 +228,7 @@
 
                             <!-- 3. Banco de horas -->
                             <li class="flex items-start gap-3">
-                                <div class="shrink-0 w-6 h-6 rounded-lg bg-purple-100/80 text-purple-700 flex items-center justify-center font-bold mt-0.5">
+                                <div class="shrink-0 w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold mt-0.5">
                                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                                     </svg>
@@ -241,7 +241,7 @@
 
                             <!-- 4. Fechamento -->
                             <li class="flex items-start gap-3">
-                                <div class="shrink-0 w-6 h-6 rounded-lg bg-purple-100/80 text-purple-700 flex items-center justify-center font-bold mt-0.5">
+                                <div class="shrink-0 w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold mt-0.5">
                                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                                     </svg>
@@ -254,7 +254,7 @@
 
                             <!-- 5. Relatórios -->
                             <li class="flex items-start gap-3">
-                                <div class="shrink-0 w-6 h-6 rounded-lg bg-purple-100/80 text-purple-700 flex items-center justify-center font-bold mt-0.5">
+                                <div class="shrink-0 w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold mt-0.5">
                                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                                     </svg>
@@ -267,7 +267,7 @@
 
                             <!-- 6. Auditoria -->
                             <li class="flex items-start gap-3">
-                                <div class="shrink-0 w-6 h-6 rounded-lg bg-purple-100/80 text-purple-700 flex items-center justify-center font-bold mt-0.5">
+                                <div class="shrink-0 w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold mt-0.5">
                                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                                     </svg>
@@ -281,8 +281,8 @@
                         </ul>
                     </div>
 
-                    <div class="pt-4 mt-6 border-t border-slate-100 text-xs text-purple-700 font-semibold flex items-center gap-1.5">
-                        <span class="inline-block w-1.5 h-1.5 rounded-full bg-purple-600"></span>
+                    <div class="pt-4 mt-6 border-t border-slate-100 text-xs text-indigo-700 font-semibold flex items-center gap-1.5">
+                        <span class="inline-block w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
                         <span>Processamento automatizado sem planilhas manuais</span>
                     </div>
                 </div>
