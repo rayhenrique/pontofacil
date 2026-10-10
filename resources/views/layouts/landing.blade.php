@@ -4,13 +4,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
     <title>PontoFácil • Controle de Jornada Digital • REP-P + PTRP (Portaria 671)</title>
-    <meta name="description" content="Controle de jornada digital • REP-P + PTRP. Arquitetura preparada para a Portaria 671, validação por QR Code dinâmico, GPS e trilha de auditoria para conformidade fiscal.">
+    <meta name="description" content="Controle de jornada digital • REP-P + PTRP. Arquitetura preparada para a Portaria 671, QR Code e localização como apoio à validação e trilha de auditoria para conformidade fiscal.">
     <meta name="keywords" content="controle de ponto, portaria 671, REP-P, PTRP, ponto eletrônico, QR Code ponto, ponto GPS, espelho de ponto, AFD, AEJ, RH">
     
     <!-- Open Graph / Social Media -->
     <meta property="og:type" content="website">
     <meta property="og:title" content="PontoFácil • Controle de Jornada Digital • REP-P + PTRP">
-    <meta property="og:description" content="Controle de jornada digital com arquitetura REP-P + PTRP. Fechamento de folha em minutos, validação por QR Code, GPS e trilha de auditoria.">
+    <meta property="og:description" content="Controle de jornada digital com arquitetura REP-P + PTRP. Fechamento de folha em minutos, QR Code, localização registrada como evidência e trilha de auditoria.">
     <meta property="og:locale" content="pt_BR">
     
     <!-- Favicon -->

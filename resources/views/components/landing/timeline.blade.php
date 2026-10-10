@@ -385,7 +385,7 @@
                         </h3>
 
                         <p class="text-sm text-slate-600 mb-3 leading-relaxed">
-                            Início da plataforma comercial com validação dupla pioneira (QR Code + Cerca Virtual GPS) e emissão de comprovantes com código de validação e hash de integridade.
+                            Início da plataforma comercial com apoio de QR Code e localização registrada como evidência probatória, além de emissão de comprovantes com código de validação e hash de integridade.
                         </p>
 
                         <div class="flex flex-wrap gap-2 text-[11px] font-medium text-slate-600">

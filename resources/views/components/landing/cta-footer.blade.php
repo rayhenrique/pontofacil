@@ -88,7 +88,7 @@
                     </span>
                 </div>
                 <p class="text-slate-400 text-xs leading-relaxed max-w-sm">
-                    Controle de jornada digital com arquitetura REP-P + PTRP preparada para a Portaria 671 do Ministério do Trabalho e Previdência. Trilha de auditoria, validação cruzada por QR Code e cerca virtual de GPS.
+                    Controle de jornada digital com arquitetura REP-P + PTRP preparada para a Portaria 671 do Ministério do Trabalho e Previdência. Trilha de auditoria, QR Code e localização como apoio à validação.
                 </p>
                 <div class="text-[11px] text-slate-500 font-medium">
                     Desenvolvido com excelência por 
@@ -124,7 +124,7 @@
                     <li><span class="text-slate-300">Padrão REP-P + PTRP</span></li>
                     <li><span class="text-slate-300">Carimbo de Tempo NTP.br</span></li>
                     <li><span class="text-slate-300">Hash de Integridade SHA-256</span></li>
-                    <li><span class="text-slate-300">Cerca Virtual com GPS</span></li>
+                    <li><span class="text-slate-300">Cerca Virtual para Análise de Localização</span></li>
                     <li class="pt-1.5">
                         <a href="{{ route('receipts.verify') }}" class="text-emerald-400 hover:text-emerald-300 font-semibold transition inline-flex items-center gap-1.5">
                             <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">

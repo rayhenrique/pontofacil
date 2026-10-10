@@ -61,6 +61,10 @@
     - **Fluxo Visual Otimizado:** Posicionamento imediato do mockup interativo de registro de ponto logo após os botões de ação no mobile, eliminação de vácuos verticais desnecessários e paddings compactados (`pt-6 pb-12 sm:pt-10 sm:pb-16`).
     - **Compatibilidade Extensiva:** Excelente leitura e fluidez em larguras estritas (320px, 360px, 390px, 430px e superiores), preservando rigorosamente a identidade visual branco + slate + índigo.
     - **Mockup Autêntico da Tela Real do PontoFácil:** Substituição do card genérico de marketing por uma réplica fiel da interface do colaborador: saudação personalizada ("Olá, Carlos"), relógio digital com precisão ao segundo em fuso oficial GMT-3, indicador situacional da jornada ("Você ainda não registrou a saída"), botão de ação principal proeminente ("Registrar ponto"), exibição do último registro ("18:02 • Entrada"), localização registrada como evidência documental (sem mensagens punitivas de raio ou bloqueios falsos por GPS) e garantia de comprovante disponível após a marcação. Interatividade demonstrativa fluida com feedback visual temporário e zero persistência no banco.
+    - **Revisão Conceitual de Geolocalização e Geofence (Evidência Antifraude sem Bloqueio):**
+      - **Apresentação Adequada à Legislação:** Revisão completa dos textos da Landing Page para assegurar que a geolocalização seja apresentada estritamente como evidência probatória adicional e apoio à auditoria fiscal e gestão, e nunca como motivo para bloquear ou impedir a marcação do colaborador.
+      - **Eliminação de Termos Restritivos:** Remoção de expressões como "o registro só é aceito quando...", "fim das fraudes de localização", "cerca virtual obrigatória", "ponto bloqueado fora do raio" e "bloqueia registros fora da filial".
+      - **Padronização Conceitual:** Adoção uniforme de terminologias de integridade: "Localização registrada como evidência", "Cerca virtual para análise de localização", "Evidências adicionais para auditoria" e "QR Code e localização como apoio à validação".
   - **Suíte de Testes Expandida:** `172 testes e 923 asserções 100% aprovados`.
 
 ## v2.4.0

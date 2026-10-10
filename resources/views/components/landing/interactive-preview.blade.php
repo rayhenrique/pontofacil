@@ -79,7 +79,7 @@
                                     </span>
                                     <span class="text-emerald-400 font-semibold flex items-center gap-1">
                                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-                                        GPS Ativo
+                                        Localização registrada
                                     </span>
                                 </div>
 
@@ -136,7 +136,7 @@
                                 <!-- Barra Inferior de Ação -->
                                 <div class="w-full space-y-2 z-20">
                                     <div class="text-[11px] text-center text-slate-300 font-medium">
-                                        📍 Setor TI • Raio 6m de 100m
+                                        📍 Setor TI • Evidência de local registrada
                                     </div>
                                     <div class="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 text-white font-bold text-xs text-center shadow-md">
                                         Registrar Ponto (1 Toque)
@@ -177,8 +177,8 @@
                                     2
                                 </div>
                                 <div class="text-sm">
-                                    <strong class="text-slate-900 font-semibold">Checagem de GPS transparente:</strong>
-                                    <span class="text-slate-600"> O navegador valida se as coordenadas estão dentro do raio da empresa.</span>
+                                    <strong class="text-slate-900 font-semibold">Localização registrada como evidência:</strong>
+                                    <span class="text-slate-600"> Coordenadas capturadas e associadas à marcação como evidência adicional para fins de auditoria, sem bloquear o registro.</span>
                                 </div>
                             </div>
 
@@ -279,7 +279,7 @@
                                         <th class="py-3 px-4">Setor</th>
                                         <th class="py-3 px-4">Horário</th>
                                         <th class="py-3 px-4">Tipo</th>
-                                        <th class="py-3 px-4">Validação</th>
+                                        <th class="py-3 px-4">Evidências / Apoio</th>
                                         <th class="py-3 px-4 text-right">Status</th>
                                     </tr>
                                 </thead>

@@ -65,8 +65,8 @@
                                 </svg>
                             </div>
                             <span class="text-sm text-slate-600 leading-snug">
-                                <strong class="text-slate-800 font-semibold line-through decoration-rose-400">Ponto "amigo" e fraudes:</strong> 
-                                Registros feitos por terceiros sem qualquer validação geográfica de presença.
+                                <strong class="text-slate-800 font-semibold line-through decoration-rose-400">Ponto "amigo" e falta de rastreio:</strong> 
+                                Registros feitos por terceiros sem evidência de presença ou rastreabilidade.
                             </span>
                         </li>
 
@@ -161,8 +161,8 @@
                                 </svg>
                             </div>
                             <span class="text-sm text-slate-700 leading-snug">
-                                <strong class="text-slate-900 font-bold">Cerca virtual com GPS de precisão:</strong> 
-                                Bloqueia registros fora da filial. Impossível fraudar localização.
+                                <strong class="text-slate-900 font-bold">Cerca virtual para análise de localização:</strong> 
+                                Localização registrada como evidência probatória para apoiar a auditoria e a gestão, sem impedir o registro.
                             </span>
                         </li>
 

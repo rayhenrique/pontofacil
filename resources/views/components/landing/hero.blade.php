@@ -60,7 +60,7 @@
                         <svg class="w-3.5 h-3.5 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                         </svg>
-                        <span>Validação QR Code & GPS</span>
+                        <span>QR Code e localização como apoio à validação</span>
                     </div>
                     <div class="flex items-center gap-1.5">
                         <svg class="w-3.5 h-3.5 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">

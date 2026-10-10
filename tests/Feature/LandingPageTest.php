@@ -49,10 +49,19 @@ class LandingPageTest extends TestCase
         $response->assertSee('O Jeito Antigo');
         $response->assertSee('Com o PontoFácil');
 
-        // Recursos (Tríade)
-        $response->assertSee('Validação Cruzada Segura');
+        // Recursos (Tríade) & Evidências de Auditoria
+        $response->assertSee('QR Code e Localização como Apoio à Validação');
         $response->assertSee('Espelho Automatizado em Tempo Real');
         $response->assertSee('Trilha de Auditoria e Rastreabilidade');
+        $response->assertSee('Cerca virtual para análise de localização');
+        $response->assertSee('Evidências adicionais para auditoria');
+
+        // Garantir que a localização nunca é apresentada como motivo para bloquear a marcação
+        $response->assertDontSee('o registro só é aceito quando');
+        $response->assertDontSee('fim das fraudes de localização');
+        $response->assertDontSee('cerca virtual obrigatória');
+        $response->assertDontSee('ponto bloqueado fora do raio');
+        $response->assertDontSee('Bloqueia registros fora da filial');
 
         // Demonstração Interativa
         $response->assertSee('Visão do Colaborador');
