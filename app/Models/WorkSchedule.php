@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\LegalRegime;
+use App\Enums\WorkScheduleModality;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,24 +11,66 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class WorkSchedule extends Model
 {
     protected $fillable = [
+        'code',
         'name',
         'description',
+        'modality',
+        'cycle_days',
         'tolerance_minutes',
         'daily_tolerance_minutes',
+        'expected_daily_minutes',
+        'expected_weekly_minutes',
+        'expected_monthly_minutes',
+        'timezone',
+        'requires_legal_authorization',
+        'allowed_legal_regimes',
         'schedule_data',
+        'cycle_data',
         'active',
     ];
 
     protected $casts = [
+        'modality' => WorkScheduleModality::class,
+        'cycle_days' => 'integer',
         'tolerance_minutes' => 'integer',
         'daily_tolerance_minutes' => 'integer',
+        'expected_daily_minutes' => 'integer',
+        'expected_weekly_minutes' => 'integer',
+        'expected_monthly_minutes' => 'integer',
+        'requires_legal_authorization' => 'boolean',
+        'allowed_legal_regimes' => 'array',
         'schedule_data' => 'array',
+        'cycle_data' => 'array',
         'active' => 'boolean',
     ];
 
     public function employees(): HasMany
     {
         return $this->hasMany(Employee::class);
+    }
+
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(WorkScheduleAssignment::class);
+    }
+
+    /**
+     * Verifica se o regime jurídico informado possui autorização para este modelo de escala.
+     */
+    public function isAuthorizedForRegime(LegalRegime|string|null $regime): bool
+    {
+        if (! $this->requires_legal_authorization) {
+            return true;
+        }
+
+        if ($regime === null) {
+            return false;
+        }
+
+        $regimeValue = $regime instanceof LegalRegime ? $regime->value : $regime;
+        $allowed = $this->allowed_legal_regimes ?? [];
+
+        return in_array($regimeValue, $allowed, true);
     }
 
     /**

@@ -34,7 +34,7 @@ class CalculateDailyJourneyAction
         $dateStr = $date->format('Y-m-d');
 
         // 1. Escala de trabalho esperada
-        $workSchedule = $schedule ?? $employee->workSchedule ?? WorkSchedule::first();
+        $workSchedule = $schedule ?? $employee->getWorkScheduleForDate($date) ?? $employee->workSchedule ?? WorkSchedule::first();
         if (! $workSchedule) {
             $workSchedule = WorkSchedule::createDefault40h();
         }
