@@ -33,9 +33,8 @@ class FolhaPontoTest extends TestCase
         $response = $this->actingAs($user)->get(route('folha-ponto'));
         $response->assertOk();
         $response->assertSee('FOLHA DE PONTO DE FUNCIONÁRIO');
-        $response->assertSee('PREFEITURA MUNICIPAL DE TEOTÔNIO VILELA');
-        $response->assertSee('SECRETARIA MUNICIPAL DE SAÚDE');
         $response->assertSee('MARIA ENFERMAGEM');
+        $response->assertDontSee('PREFEITURA MUNICIPAL DE TEOTÔNIO VILELA');
     }
 
     public function test_folha_ponto_renders_official_prefeitura_header_and_signatures(): void

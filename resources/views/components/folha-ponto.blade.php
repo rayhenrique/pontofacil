@@ -12,7 +12,7 @@ use App\Enums\UserRole;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 
-new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário • Modelo Oficial')] class extends Component
+new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class extends Component
 {
     public $userId;
     public $month;
@@ -20,67 +20,110 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário • Modelo 
     public $fillMode = 'punches'; // 'punches' ou 'blank'
     public $includeRubrica = true;
 
-    // Cabeçalho Oficial
-    public $headerState = 'ESTADO DE ALAGOAS';
-    public $headerEntity = 'PREFEITURA MUNICIPAL DE TEOTÔNIO VILELA';
-    public $headerSubEntity = 'SECRETARIA MUNICIPAL DE SAÚDE';
-    public $headerAddress = 'Rua Vereador Manoel Firmino, 108 – Centro – Teotônio Vilela – Alagoas';
-    public $headerCnpj = '11.780.685/0001-52';
-    public $headerPhone = '(82) 3543-1114';
-    public $headerEmail = 'rhsaudetv@gmail.com';
+    // Cabeçalho Institucional
+    public $headerState = '';
+    public $headerEntity = '';
+    public $headerSubEntity = '';
+    public $headerAddress = '';
+    public $headerCnpj = '';
+    public $headerPhone = '';
+    public $headerEmail = '';
     public ?string $companyLogoUrl = null;
+    public bool $isCompanyConfigured = true;
+    public array $missingCompanyFields = [];
 
-    // Metadados do Servidor
+    // Metadados do Servidor / Colaborador
     public $workload = '40h';
     public $zone = 'Urbana';
     public $jobTitle = '';
-    public $contractType = 'Efetivo';
+    public $contractType = 'CLT';
     public $location = '';
 
-    public function mount()
+    public function mount(?int $userId = null, ?int $month = null, ?int $year = null): void
     {
-        $this->month = (int) (request('month') ?? now()->month);
-        $this->year = (int) (request('year') ?? now()->year);
+        $this->month = $month ?? (int) (request('month') ?? now()->month);
+        $this->year = $year ?? (int) (request('year') ?? now()->year);
 
         $currentUser = Auth::user();
-        $requestedUserId = request('userId');
-
-        if ($currentUser->role === UserRole::Admin) {
-            $this->userId = $requestedUserId ? (int) $requestedUserId : $currentUser->id;
-        } elseif ($currentUser->role === UserRole::Manager) {
-            $managedSectorIds = Sector::where('manager_id', $currentUser->id)->pluck('id');
-            $allowedUserIds = Employee::whereIn('sector_id', $managedSectorIds)->pluck('user_id')->push($currentUser->id);
-
-            if ($requestedUserId && $allowedUserIds->contains((int) $requestedUserId)) {
-                $this->userId = (int) $requestedUserId;
-            } else {
-                $this->userId = $currentUser->id;
-            }
-        } else {
-            $this->userId = $currentUser->id;
+        if (! $currentUser) {
+            abort(401);
         }
+
+        $targetUserId = $userId ?? (request('userId') !== null ? (int) request('userId') : (int) $currentUser->id);
+
+        $this->validateAuthorizedUserId($targetUserId);
+        $this->userId = $targetUserId;
 
         $this->loadSettings();
         $this->loadEmployeeData();
     }
 
-    public function loadSettings()
+    public function updatingUserId($value): void
+    {
+        $this->validateAuthorizedUserId((int) $value);
+    }
+
+    /**
+     * Validação rigorosa de autorização no servidor (anti-tampering de parâmetros de URL e Livewire).
+     */
+    protected function validateAuthorizedUserId(int $targetUserId): void
+    {
+        $currentUser = Auth::user();
+        if (! $currentUser) {
+            abort(401);
+        }
+
+        if ($targetUserId === (int) $currentUser->id) {
+            return;
+        }
+
+        if ($currentUser->role === UserRole::Admin) {
+            if (! User::where('id', $targetUserId)->exists()) {
+                abort(404, 'Colaborador não encontrado.');
+            }
+            return;
+        }
+
+        if ($currentUser->role === UserRole::Manager) {
+            $managedSectorIds = Sector::where('manager_id', $currentUser->id)->pluck('id');
+            $allowedUserIds = Employee::whereIn('sector_id', $managedSectorIds)->pluck('user_id');
+
+            if (! $allowedUserIds->contains($targetUserId)) {
+                abort(403, 'Acesso não autorizado à folha de ponto deste colaborador.');
+            }
+            return;
+        }
+
+        abort(403, 'Acesso restrito à própria folha de ponto.');
+    }
+
+    public function loadSettings(): void
     {
         $company = \App\Domain\Company\Services\CurrentCompany::get();
-        if (!empty($company->header_state)) $this->headerState = $company->header_state;
-        if (!empty($company->header_entity)) $this->headerEntity = $company->header_entity;
-        if (!empty($company->header_sub_entity)) $this->headerSubEntity = $company->header_sub_entity;
-        if (!empty($company->address)) {
-            $addr = $company->address;
-            if ($company->city) $addr .= " – {$company->city}";
-            if ($company->state) $addr .= " – {$company->state}";
-            $this->headerAddress = $addr;
-        }
-        if (!empty($company->cnpj)) $this->headerCnpj = $company->formatted_cnpj;
-        if (!empty($company->phone)) $this->headerPhone = $company->phone;
-        if (!empty($company->email)) $this->headerEmail = $company->email;
-        if (!empty($company->logo_url)) $this->companyLogoUrl = $company->logo_url;
+        $establishment = $company->defaultEstablishment();
 
+        // 1. Prioriza dados reais da empresa e estabelecimento da instalação
+        $this->headerEntity = $company->header_entity ?: ($company->trade_name ?: $company->legal_name);
+        $this->headerState = $company->header_state ?: ($company->state ? 'ESTADO DE ' . $company->state : '');
+        $this->headerSubEntity = $company->header_sub_entity ?: '';
+
+        $addr = $company->address ?: ($establishment?->address ?: '');
+        $city = $company->city ?: ($establishment?->city ?: '');
+        $state = $company->state ?: ($establishment?->state ?: '');
+        if ($addr && $city) {
+            $addr .= " – {$city}";
+        }
+        if ($addr && $state) {
+            $addr .= " – {$state}";
+        }
+        $this->headerAddress = $addr;
+
+        $this->headerCnpj = $company->formatted_cnpj ?: ($establishment?->identifier_number ?: '');
+        $this->headerPhone = $company->phone ?: '';
+        $this->headerEmail = $company->email ?: '';
+        $this->companyLogoUrl = $company->logo_url;
+
+        // 2. Sobrescritas autorizadas via SystemSetting se cadastradas
         $settings = SystemSetting::whereIn('key', [
             'report_header_state',
             'report_header_entity',
@@ -100,27 +143,41 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário • Modelo 
         if (!empty($settings['report_header_phone'])) $this->headerPhone = $settings['report_header_phone'];
         if (!empty($settings['report_header_email'])) $this->headerEmail = $settings['report_header_email'];
         if (!empty($settings['company_logo_url'])) $this->companyLogoUrl = $settings['company_logo_url'];
+
+        // 3. Verificação de completude cadastral institucional
+        $this->missingCompanyFields = [];
+        if (empty(trim((string) $this->headerEntity))) {
+            $this->missingCompanyFields[] = 'Razão Social / Nome da Entidade';
+        }
+        if (empty(trim((string) $this->headerCnpj))) {
+            $this->missingCompanyFields[] = 'CNPJ da Empresa';
+        }
+        if (empty(trim((string) $this->headerAddress))) {
+            $this->missingCompanyFields[] = 'Endereço do Estabelecimento';
+        }
+
+        $this->isCompanyConfigured = empty($this->missingCompanyFields);
     }
 
-    public function updatedUserId()
+    public function updatedUserId(): void
     {
         $this->loadEmployeeData();
     }
 
-    public function loadEmployeeData()
+    public function loadEmployeeData(): void
     {
         $targetUser = User::with('employee.sector')->find($this->userId);
         if ($targetUser && $targetUser->employee) {
             $emp = $targetUser->employee;
-            $this->location = optional($emp->sector)->name ?? 'Secretaria Municipal de Saúde';
-            $this->jobTitle = $emp->job_title ?: ($targetUser->role === UserRole::Admin ? 'Administrador do Sistema' : ($targetUser->role === UserRole::Manager ? 'Coordenador / Gestor' : 'Servidor Público'));
-            $this->contractType = $emp->contract_type ?: 'Efetivo';
+            $this->location = optional($emp->sector)->name ?? 'Geral';
+            $this->jobTitle = $emp->job_title ?: ($targetUser->role === UserRole::Admin ? 'Administrador' : ($targetUser->role === UserRole::Manager ? 'Gestor' : 'Colaborador'));
+            $this->contractType = $emp->contract_type ?: 'CLT';
             $this->workload = $emp->workload ?: '40h';
             $this->zone = $emp->zone ?: 'Urbana';
         } else {
-            $this->location = 'Secretaria Municipal de Saúde';
-            $this->jobTitle = ($targetUser && $targetUser->role === UserRole::Admin) ? 'Administrador do Sistema' : (($targetUser && $targetUser->role === UserRole::Manager) ? 'Coordenador / Gestor' : 'Servidor Público');
-            $this->contractType = 'Efetivo';
+            $this->location = 'Geral';
+            $this->jobTitle = ($targetUser && $targetUser->role === UserRole::Admin) ? 'Administrador' : (($targetUser && $targetUser->role === UserRole::Manager) ? 'Gestor' : 'Colaborador');
+            $this->contractType = 'CLT';
             $this->workload = '40h';
             $this->zone = 'Urbana';
         }
@@ -288,7 +345,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário • Modelo 
                     Folha de Ponto de Funcionário
                 </h2>
                 <p class="text-xs sm:text-sm text-gray-500 mt-0.5">
-                    Modelo oficial de folha de frequência para conferência, assinatura física e arquivamento no RH.
+                    Folha de frequência para conferência interna, assinatura física e arquivamento no setor de pessoal.
                 </p>
             </div>
 
@@ -300,14 +357,26 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário • Modelo 
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24-1.076-.641-2.072-1.185-2.97a9.387 9.387 0 0 0-2.316-2.482M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 0 0-3.7-3.7 48.678 48.678 0 0 0-7.324 0 4.006 4.006 0 0 0-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 0 0 3.7 3.7 48.656 48.656 0 0 0 7.324 0 4.006 4.006 0 0 0 3.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3-3 3" />
                     </svg>
-                    <span>Imprimir Folha (A4)</span>
+                    <span>Imprimir folha de ponto</span>
                 </button>
 
-                <a href="{{ route('timesheet') }}" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold transition">
+                <a href="{{ route('timesheet', ['userId' => $this->userId, 'month' => $this->month, 'year' => $this->year]) }}" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold transition">
                     Voltar
                 </a>
             </div>
         </div>
+
+        @if(! $isCompanyConfigured)
+            <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-center gap-2">
+                <svg class="w-4 h-4 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+                <span>
+                    <strong>Atenção:</strong> Configuração cadastral da empresa incompleta ({{ implode(', ', $missingCompanyFields) }}). 
+                    Acesse o painel de administração para preencher os dados reais da organização.
+                </span>
+            </div>
+        @endif
 
         <!-- Filtros Principais -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
@@ -384,7 +453,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário • Modelo 
     <!-- FOLHA DE PONTO OFICIAL (A4 FIDELIDADE 100% AO MODELO PDF) -->
     <div class="print-container max-w-[820px] mx-auto bg-white border border-gray-300 shadow-md p-6 sm:p-8 text-black print-sheet" style="font-family: Arial, Helvetica, 'Times New Roman', sans-serif;">
         
-        <!-- CABEÇALHO DO ÓRGÃO PÚBLICO / EMPRESA -->
+        <!-- CABEÇALHO DA EMPRESA / ESTABELECIMENTO -->
         <div class="flex items-center gap-4 border-b border-black pb-2 mb-2">
             <!-- Brasão / Logo -->
             <div class="w-16 h-16 shrink-0 flex items-center justify-center overflow-hidden">
@@ -393,39 +462,41 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário • Modelo 
                          alt="Logotipo da Empresa" 
                          class="max-h-16 max-w-16 object-contain" 
                          onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');" />
-                    <div class="hidden">
-                        <svg viewBox="0 0 100 100" class="w-14 h-14" xmlns="http://www.w3.org/2000/svg">
-                            <!-- Faixas tricolores estilizadas do município -->
-                            <rect x="15" y="10" width="18" height="65" rx="3" fill="#0284c7" />
-                            <rect x="38" y="10" width="18" height="65" rx="3" fill="#eab308" />
-                            <rect x="61" y="10" width="18" height="65" rx="3" fill="#dc2626" />
-                            <path d="M10 82h80v8H10z" fill="#0f172a" />
-                            <text x="50" y="98" font-size="7" font-weight="900" text-anchor="middle" fill="#0f172a">TEOTÔNIO VILELA</text>
+                    <div class="hidden text-gray-400">
+                        <svg class="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
                         </svg>
                     </div>
                 @else
-                    <svg viewBox="0 0 100 100" class="w-14 h-14" xmlns="http://www.w3.org/2000/svg">
-                        <!-- Faixas tricolores estilizadas do município -->
-                        <rect x="15" y="10" width="18" height="65" rx="3" fill="#0284c7" />
-                        <rect x="38" y="10" width="18" height="65" rx="3" fill="#eab308" />
-                        <rect x="61" y="10" width="18" height="65" rx="3" fill="#dc2626" />
-                        <path d="M10 82h80v8H10z" fill="#0f172a" />
-                        <text x="50" y="98" font-size="7" font-weight="900" text-anchor="middle" fill="#0f172a">TEOTÔNIO VILELA</text>
-                    </svg>
+                    <div class="text-gray-400">
+                        <svg class="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+                        </svg>
+                    </div>
                 @endif
             </div>
 
             <!-- Dados Institucionais Centralizados -->
             <div class="flex-1 text-center text-black leading-tight">
-                <div class="text-[12px] font-bold tracking-wider uppercase">{{ $headerState }}</div>
-                <div class="text-[14px] font-black uppercase tracking-tight">{{ $headerEntity }}</div>
-                <div class="text-[12px] font-bold uppercase">{{ $headerSubEntity }}</div>
+                @if(!empty($headerState))
+                    <div class="text-[12px] font-bold tracking-wider uppercase">{{ $headerState }}</div>
+                @endif
+                <div class="text-[14px] font-black uppercase tracking-tight">
+                    {{ !empty($headerEntity) ? $headerEntity : '[Razão Social / Nome da Entidade não configurado]' }}
+                </div>
+                @if(!empty($headerSubEntity))
+                    <div class="text-[12px] font-bold uppercase">{{ $headerSubEntity }}</div>
+                @endif
                 <div class="text-[10px] mt-0.5 font-normal">
-                    {{ $headerAddress }} &nbsp; <strong>CNPJ:</strong> {{ $headerCnpj }}
+                    {{ !empty($headerAddress) ? $headerAddress : '[Endereço não cadastrado]' }} &nbsp; 
+                    <strong>CNPJ:</strong> {{ !empty($headerCnpj) ? $headerCnpj : '[Não cadastrado]' }}
                 </div>
-                <div class="text-[10px] font-normal">
-                    <strong>Telefone:</strong> {{ $headerPhone }} &nbsp; <strong>EMAIL:</strong> {{ $headerEmail }}
-                </div>
+                @if(!empty($headerPhone) || !empty($headerEmail))
+                    <div class="text-[10px] font-normal">
+                        @if(!empty($headerPhone))<strong>Telefone:</strong> {{ $headerPhone }} &nbsp;@endif
+                        @if(!empty($headerEmail))<strong>EMAIL:</strong> {{ $headerEmail }}@endif
+                    </div>
+                @endif
             </div>
         </div>
 

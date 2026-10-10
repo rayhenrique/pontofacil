@@ -101,4 +101,9 @@ class TreatmentEvent extends Model
     {
         return $query->where('status', TreatmentEventStatus::Rejected->value);
     }
+
+    public function getPayloadAttribute(): ?array
+    {
+        return $this->new_value_json;
+    }
 }

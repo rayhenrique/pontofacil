@@ -5,6 +5,7 @@ namespace App\Domain\PTRP\Services;
 use App\Domain\PTRP\Actions\CalculateDailyJourneyAction;
 use App\Domain\PTRP\DTOs\CalculatedJourney;
 use App\Domain\PTRP\Enums\TreatmentEventStatus;
+use App\Domain\PTRP\Enums\TreatmentEventType;
 use App\Models\ClosedPeriod;
 use App\Models\Employee;
 use App\Models\PunchEvent;
@@ -146,6 +147,7 @@ class TimesheetJourneyService
                     'is_open' => false,
                     'notes' => $j['treatment_notes'] ?? [],
                     'scheduled_minutes' => $j['scheduled_minutes'] ?? 0,
+                    'treatments' => collect([]),
                 ];
 
                 $groupedEntries[$date] = $rawPunchesByDate[$date] ?? $this->formatEffectivePunchesAsEntries($effectivePunches, $date);
@@ -195,20 +197,24 @@ class TimesheetJourneyService
         Carbon $periodStart,
         Carbon $periodEnd
     ): array {
-        $rawPunchesByDate = $this->loadRawEntriesGroupedByDate($targetUser, $employee, $year, $month);
-
-        $pendingTreatments = TreatmentEvent::where(function ($q) use ($employee) {
-            $q->where('employee_id', $employee->id)
-                ->orWhere('employment_id', $employee->id);
-        })
-            ->where('status', TreatmentEventStatus::Pending)
+        $allMonthTreatments = TreatmentEvent::with(['requester', 'approver', 'rejecter'])
+            ->where(function ($q) use ($employee) {
+                $q->where('employee_id', $employee->id)
+                    ->orWhere('employment_id', $employee->id);
+            })
             ->whereBetween('effective_at', [$periodStart, $periodEnd])
-            ->get()
-            ->groupBy(fn ($t) => $t->effective_at->format('Y-m-d'));
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $treatmentsByDate = $allMonthTreatments->groupBy(fn ($t) => $t->effective_at->format('Y-m-d'));
+        $treatmentsByPunchId = $allMonthTreatments->whereNotNull('reference_punch_id')->groupBy('reference_punch_id');
+        $pendingTreatments = $allMonthTreatments->where('status', TreatmentEventStatus::Pending)->groupBy(fn ($t) => $t->effective_at->format('Y-m-d'));
+
+        $rawPunchesByDate = $this->loadRawEntriesGroupedByDate($targetUser, $employee, $year, $month);
 
         // Identifica todas as datas no mês que possuem marcações ou solicitações de tratamento
         $activeDates = collect(array_keys($rawPunchesByDate))
-            ->merge($pendingTreatments->keys())
+            ->merge($treatmentsByDate->keys())
             ->unique()
             ->sortDesc()
             ->values();
@@ -257,6 +263,8 @@ class TimesheetJourneyService
             $hours = intdiv($workedMinutes, 60);
             $remMinutes = $workedMinutes % 60;
 
+            $dayTreatments = $treatmentsByDate->get($dateStr, collect([]));
+
             $daysCalculated[$dateStr] = [
                 'minutes' => $workedMinutes,
                 'hours' => $hours,
@@ -270,9 +278,18 @@ class TimesheetJourneyService
                 'notes' => $calculated->treatmentNotes,
                 'scheduled_minutes' => $calculated->scheduledMinutes,
                 'has_pending_treatment' => $hasPendingTreatment,
+                'treatments' => $dayTreatments,
             ];
 
-            $groupedEntries[$dateStr] = $rawPunchesByDate[$dateStr] ?? collect([]);
+            $entries = $rawPunchesByDate[$dateStr] ?? collect([]);
+            foreach ($entries as $entry) {
+                $punchTreatment = $treatmentsByPunchId->get($entry->id)?->first();
+                $entry->treatment = $punchTreatment;
+                $entry->is_disregarded = ($punchTreatment && $punchTreatment->type === TreatmentEventType::PunchDisregarded && $punchTreatment->status === TreatmentEventStatus::Approved);
+                $entry->has_pending_disregard = ($punchTreatment && $punchTreatment->type === TreatmentEventType::PunchDisregarded && $punchTreatment->status === TreatmentEventStatus::Pending);
+                $entry->has_rejected_disregard = ($punchTreatment && $punchTreatment->type === TreatmentEventType::PunchDisregarded && $punchTreatment->status === TreatmentEventStatus::Rejected);
+            }
+            $groupedEntries[$dateStr] = $entries;
         }
 
         $monthHours = intdiv($totalWorkedMinutes, 60);

@@ -22,6 +22,7 @@ class RequestTreatmentEventAction
         ?string $referencePunchId = null,
         ?array $newValueJson = null,
         ?string $attachmentPath = null,
+        ?string $reasonCode = null,
     ): TreatmentEvent {
         if (empty(trim($reasonText))) {
             throw new \InvalidArgumentException('A justificativa da solicitação de tratamento é obrigatória.');
@@ -35,6 +36,47 @@ class RequestTreatmentEventAction
             ));
         }
 
+        // Prevenção contra solicitações duplicadas pendentes no PTRP
+        if ($referencePunchId !== null) {
+            $duplicate = TreatmentEvent::where(function ($q) use ($employee) {
+                $q->where('employee_id', $employee->id)
+                    ->orWhere('employment_id', $employee->id);
+            })
+                ->where('reference_punch_id', $referencePunchId)
+                ->where('status', TreatmentEventStatus::Pending)
+                ->first();
+
+            if ($duplicate) {
+                throw new \DomainException('Já existe uma solicitação pendente de análise para esta mesma marcação.');
+            }
+        } elseif ($type === TreatmentEventType::AbsenceJustified) {
+            $duplicate = TreatmentEvent::where(function ($q) use ($employee) {
+                $q->where('employee_id', $employee->id)
+                    ->orWhere('employment_id', $employee->id);
+            })
+                ->where('type', TreatmentEventType::AbsenceJustified)
+                ->where('status', TreatmentEventStatus::Pending)
+                ->whereDate('effective_at', $effectiveAt->toDateString())
+                ->first();
+
+            if ($duplicate) {
+                throw new \DomainException('Já existe uma solicitação de justificativa de ausência pendente para esta data.');
+            }
+        } elseif ($type === TreatmentEventType::ManualPunchAdded) {
+            $duplicate = TreatmentEvent::where(function ($q) use ($employee) {
+                $q->where('employee_id', $employee->id)
+                    ->orWhere('employment_id', $employee->id);
+            })
+                ->where('type', TreatmentEventType::ManualPunchAdded)
+                ->where('status', TreatmentEventStatus::Pending)
+                ->where('effective_at', $effectiveAt)
+                ->first();
+
+            if ($duplicate) {
+                throw new \DomainException('Já existe uma solicitação de inclusão de batida pendente para este mesmo horário.');
+            }
+        }
+
         $event = TreatmentEvent::create([
             'employee_id' => $employee->id,
             'employment_id' => $employee->id,
@@ -43,6 +85,7 @@ class RequestTreatmentEventAction
             'status' => TreatmentEventStatus::Pending,
             'effective_at' => $effectiveAt,
             'new_value_json' => $newValueJson,
+            'reason_code' => $reasonCode,
             'reason_text' => trim($reasonText),
             'attachment_path' => $attachmentPath,
             'requested_by' => $requestedBy->id,
@@ -52,6 +95,7 @@ class RequestTreatmentEventAction
             'event_id' => $event->id,
             'employee_id' => $employee->id,
             'type' => $type->value,
+            'reason_code' => $reasonCode,
             'requested_by' => $requestedBy->id,
             'effective_at' => $effectiveAt->toDateTimeString(),
         ]);

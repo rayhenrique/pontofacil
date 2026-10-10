@@ -5,7 +5,9 @@ use App\Domain\PTRP\Services\TimesheetJourneyService;
 use App\Enums\UserRole;
 use App\Models\ClosedPeriod;
 use App\Models\Employee;
+use App\Models\PunchEvent;
 use App\Models\Sector;
+use App\Models\TreatmentEvent;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -26,16 +28,24 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
     public string $userSearch = '';
 
     public $showTreatmentModal = false;
+    public $reqType = 'manual_punch_added';
     public $reqDate = '';
     public $reqTime = '08:00';
-    public $reqType = 'manual_punch_added';
+    public $reqReasonCategory = 'medical_certificate';
     public $reqReason = '';
     public $reqAttachment = null;
+    public $reqReferencePunchId = null;
+    public array $availablePunchesForDate = [];
+    public bool $isSubmitting = false;
 
-    public function mount(?int $userId = null): void
+    // Modal de Detalhes da Decisão do Tratamento
+    public bool $showTreatmentDetailsModal = false;
+    public ?array $viewingTreatment = null;
+
+    public function mount(?int $userId = null, ?int $month = null, ?int $year = null): void
     {
-        $this->month = (int) (request('month') ?? now()->month);
-        $this->year = (int) (request('year') ?? now()->year);
+        $this->month = $month ?? (int) (request('month') ?? now()->month);
+        $this->year = $year ?? (int) (request('year') ?? now()->year);
 
         $targetId = $userId ?? (int) request('userId', Auth::id());
         $this->validateAuthorizedUserId($targetId);
@@ -92,7 +102,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
         $this->userSearch = '';
     }
 
-    public function openTreatmentModal(?string $date = null): void
+    public function openTreatmentModal(?string $date = null, ?string $type = null, ?string $punchId = null): void
     {
         $this->validateAuthorizedUserId((int) $this->userId);
 
@@ -108,11 +118,112 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
         }
 
         $this->reqDate = $date ?? now()->toDateString();
+        $this->reqType = $type ?? ($punchId ? 'punch_disregarded' : 'manual_punch_added');
         $this->reqTime = '08:00';
-        $this->reqType = 'manual_punch_added';
+        $this->reqReasonCategory = 'medical_certificate';
         $this->reqReason = '';
         $this->reqAttachment = null;
+        $this->isSubmitting = false;
+
+        $this->loadAvailablePunchesForDate();
+
+        if ($punchId) {
+            $this->reqReferencePunchId = $punchId;
+        } elseif ($this->reqType === 'punch_disregarded' && ! empty($this->availablePunchesForDate)) {
+            $this->reqReferencePunchId = $this->availablePunchesForDate[0]['id'];
+        } else {
+            $this->reqReferencePunchId = null;
+        }
+
+        $this->resetErrorBag();
         $this->showTreatmentModal = true;
+    }
+
+    public function openTreatmentModalForPunch(string $dateOrPunchId, ?string $punchId = null): void
+    {
+        if ($punchId === null) {
+            $punch = PunchEvent::find($dateOrPunchId);
+            $date = $punch ? $punch->occurred_at_local->format('Y-m-d') : now()->toDateString();
+            $this->openTreatmentModal($date, 'punch_disregarded', $dateOrPunchId);
+        } else {
+            $this->openTreatmentModal($dateOrPunchId, 'punch_disregarded', $punchId);
+        }
+    }
+
+    public function closeTreatmentModal(): void
+    {
+        $this->showTreatmentModal = false;
+        $this->isSubmitting = false;
+    }
+
+    public function updatedReqDate($value): void
+    {
+        $this->loadAvailablePunchesForDate();
+        if ($this->reqType === 'punch_disregarded' && ! empty($this->availablePunchesForDate)) {
+            $this->reqReferencePunchId = $this->availablePunchesForDate[0]['id'];
+        } else {
+            $this->reqReferencePunchId = null;
+        }
+    }
+
+    public function updatedReqType($value): void
+    {
+        if ($value === 'punch_disregarded') {
+            $this->loadAvailablePunchesForDate();
+            if (! empty($this->availablePunchesForDate) && ! $this->reqReferencePunchId) {
+                $this->reqReferencePunchId = $this->availablePunchesForDate[0]['id'];
+            }
+        } elseif ($value === 'absence_justified') {
+            if (! $this->reqReasonCategory) {
+                $this->reqReasonCategory = 'medical_certificate';
+            }
+        }
+    }
+
+    public function loadAvailablePunchesForDate(): void
+    {
+        if (! $this->reqDate) {
+            $this->availablePunchesForDate = [];
+            return;
+        }
+
+        $employee = Employee::where('user_id', $this->userId)->first();
+        if (! $employee) {
+            $this->availablePunchesForDate = [];
+            return;
+        }
+
+        $dateStr = Carbon::parse($this->reqDate)->toDateString();
+
+        $punches = \App\Models\PunchEvent::where(function ($q) use ($employee) {
+            $q->where('employee_id', $employee->id)
+                ->orWhere('user_id', $this->userId);
+        })
+            ->whereDate('occurred_at_local', $dateStr)
+            ->orderBy('occurred_at_local', 'asc')
+            ->get();
+
+        if ($punches->isEmpty()) {
+            $legacy = \App\Models\TimeEntry::where('user_id', $this->userId)
+                ->whereDate('timestamp', $dateStr)
+                ->orderBy('timestamp', 'asc')
+                ->get();
+
+            $this->availablePunchesForDate = $legacy->map(fn ($e) => [
+                'id' => (string) $e->id,
+                'time' => Carbon::parse($e->timestamp)->format('H:i'),
+                'direction' => $e->type === 'in' ? 'Entrada' : 'Saída',
+                'label' => sprintf('%s às %s (Registro Histórico)', $e->type === 'in' ? 'Entrada' : 'Saída', Carbon::parse($e->timestamp)->format('H:i:s')),
+            ])->all();
+            return;
+        }
+
+        $this->availablePunchesForDate = $punches->map(fn ($p) => [
+            'id' => (string) $p->id,
+            'time' => $p->occurred_at_local->format('H:i'),
+            'direction' => $p->direction === 'in' ? 'Entrada' : 'Saída',
+            'label' => sprintf('%s às %s (NSR #%s)', $p->direction === 'in' ? 'Entrada' : 'Saída', $p->occurred_at_local->format('H:i:s'), str_pad((string)$p->nsr, 6, '0', STR_PAD_LEFT)),
+        ])->all();
     }
 
     public function submitTreatmentRequest(): void
@@ -125,19 +236,62 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
             abort(403, 'Você não possui permissão para solicitar ajustes para outro colaborador.');
         }
 
-        $this->validate([
+        if ($this->isSubmitting) {
+            return;
+        }
+        $this->isSubmitting = true;
+
+        $rules = [
             'reqDate' => 'required|date',
-            'reqTime' => 'required|date_format:H:i',
             'reqType' => 'required|in:manual_punch_added,absence_justified,punch_disregarded',
             'reqReason' => 'required|string|min:5|max:500',
-        ]);
+        ];
 
-        $effectiveAt = Carbon::parse($this->reqDate . ' ' . $this->reqTime);
-        if (ClosedPeriod::isClosed($effectiveAt->year, $effectiveAt->month)) {
+        if ($this->reqType === 'manual_punch_added') {
+            $rules['reqTime'] = 'required|date_format:H:i';
+            $rules['reqAttachment'] = 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120';
+        } elseif ($this->reqType === 'absence_justified') {
+            $rules['reqReasonCategory'] = 'required|in:medical_certificate,medical_appointment,bereavement,wedding,blood_donation,court_summons,other';
+
+            // Requisito 5: Obrigatoriedade estrita de documentos para atestados médicos (conforme política)
+            $requiresAttachment = in_array($this->reqReasonCategory, ['medical_certificate'], true);
+            if ($requiresAttachment) {
+                $rules['reqAttachment'] = 'required|file|mimes:pdf,jpg,jpeg,png|max:5120';
+            } else {
+                $rules['reqAttachment'] = 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120';
+            }
+        } elseif ($this->reqType === 'punch_disregarded') {
+            $rules['reqReferencePunchId'] = 'required|string';
+            $rules['reqAttachment'] = 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120';
+        }
+
+        $messages = [
+            'reqReason.required' => 'A justificativa é obrigatória para análise do RH/Gestor.',
+            'reqReason.min' => 'A justificativa deve conter pelo menos 5 caracteres explicativos.',
+            'reqReason.max' => 'A justificativa não pode ultrapassar 500 caracteres.',
+            'reqTime.required' => 'Informe o horário previsto para a batida esquecida.',
+            'reqTime.date_format' => 'Horário em formato inválido (HH:MM).',
+            'reqReferencePunchId.required' => 'Selecione uma marcação existente do dia para desconsiderar.',
+            'reqAttachment.required' => 'O anexo comprobatório (atestado médico) é obrigatório para este motivo legal.',
+            'reqAttachment.mimes' => 'O anexo deve ser um documento nos formatos PDF, JPG, JPEG ou PNG.',
+            'reqAttachment.max' => 'O anexo não pode ultrapassar 5MB.',
+        ];
+
+        try {
+            $this->validate($rules, $messages);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->isSubmitting = false;
+            throw $e;
+        }
+
+        $parsedDate = Carbon::parse($this->reqDate);
+        if (ClosedPeriod::isClosed($parsedDate->year, $parsedDate->month)) {
+            $this->isSubmitting = false;
+            $this->addError('reqDate', 'Esta competência encontra-se formalmente fechada e congelada fiscalmente.');
             $this->dispatch('app-modal-alert', [
                 'type' => 'error',
                 'title' => 'Competência Fechada',
-                'message' => 'Esta competência encontra-se formalmente fechada e congelada fiscalmente. Solicitações de tratamento retroativas não são permitidas.',
+                'message' => 'Esta competência encontra-se formalmente fechada e congelada fiscalmente. Solicitações retroativas não são permitidas.',
                 'buttonText' => 'Fechar',
             ]);
             return;
@@ -145,6 +299,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
 
         $employee = Employee::where('user_id', $this->userId)->first();
         if (! $employee) {
+            $this->isSubmitting = false;
             $this->dispatch('app-modal-alert', [
                 'type' => 'error',
                 'title' => 'Perfil Incompleto',
@@ -160,12 +315,52 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
             'punch_disregarded' => TreatmentEventType::PunchDisregarded,
         };
 
+        $referencePunchId = null;
+        $reasonCode = null;
+        $newValueJson = null;
+
+        if ($this->reqType === 'manual_punch_added') {
+            $effectiveAt = Carbon::parse($this->reqDate . ' ' . $this->reqTime);
+            $newValueJson = [
+                'suggested_time' => $this->reqTime,
+                'effective_date' => $this->reqDate,
+            ];
+        } elseif ($this->reqType === 'absence_justified') {
+            // Requisito 1: Não exigir artificialmente horário de batida para justificar o dia inteiro
+            $effectiveAt = Carbon::parse($this->reqDate)->startOfDay();
+            $reasonCode = $this->reqReasonCategory;
+            $newValueJson = [
+                'reason_category' => $this->reqReasonCategory,
+                'period_type' => 'full_day',
+            ];
+        } else {
+            // punch_disregarded
+            $referencePunchId = $this->reqReferencePunchId;
+            $punch = \App\Models\PunchEvent::find($referencePunchId);
+            if ($punch) {
+                $effectiveAt = $punch->occurred_at_local;
+                $newValueJson = [
+                    'original_nsr' => $punch->nsr,
+                    'original_time' => $punch->occurred_at_local->format('H:i:s'),
+                    'direction' => $punch->direction,
+                ];
+            } else {
+                $legacy = \App\Models\TimeEntry::find($referencePunchId);
+                if ($legacy) {
+                    $effectiveAt = Carbon::parse($legacy->timestamp);
+                    $newValueJson = [
+                        'legacy_entry_id' => $legacy->id,
+                        'original_time' => Carbon::parse($legacy->timestamp)->format('H:i:s'),
+                    ];
+                } else {
+                    $effectiveAt = Carbon::parse($this->reqDate . ' 12:00:00');
+                }
+            }
+        }
+
         // Armazenamento em disco privado (local) para proteger documentos sensíveis (LGPD)
         $attachmentPath = null;
         if ($this->reqAttachment) {
-            $this->validate([
-                'reqAttachment' => 'file|mimes:pdf,jpg,jpeg,png|max:5120',
-            ]);
             $attachmentPath = $this->reqAttachment->store('treatment_attachments', 'local');
         }
 
@@ -176,30 +371,101 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                 effectiveAt: $effectiveAt,
                 reasonText: $this->reqReason,
                 requestedBy: $currentUser,
+                referencePunchId: $referencePunchId,
+                newValueJson: $newValueJson,
                 attachmentPath: $attachmentPath,
+                reasonCode: $reasonCode,
             );
 
             $this->showTreatmentModal = false;
             $this->reqAttachment = null;
+            $this->reqReason = '';
+            $this->isSubmitting = false;
+
             $this->dispatch('app-modal-alert', [
                 'type' => 'success',
                 'title' => 'Solicitação Enviada com Sucesso!',
-                'message' => 'Sua solicitação de tratamento/justificativa foi enviada ao RH para análise e aprovação.',
-                'buttonText' => 'OK',
+                'message' => 'Sua solicitação de ajuste foi registrada com status Pendente e enviada para análise da chefia imediata/RH.',
+                'buttonText' => 'Entendido',
             ]);
-        } catch (\Throwable $e) {
-            // Em caso de falha, remove arquivo temporário já persistido no disco privado
+        } catch (\DomainException $de) {
+            // Erros de regra de domínio (duplicidade ou período fechado): mantém dados preenchidos
             if ($attachmentPath && Storage::disk('local')->exists($attachmentPath)) {
                 Storage::disk('local')->delete($attachmentPath);
             }
+            $this->isSubmitting = false;
 
+            if ($this->reqType === 'punch_disregarded') {
+                $this->addError('reqReferencePunchId', $de->getMessage());
+            } else {
+                $this->addError('reqReason', $de->getMessage());
+            }
+
+            $this->dispatch('app-modal-alert', [
+                'type' => 'warning',
+                'title' => 'Atenção na Solicitação',
+                'message' => $de->getMessage(),
+                'buttonText' => 'Revisar',
+            ]);
+        } catch (\Throwable $e) {
+            // Em caso de falha técnica inesperada, remove arquivo temporário e não expõe stack trace
+            if ($attachmentPath && Storage::disk('local')->exists($attachmentPath)) {
+                Storage::disk('local')->delete($attachmentPath);
+            }
+            $this->isSubmitting = false;
+
+            \Illuminate\Support\Facades\Log::error('timesheet.treatment_submit_error', [
+                'user_id' => $this->userId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            // Requisito 6: Mensagem de erro amigável ao usuário
             $this->dispatch('app-modal-alert', [
                 'type' => 'error',
                 'title' => 'Erro ao Enviar Solicitação',
-                'message' => $e->getMessage(),
+                'message' => 'Não foi possível enviar a solicitação. Tente novamente.',
                 'buttonText' => 'Fechar',
             ]);
         }
+    }
+
+    public function viewTreatmentDetails(string $treatmentId): void
+    {
+        $this->validateAuthorizedUserId((int) $this->userId);
+
+        $treatment = \App\Models\TreatmentEvent::with(['requester', 'approver', 'rejecter', 'referencePunch'])->find($treatmentId);
+        if (! $treatment) {
+            return;
+        }
+
+        $this->viewingTreatment = [
+            'id' => $treatment->id,
+            'type_label' => $treatment->type->label(),
+            'status' => $treatment->status->value,
+            'status_label' => match ($treatment->status) {
+                \App\Domain\PTRP\Enums\TreatmentEventStatus::Pending => 'Pendente de Análise',
+                \App\Domain\PTRP\Enums\TreatmentEventStatus::Approved => 'Aprovada',
+                \App\Domain\PTRP\Enums\TreatmentEventStatus::Rejected => 'Rejeitada',
+            },
+            'effective_date' => $treatment->effective_at->format('d/m/Y'),
+            'effective_time' => $treatment->effective_at->format('H:i'),
+            'reason_code' => $treatment->reason_code,
+            'reason_text' => $treatment->reason_text,
+            'rejection_reason' => $treatment->rejection_reason,
+            'decided_at' => $treatment->decided_at ? $treatment->decided_at->format('d/m/Y H:i') : null,
+            'decided_by' => $treatment->approver?->name ?? $treatment->rejecter?->name,
+            'requested_by' => $treatment->requester?->name,
+            'has_attachment' => ! empty($treatment->attachment_path),
+        ];
+
+        $this->showTreatmentDetailsModal = true;
+    }
+
+    public function closeTreatmentDetailsModal(): void
+    {
+        $this->showTreatmentDetailsModal = false;
+        $this->viewingTreatment = null;
     }
 
     protected function maskCpf(?string $cpf): string
@@ -311,7 +577,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                     <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
                     </svg>
-                    <span>Imprimir Folha Oficial</span>
+                    <span>Imprimir folha de ponto</span>
                 </a>
                 <a href="{{ route('home') }}" class="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 text-sm font-semibold">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
@@ -509,6 +775,16 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                             {{ Carbon::parse($date)->isoFormat('dddd, LL') }}
                         </h3>
                         <div class="flex items-center gap-2 flex-wrap">
+                            @if(! $isClosedPeriod)
+                                <button type="button" 
+                                        wire:click="openTreatmentModal('{{ $date }}')" 
+                                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 shadow-2xs transition cursor-pointer"
+                                        title="Solicitar correção ou justificativa para este dia">
+                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
+                                    <span>Solicitar correção</span>
+                                </button>
+                            @endif
+
                             @if(isset($daysCalculated[$date]))
                                 @php $dayCalc = $daysCalculated[$date]; @endphp
                                 <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border {{ $dayCalc['status_badge_class'] }}">
@@ -528,6 +804,35 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                         </div>
                     </div>
 
+                    {{-- Faixa de Solicitações de Tratamento do Dia --}}
+                    @if(isset($daysCalculated[$date]['treatments']) && $daysCalculated[$date]['treatments']->isNotEmpty())
+                        <div class="bg-slate-50/90 px-4 py-2 border-b border-gray-100 flex flex-wrap items-center gap-2">
+                            <span class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Ajustes:</span>
+                            @foreach($daysCalculated[$date]['treatments'] as $treatment)
+                                @if($treatment->status->value === 'pending')
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                        <span>Pendente: {{ $treatment->type->label() }}</span>
+                                    </span>
+                                @elseif($treatment->status->value === 'approved')
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                        <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                                        <span>Aprovada: {{ $treatment->type->label() }}</span>
+                                    </span>
+                                @elseif($treatment->status->value === 'rejected')
+                                    <button type="button" 
+                                            wire:click="viewTreatmentDetails('{{ $treatment->id }}')" 
+                                            class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-900 border border-rose-300 hover:bg-rose-200 transition cursor-pointer"
+                                            title="Clique para ver o motivo da recusa">
+                                        <svg class="w-3.5 h-3.5 text-rose-600" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                        <span>Recusada: {{ $treatment->type->label() }}</span>
+                                        <span class="underline text-[10px] text-rose-700 ml-1">Ver motivo</span>
+                                    </button>
+                                @endif
+                            @endforeach
+                        </div>
+                    @endif
+
                     @if(isset($daysCalculated[$date]['notes']) && count($daysCalculated[$date]['notes']) > 0)
                         <div class="bg-indigo-50/40 px-4 py-1.5 border-b border-indigo-100 text-[11px] text-indigo-800 space-y-0.5">
                             @foreach($daysCalculated[$date]['notes'] as $note)
@@ -541,12 +846,12 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
 
                     <ul class="divide-y divide-gray-100">
                         @foreach($dayEntries as $entry)
-                            <li class="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-gray-50 transition" wire:key="entry-{{ $entry->id }}">
+                            <li class="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-gray-50 transition {{ !empty($entry->is_disregarded) ? 'bg-gray-50/70 opacity-75' : '' }}" wire:key="entry-{{ $entry->id }}">
                                 <div class="flex items-center gap-2.5 flex-wrap">
                                     <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold {{ $entry->type === 'in' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
                                         {{ $entry->type === 'in' ? 'Entrada' : 'Saída' }}
                                     </span>
-                                    <span class="text-base text-gray-900 font-mono font-bold">
+                                    <span class="text-base text-gray-900 font-mono font-bold {{ !empty($entry->is_disregarded) ? 'line-through text-gray-400' : '' }}">
                                         {{ Carbon::parse($entry->timestamp)->format('H:i:s') }}
                                     </span>
                                     @if($entry->is_manual)
@@ -559,9 +864,38 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                                             NSR #{{ str_pad((string)$entry->nsr, 9, '0', STR_PAD_LEFT) }}
                                         </span>
                                     @endif
+
+                                    {{-- Status da Marcação no PTRP --}}
+                                    @if(!empty($entry->is_disregarded))
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-gray-200 text-gray-700">
+                                            Desconsiderada pelo RH
+                                        </span>
+                                    @elseif(!empty($entry->has_pending_disregard))
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
+                                            Desconsideração Pendente
+                                        </span>
+                                    @elseif(!empty($entry->has_rejected_disregard) && $entry->treatment)
+                                        <button type="button" 
+                                                wire:click="viewTreatmentDetails('{{ $entry->treatment->id }}')" 
+                                                class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-300 hover:bg-rose-200 cursor-pointer"
+                                                title="Clique para ver a justificativa da recusa">
+                                            Desconsideração Rejeitada (Ver)
+                                        </button>
+                                    @endif
                                 </div>
 
                                 <div class="flex items-center gap-3">
+                                    {{-- Botão de Solicitação de Desconsideração Contextual por Batida --}}
+                                    @if(! $isClosedPeriod && empty($entry->is_disregarded) && empty($entry->has_pending_disregard))
+                                        <button type="button" 
+                                                wire:click="openTreatmentModalForPunch('{{ $date }}', '{{ $entry->id }}')" 
+                                                class="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-rose-600 transition cursor-pointer"
+                                                title="Solicitar desconsideração desta marcação indevida ou duplicada">
+                                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                                            <span>Desconsiderar</span>
+                                        </button>
+                                    @endif
+
                                     @if($entry->has_valid_location)
                                         <div class="text-xs text-gray-500 font-mono flex items-center gap-1" title="Coordenadas geográficas registradas no ponto">
                                             <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
@@ -597,69 +931,266 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
         </div>
     </div>
 
-    <!-- Modal Solicitação de Tratamento / Justificativa -->
+    <!-- Modal Solicitação de Tratamento / Justificativa Contextual -->
     @if($showTreatmentModal)
-        <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="treatment-modal-title"
+             @keydown.escape.window="$wire.closeTreatmentModal()">
             <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
-                <div class="flex items-center justify-between border-b pb-3">
+                <div class="flex items-center justify-between border-b border-gray-100 pb-3">
                     <div class="flex items-center gap-2">
                         <div class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
-                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
                         </div>
-                        <h3 class="text-base font-bold text-gray-900">Solicitar Ajuste ou Justificativa</h3>
+                        <h3 id="treatment-modal-title" class="text-base font-bold text-gray-900">Solicitar Ajuste ou Justificativa</h3>
                     </div>
-                    <button wire:click="$set('showTreatmentModal', false)" class="text-gray-400 hover:text-gray-600 cursor-pointer">✕</button>
+                    <button type="button" wire:click="closeTreatmentModal" class="text-gray-400 hover:text-gray-600 cursor-pointer">✕</button>
                 </div>
 
                 <form wire:submit="submitTreatmentRequest" class="space-y-4 text-xs">
+                    {{-- Seleção Contextual do Tipo de Solicitação --}}
                     <div>
                         <label class="block font-bold text-gray-700 uppercase mb-1">Tipo de Solicitação</label>
-                        <select wire:model="reqType" class="w-full px-3 py-2.5 border rounded-xl bg-white font-medium">
-                            <option value="manual_punch_added">Inclusão de Batida Manual (Esquecimento)</option>
-                            <option value="absence_justified">Abono de Falta / Atestado Médico</option>
-                            <option value="punch_disregarded">Desconsideração de Marcação Indevida</option>
-                        </select>
-                        @error('reqType') <span class="text-red-500 mt-1 block">{{ $message }}</span> @enderror
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-1.5 p-1 bg-gray-100 rounded-xl">
+                            <button type="button" 
+                                    wire:click="$set('reqType', 'manual_punch_added')"
+                                    class="py-2 px-2.5 rounded-lg text-center font-bold transition cursor-pointer {{ $reqType === 'manual_punch_added' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-600 hover:text-gray-900' }}">
+                                Inclusão de Batida
+                            </button>
+                            <button type="button" 
+                                    wire:click="$set('reqType', 'absence_justified')"
+                                    class="py-2 px-2.5 rounded-lg text-center font-bold transition cursor-pointer {{ $reqType === 'absence_justified' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-600 hover:text-gray-900' }}">
+                                Justificativa Ausência
+                            </button>
+                            <button type="button" 
+                                    wire:click="$set('reqType', 'punch_disregarded')"
+                                    class="py-2 px-2.5 rounded-lg text-center font-bold transition cursor-pointer {{ $reqType === 'punch_disregarded' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-600 hover:text-gray-900' }}">
+                                Desconsiderar Batida
+                            </button>
+                        </div>
+                        @error('reqType') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
                     </div>
 
-                    <div class="grid grid-cols-2 gap-3">
+                    {{-- 1. CAMPOS DE INCLUSÃO DE BATIDA ESQUECIDA --}}
+                    @if($reqType === 'manual_punch_added')
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-bold text-gray-700 uppercase mb-1">Data da Ocorrência</label>
+                                <input type="date" wire:model.live="reqDate" class="w-full px-3 py-2 border rounded-xl font-mono" required>
+                                @error('reqDate') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                            </div>
+                            <div>
+                                <label class="block font-bold text-gray-700 uppercase mb-1">Horário Previsto</label>
+                                <input type="time" wire:model="reqTime" class="w-full px-3 py-2 border rounded-xl font-mono" required>
+                                @error('reqTime') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                            </div>
+                        </div>
+
                         <div>
-                            <label class="block font-bold text-gray-700 uppercase mb-1">Data da Ocorrência</label>
-                            <input type="date" wire:model="reqDate" class="w-full px-3 py-2 border rounded-xl font-mono" required>
-                            @error('reqDate') <span class="text-red-500 mt-1 block">{{ $message }}</span> @enderror
+                            <label class="block font-bold text-gray-700 uppercase mb-1">Justificativa do Esquecimento (Obrigatória)</label>
+                            <textarea wire:model="reqReason" rows="3" class="w-full px-3 py-2 border rounded-xl" placeholder="Ex: Esquecimento de registro na saída para almoço em virtude de atendimento emergencial..." required></textarea>
+                            @error('reqReason') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
                         </div>
+
                         <div>
-                            <label class="block font-bold text-gray-700 uppercase mb-1">Horário Previsto</label>
-                            <input type="time" wire:model="reqTime" class="w-full px-3 py-2 border rounded-xl font-mono" required>
-                            @error('reqTime') <span class="text-red-500 mt-1 block">{{ $message }}</span> @enderror
+                            <label class="block font-bold text-gray-700 uppercase mb-1">Anexo / Comprovante <span class="text-gray-400 font-normal">(Opcional)</span></label>
+                            <input type="file" wire:model="reqAttachment" accept=".pdf,.jpg,.jpeg,.png" class="w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border border-gray-200 rounded-xl p-1 bg-gray-50">
+                            <p class="text-[10px] text-gray-400 mt-1">Formatos aceitos: PDF, PNG, JPG (máx. 5MB). Opcional para inclusões manuais.</p>
+                            @error('reqAttachment') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
                         </div>
-                    </div>
 
-                    <div>
-                        <label class="block font-bold text-gray-700 uppercase mb-1">Justificativa e Motivo Legal (Obrigatório)</label>
-                        <textarea wire:model="reqReason" rows="3" class="w-full px-3 py-2 border rounded-xl" placeholder="Descreva detalhadamente a justificativa para avaliação do RH/Gestor..." required></textarea>
-                        @error('reqReason') <span class="text-red-500 mt-1 block">{{ $message }}</span> @enderror
-                    </div>
+                    {{-- 2. CAMPOS DE JUSTIFICATIVA DE AUSÊNCIA (DIA INTEIRO / ABONO) --}}
+                    @elseif($reqType === 'absence_justified')
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-bold text-gray-700 uppercase mb-1">Data da Ausência</label>
+                                <input type="date" wire:model.live="reqDate" class="w-full px-3 py-2 border rounded-xl font-mono" required>
+                                <p class="text-[10px] text-gray-400 mt-0.5">A justificativa cobre o expediente completo da data.</p>
+                                @error('reqDate') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                            </div>
 
-                    <div>
-                        <label class="block font-bold text-gray-700 uppercase mb-1">Anexo / Atestado Médico (Opcional / Obrigatório para Abono)</label>
-                        <input type="file" wire:model="reqAttachment" accept=".pdf,.jpg,.jpeg,.png" class="w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border border-gray-200 rounded-xl p-1 bg-gray-50">
-                        <p class="text-[10px] text-gray-400 mt-1">Armazenamento seguro e confidencial. Formatos aceitos: PDF, PNG, JPG (máx. 5MB). Indispensável para auditoria do RH e abono legal de faltas.</p>
-                        @error('reqAttachment') <span class="text-red-500 mt-1 block">{{ $message }}</span> @enderror
-                        <div wire:loading wire:target="reqAttachment" class="text-[11px] text-indigo-600 font-semibold mt-1">
-                            Enviando anexo confidencial... aguarde.
+                            <div>
+                                <label class="block font-bold text-gray-700 uppercase mb-1">Motivo Legal / Categoria</label>
+                                <select wire:model.live="reqReasonCategory" class="w-full px-3 py-2 border rounded-xl bg-white font-medium">
+                                    <option value="medical_certificate">Atestado Médico / Odontológico</option>
+                                    <option value="medical_appointment">Declaração de Consulta / Exames</option>
+                                    <option value="bereavement">Falecimento em Família (Licença Nojo)</option>
+                                    <option value="wedding">Casamento (Licença Gala)</option>
+                                    <option value="blood_donation">Doação Voluntária de Sangue</option>
+                                    <option value="court_summons">Convocação Judicial / Eleitoral</option>
+                                    <option value="other">Outro Motivo / Força Maior</option>
+                                </select>
+                                @error('reqReasonCategory') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                            </div>
                         </div>
+
+                        <div>
+                            <label class="block font-bold text-gray-700 uppercase mb-1">Justificativa e Detalhamento (Obrigatório)</label>
+                            <textarea wire:model="reqReason" rows="3" class="w-full px-3 py-2 border rounded-xl" placeholder="Descreva o motivo da ausência para análise do RH/Gestor..." required></textarea>
+                            @error('reqReason') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                        </div>
+
+                        <div>
+                            @php
+                                $isDocRequired = in_array($reqReasonCategory, ['medical_certificate', 'medical_appointment', 'blood_donation', 'court_summons'], true);
+                            @endphp
+                            <label class="block font-bold text-gray-700 uppercase mb-1">
+                                Anexo / Comprovante Documental 
+                                @if($isDocRequired)
+                                    <span class="text-rose-600 font-bold">* (Obrigatório)</span>
+                                @else
+                                    <span class="text-gray-400 font-normal">(Opcional)</span>
+                                @endif
+                            </label>
+                            <input type="file" wire:model="reqAttachment" accept=".pdf,.jpg,.jpeg,.png" class="w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border border-gray-200 rounded-xl p-1 bg-gray-50">
+                            <p class="text-[10px] {{ $isDocRequired ? 'text-rose-600 font-medium' : 'text-gray-400' }} mt-1">
+                                @if($isDocRequired)
+                                    Atestados médicos e declarações legais exigem comprovação documental arquivada de forma privada (PDF, PNG, JPG de até 5MB).
+                                @else
+                                    Formatos aceitos: PDF, PNG, JPG (máx. 5MB). Opcional para este motivo.
+                                @endif
+                            </p>
+                            @error('reqAttachment') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                        </div>
+
+                    {{-- 3. CAMPOS DE DESCONSIDERAÇÃO DE MARCAÇÃO --}}
+                    @elseif($reqType === 'punch_disregarded')
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-bold text-gray-700 uppercase mb-1">Data da Marcação</label>
+                                <input type="date" wire:model.live="reqDate" class="w-full px-3 py-2 border rounded-xl font-mono" required>
+                                @error('reqDate') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                            </div>
+
+                            <div>
+                                <label class="block font-bold text-gray-700 uppercase mb-1">Marcação Existente a Desconsiderar</label>
+                                @if(!empty($availablePunchesForDate))
+                                    <select wire:model="reqReferencePunchId" class="w-full px-3 py-2 border rounded-xl bg-white font-mono text-xs font-semibold">
+                                        <option value="">Selecione a marcação...</option>
+                                        @foreach($availablePunchesForDate as $punchOpt)
+                                            <option value="{{ $punchOpt['id'] }}">{{ $punchOpt['label'] }}</option>
+                                        @endforeach
+                                    </select>
+                                @else
+                                    <div class="p-2 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px]">
+                                        Nenhuma marcação bruta encontrada para {{ Carbon::parse($reqDate)->format('d/m/Y') }}.
+                                    </div>
+                                @endif
+                                @error('reqReferencePunchId') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                            </div>
+                        </div>
+
+                        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 leading-relaxed text-[11px]">
+                            <strong>Garantia de Integridade Fiscal:</strong> O registro bruto original permanece registrado de forma imutável no REP-P. A desconsideração é auditada no PTRP para descarte da apuração após aprovação do RH.
+                        </div>
+
+                        <div>
+                            <label class="block font-bold text-gray-700 uppercase mb-1">Motivo da Desconsideração (Obrigatório)</label>
+                            <textarea wire:model="reqReason" rows="3" class="w-full px-3 py-2 border rounded-xl" placeholder="Descreva porque esta marcação deve ser desconsiderada (ex: batida duplicada acidental, teste operacional)..." required></textarea>
+                            @error('reqReason') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                        </div>
+
+                        <div>
+                            <label class="block font-bold text-gray-700 uppercase mb-1">Anexo <span class="text-gray-400 font-normal">(Opcional)</span></label>
+                            <input type="file" wire:model="reqAttachment" accept=".pdf,.jpg,.jpeg,.png" class="w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border border-gray-200 rounded-xl p-1 bg-gray-50">
+                            @error('reqAttachment') <span class="text-rose-500 mt-1 block font-medium">{{ $message }}</span> @enderror
+                        </div>
+                    @endif
+
+                    <div wire:loading wire:target="reqAttachment" class="text-[11px] text-indigo-600 font-semibold">
+                        Enviando anexo para armazenamento privado... aguarde.
                     </div>
 
-                    <div class="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl text-indigo-900 leading-relaxed">
-                        Sua solicitação será enviada com carimbo de auditoria e status <strong>Pendente</strong>, sendo validada pelo Gestor do Setor e pela Coordenação de RH antes da apuração final.
+                    <div class="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl text-indigo-900 leading-relaxed text-[11px]">
+                        A solicitação será registrada com status <strong>Pendente</strong> no PTRP, sendo submetida para aprovação do gestor do setor e RH antes de alterar o espelho de ponto.
                     </div>
 
-                    <div class="flex justify-end gap-2 pt-3 border-t">
-                        <button type="button" wire:click="$set('showTreatmentModal', false)" class="px-4 py-2 border rounded-xl font-bold text-gray-600 hover:bg-gray-50 cursor-pointer">Cancelar</button>
-                        <button type="submit" class="px-5 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-sm cursor-pointer">Enviar Solicitação</button>
+                    <div class="flex justify-end gap-2 pt-3 border-t border-gray-100">
+                        <button type="button" 
+                                wire:click="closeTreatmentModal" 
+                                class="px-4 py-2 border rounded-xl font-bold text-gray-600 hover:bg-gray-50 cursor-pointer">
+                            Cancelar
+                        </button>
+                        <button type="submit" 
+                                wire:loading.attr="disabled"
+                                wire:target="submitTreatmentRequest"
+                                :disabled="$wire.isSubmitting"
+                                class="px-5 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-sm transition disabled:opacity-50 cursor-pointer flex items-center gap-2">
+                            <span wire:loading.remove wire:target="submitTreatmentRequest">Enviar Solicitação</span>
+                            <span wire:loading wire:target="submitTreatmentRequest" class="flex items-center gap-1.5">
+                                <svg class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                                Enviando...
+                            </span>
+                        </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    @endif
+
+    <!-- Modal de Detalhes da Decisão do Tratamento -->
+    @if($showTreatmentDetailsModal && $viewingTreatment)
+        <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="treatment-details-title"
+             @keydown.escape.window="$wire.closeTreatmentDetailsModal()">
+            <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+                <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <div>
+                        <h3 id="treatment-details-title" class="text-base font-bold text-gray-900">Detalhes da Solicitação</h3>
+                        <p class="text-xs text-gray-500">{{ $viewingTreatment['type_label'] }} · {{ $viewingTreatment['effective_date'] }}</p>
+                    </div>
+                    <button type="button" wire:click="closeTreatmentDetailsModal" class="text-gray-400 hover:text-gray-600 cursor-pointer">✕</button>
+                </div>
+
+                <div class="space-y-3 text-xs">
+                    <div>
+                        <span class="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Status Atual</span>
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-bold text-xs mt-1
+                            {{ $viewingTreatment['status'] === 'approved' ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' : '' }}
+                            {{ $viewingTreatment['status'] === 'rejected' ? 'bg-rose-100 text-rose-900 border border-rose-300' : '' }}
+                            {{ $viewingTreatment['status'] === 'pending' ? 'bg-amber-100 text-amber-900 border border-amber-300' : '' }}">
+                            {{ $viewingTreatment['status_label'] }}
+                        </span>
+                    </div>
+
+                    <div>
+                        <span class="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Justificativa do Solicitante</span>
+                        <p class="text-gray-800 bg-gray-50 p-2.5 rounded-xl border border-gray-200 mt-1 leading-relaxed">
+                            {{ $viewingTreatment['reason_text'] }}
+                        </p>
+                    </div>
+
+                    @if($viewingTreatment['status'] === 'rejected')
+                        <div class="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 space-y-1">
+                            <span class="text-[10px] uppercase font-bold text-rose-700 block tracking-wider">Motivo da Recusa</span>
+                            <p class="font-semibold text-xs leading-relaxed">
+                                {{ $viewingTreatment['rejection_reason'] ?: 'Motivo não informado pelo avaliador.' }}
+                            </p>
+                            @if($viewingTreatment['decided_by'])
+                                <p class="text-[11px] text-rose-600 pt-1">
+                                    Decidido por: <strong>{{ $viewingTreatment['decided_by'] }}</strong> em {{ $viewingTreatment['decided_at'] }}
+                                </p>
+                            @endif
+                        </div>
+                    @elseif($viewingTreatment['status'] === 'approved')
+                        <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 space-y-1">
+                            <span class="text-[10px] uppercase font-bold text-emerald-700 block tracking-wider">Decisão Favorável</span>
+                            <p class="text-[11px] text-emerald-700">
+                                Aprovada formalmente por <strong>{{ $viewingTreatment['decided_by'] ?? 'RH' }}</strong> em {{ $viewingTreatment['decided_at'] }}.
+                            </p>
+                        </div>
+                    @endif
+                </div>
+
+                <div class="flex justify-end pt-3 border-t border-gray-100">
+                    <button type="button" wire:click="closeTreatmentDetailsModal" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold cursor-pointer transition">
+                        Fechar
+                    </button>
+                </div>
             </div>
         </div>
     @endif
