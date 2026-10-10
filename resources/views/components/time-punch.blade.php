@@ -18,6 +18,9 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
     public $status = '';
     public string $establishmentTimezone = '';
     public string $timezoneLabel = '';
+    public string $greetingText = '';
+    public string $currentDateFormatted = '';
+    public ?array $confirmationData = null;
 
     public function mount()
     {
@@ -27,8 +30,35 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
         $establishment = $sector?->establishment ?? CurrentCompany::defaultEstablishment();
 
         $this->establishmentTimezone = $establishment?->resolvedTimezone() ?? config('app.timezone', 'America/Maceio');
-        $offset = Carbon::now($this->establishmentTimezone)->format('P');
-        $this->timezoneLabel = "Horário Oficial ({$this->establishmentTimezone}, GMT{$offset})";
+        $now = Carbon::now($this->establishmentTimezone);
+        $offset = $now->format('P');
+        $this->timezoneLabel = "Horário do estabelecimento ({$offset})";
+
+        $hour = (int) $now->format('H');
+        $greeting = $hour < 12 ? 'Bom dia' : ($hour < 18 ? 'Boa tarde' : 'Boa noite');
+        $firstName = $user ? explode(' ', trim($user->name))[0] : 'colaborador';
+        $this->greetingText = "{$greeting}, {$firstName}";
+        $this->currentDateFormatted = ucfirst($now->translatedFormat('l, d \d\e F'));
+    }
+
+    /**
+     * Retorna os registros reais de hoje do colaborador autenticado para exibição no painel lateral.
+     */
+    public function getTodayPunchesProperty()
+    {
+        $user = Auth::user();
+        if (! $user) {
+            return collect();
+        }
+
+        $tz = $this->establishmentTimezone ?: config('app.timezone', 'America/Maceio');
+        $todayDateStr = Carbon::now($tz)->toDateString();
+
+        return PunchEvent::with('receipt')
+            ->where('user_id', $user->id)
+            ->whereDate('occurred_at_local', $todayDateStr)
+            ->orderBy('occurred_at_local', 'asc')
+            ->get();
     }
 
     /**
@@ -56,6 +86,27 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
         $this->status = 'success';
         $this->message = "Ponto confirmado via reconciliação! ({$tipoStr} às " . $punch->occurred_at_local->format('H:i:s') . " - NSR #{$nsrFormatted})";
 
+        $reconciledData = [
+            'id' => $punch->id,
+            'direction' => $punch->direction,
+            'direction_title' => $punch->direction === 'in' ? 'Entrada registrada' : 'Saída registrada',
+            'direction_badge' => $punch->direction === 'in' ? 'Entrada' : 'Saída',
+            'time' => $punch->occurred_at_local->format('H:i:s'),
+            'date' => $punch->occurred_at_local->translatedFormat('d \d\e F \d\e Y'),
+            'nsr' => $punch->nsr,
+            'nsr_formatted' => $nsrFormatted,
+            'timezone' => $tz,
+            'status' => 'success',
+            'has_warning' => $punch->location_valid === false,
+            'warning_message' => $punch->location_valid === false ? 'Registro confirmado com observação de perímetro na auditoria.' : null,
+            'receipt_status' => $punch->receipt ? 'available' : 'pending',
+            'receipt_code' => $punch->receipt?->verification_code,
+            'receipt_url' => $punch->receipt ? route('receipts.pdf', ['code' => $punch->receipt->verification_code]) : null,
+            'occurred_at_local' => $punch->occurred_at_local->toIso8601String(),
+        ];
+
+        $this->confirmationData = $reconciledData;
+
         $this->dispatch('app-modal-alert', [
             'type' => 'success',
             'title' => 'Ponto Reconciliado com Sucesso!',
@@ -63,12 +114,7 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
             'buttonText' => 'Concluir'
         ]);
 
-        return [
-            'id' => $punch->id,
-            'nsr' => $punch->nsr,
-            'direction' => $punch->direction,
-            'occurred_at_local' => $punch->occurred_at_local->toIso8601String(),
-        ];
+        return $reconciledData;
     }
 
     public function registerPunch($qrCodeHash, $latitude = null, $longitude = null, $accuracy = null, ?string $idempotencyKey = null)
@@ -90,13 +136,18 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
         if ($qrCodeHash !== $expectedQrCode) {
             $this->message = "QR Code inválido ou não autorizado para o seu setor.";
             $this->status = 'error';
+            $this->confirmationData = null;
             $this->dispatch('app-modal-alert', [
                 'type' => 'error',
                 'title' => 'QR Code Não Autorizado',
                 'message' => 'O código escaneado não é válido para o seu setor ou matriz da empresa.',
                 'buttonText' => 'Escanear Novamente'
             ]);
-            return;
+            return [
+                'success' => false,
+                'status' => 'error',
+                'message' => $this->message,
+            ];
         }
 
         // 2. Resolução das Coordenadas e Raio esperados (Sem inventar coordenadas de Maceió quando não configuradas)
@@ -173,22 +224,49 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
             report($e);
             $this->status = 'error';
             $this->message = "Falha ao registrar ponto oficial REP-P. Nenhuma marcação foi registrada. Tente novamente.";
+            $this->confirmationData = null;
             $this->dispatch('app-modal-alert', [
                 'type' => 'error',
                 'title' => 'Erro no Registro REP-P',
                 'message' => 'Ocorreu uma falha ao persistir a marcação oficial. Nenhuma batida foi gravada. Por favor, tente novamente.',
                 'buttonText' => 'Entendido'
             ]);
-            return;
+            return [
+                'success' => false,
+                'status' => 'error',
+                'message' => $this->message,
+            ];
         }
 
         $tipoStr = $type === 'in' ? 'Entrada' : 'Saída';
         $nsrInfo = $nsrFormatted ? " (NSR #{$nsrFormatted})" : '';
 
-        // 6. Exibição de Alerta de Auditoria se fora do raio (não impede o registro nem altera horário oficial)
+        $distRounded = $distance !== null ? round($distance) : null;
+        $radiusRounded = $allowedRadius !== null ? round($allowedRadius) : null;
+
+        // 6. Montagem dos dados persistidos para a confirmação operacional
+        $this->confirmationData = [
+            'id' => $punchEvent->id,
+            'direction' => $punchEvent->direction,
+            'direction_title' => $type === 'in' ? 'Entrada registrada' : 'Saída registrada',
+            'direction_badge' => $type === 'in' ? 'Entrada' : 'Saída',
+            'time' => $nowInTz->format('H:i:s'),
+            'date' => $nowInTz->translatedFormat('d \d\e F \d\e Y'),
+            'nsr' => $punchEvent->nsr,
+            'nsr_formatted' => $nsrFormatted,
+            'timezone' => $tz,
+            'status' => $locationValid === false ? 'warning' : 'success',
+            'has_warning' => $locationValid === false,
+            'warning_message' => $locationValid === false
+                ? "O GPS indicou que você estava a {$distRounded}m {$locationName} (raio autorizado: {$radiusRounded}m). Esta evidência foi registrada para fins de auditoria, sem invalidar seu ponto."
+                : null,
+            'receipt_status' => $punchEvent->receipt ? 'available' : 'pending',
+            'receipt_code' => $punchEvent->receipt?->verification_code,
+            'receipt_url' => $punchEvent->receipt ? route('receipts.pdf', ['code' => $punchEvent->receipt->verification_code]) : null,
+        ];
+
+        // 7. Alerta de Auditoria se fora do raio (não impede o registro nem altera horário oficial)
         if ($locationValid === false) {
-            $distRounded = round($distance);
-            $radiusRounded = round($allowedRadius);
             $this->message = "Ponto registrado com aviso! ({$tipoStr} às " . $nowInTz->format('H:i:s') . "{$nsrInfo} - Fora do raio permitido)";
             $this->status = 'warning';
             $this->dispatch('app-modal-alert', [
@@ -207,6 +285,12 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                 'buttonText' => 'Concluir'
             ]);
         }
+
+        return [
+            'success' => true,
+            'status' => $this->status,
+            'punch' => $this->confirmationData,
+        ];
     }
 
     private function calculateDistance($lat1, $lon1, $lat2, $lon2)
@@ -225,330 +309,462 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
 };
 ?>
 
-<style>
-    /* Ajustes dinâmicos de altura para viewports compactas (mobile, netbooks, laptops 1366x768) */
-    @media (max-height: 820px) {
-        .time-punch-container {
-            padding-top: 0.25rem !important;
-            padding-bottom: 0.5rem !important;
-        }
-        .time-punch-clock-card {
-            padding: 0.625rem 1rem !important;
-            margin-bottom: 0.5rem !important;
-        }
-        .time-punch-clock-text {
-            font-size: 2rem !important;
-            line-height: 2.25rem !important;
-        }
-        .time-punch-main-card {
-            padding: 0.875rem 1rem !important;
-        }
-        .time-punch-reader-box {
-            max-width: 210px !important;
-        }
-    }
-    @media (max-height: 700px) {
-        .time-punch-clock-card {
-            padding: 0.45rem 0.75rem !important;
-            margin-bottom: 0.35rem !important;
-        }
-        .time-punch-clock-text {
-            font-size: 1.5rem !important;
-            line-height: 1.75rem !important;
-        }
-        .time-punch-main-card {
-            padding: 0.625rem 0.875rem !important;
-        }
-        .time-punch-reader-box {
-            max-width: 170px !important;
-        }
-        .time-punch-title {
-            font-size: 1.125rem !important;
-            margin-bottom: 0.125rem !important;
-        }
-        .time-punch-subtitle {
-            margin-bottom: 0.25rem !important;
-        }
-        .time-punch-btn {
-            padding-top: 0.5rem !important;
-            padding-bottom: 0.5rem !important;
-            font-size: 0.875rem !important;
-        }
-    }
-    @media (max-height: 640px) {
-        .time-punch-clock-card {
-            padding: 0.35rem 0.6rem !important;
-            margin-bottom: 0.25rem !important;
-        }
-        .time-punch-clock-text {
-            font-size: 1.35rem !important;
-            line-height: 1.5rem !important;
-        }
-        .time-punch-clock-info {
-            display: none !important;
-        }
-        .time-punch-main-card {
-            padding: 0.5rem 0.75rem !important;
-        }
-        .time-punch-reader-box {
-            max-width: 155px !important;
-        }
-        .time-punch-title {
-            font-size: 1rem !important;
-            margin-bottom: 0 !important;
-        }
-        .time-punch-subtitle {
-            font-size: 0.6875rem !important;
-            margin-bottom: 0.25rem !important;
-        }
-        .time-punch-btn {
-            padding-top: 0.45rem !important;
-            padding-bottom: 0.45rem !important;
-            font-size: 0.8125rem !important;
-        }
-    }
-    @media (max-height: 500px) {
-        .time-punch-clock-card {
-            display: none !important;
-        }
-        .time-punch-reader-box {
-            max-width: 130px !important;
-        }
-    }
-</style>
-
-<div class="time-punch-container w-full max-w-md sm:max-w-lg mx-auto py-1 sm:py-3 px-2 sm:px-4" 
+<div class="time-punch-module w-full max-w-5xl mx-auto py-2 sm:py-4 px-2 sm:px-4"
      x-data="timePunchComponent({ 
          timezone: '{{ $establishmentTimezone }}', 
          timezoneLabel: '{{ $timezoneLabel }}' 
      })">
-    <!-- Digital Clock Card (Reflete Timezone Real do Estabelecimento) -->
-    <div class="time-punch-clock-card mb-2 sm:mb-3 bg-gradient-to-r from-indigo-700 via-indigo-800 to-indigo-900 rounded-2xl shadow-sm px-4 py-2.5 sm:px-6 sm:py-3.5 text-white text-center">
-        <p class="text-[10px] sm:text-xs uppercase tracking-widest text-indigo-200 font-semibold mb-0.5" x-text="currentDate"></p>
-        <div class="time-punch-clock-text text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight font-mono text-white leading-tight" x-text="currentTime">
-            {{ Carbon::now($establishmentTimezone)->format('H:i:s') }}
+    
+    <!-- Anunciador de acessibilidade para tecnologias assistivas -->
+    <div class="sr-only" aria-live="polite" x-text="statusAnnouncement"></div>
+
+    <!-- Header Operacional (Saudação e Relógio Digital Oficial) -->
+    <div class="mb-4 sm:mb-6 bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+            <h1 class="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 tracking-tight">{{ $greetingText }}</h1>
+            <p class="text-xs sm:text-sm text-gray-500 font-medium mt-0.5">Registro de ponto &bull; {{ $currentDateFormatted }}</p>
         </div>
-        <div class="time-punch-clock-info mt-1 flex items-center justify-center gap-1.5 text-[11px] sm:text-xs text-indigo-200">
-            <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span x-text="timezoneLabel">{{ $timezoneLabel }}</span>
+        <div class="text-left sm:text-right">
+            <div class="font-mono text-2xl sm:text-3xl md:text-4xl font-extrabold text-indigo-950 tracking-tight tabular-nums" x-text="currentTime">
+                {{ Carbon::now($establishmentTimezone)->format('H:i:s') }}
+            </div>
+            <p class="text-[11px] sm:text-xs text-indigo-700 font-medium" x-text="timezoneLabel">{{ $timezoneLabel }}</p>
         </div>
     </div>
 
-    <!-- Main Scanner Card -->
-    <div class="time-punch-main-card bg-white rounded-2xl shadow-sm border border-gray-200/80 p-3.5 sm:p-5 md:p-6 text-center">
-        <h2 class="time-punch-title text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mb-0.5 sm:mb-1">Bater Ponto</h2>
-        <p class="time-punch-subtitle text-[11px] sm:text-xs md:text-sm text-gray-500 mb-2 sm:mb-3">Aponte a câmera para o QR Code da empresa</p>
+    <!-- Composição Responsiva: 2 Colunas no Desktop / Empilhamento no Mobile -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         
-        <!-- Alerts -->
-        @if($message)
-            <div class="mb-3 rounded-xl p-3 flex items-center gap-2.5 text-left {{ $status === 'success' ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' : ($status === 'warning' ? 'bg-amber-50 text-amber-900 border border-amber-200' : 'bg-red-50 text-red-900 border border-red-200') }}">
-                @if($status === 'success')
-                    <div class="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 text-emerald-600">
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+        <!-- Coluna 1: Card de Registro e Scanner QR Code -->
+        <div class="bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-6 shadow-2xs flex flex-col justify-between">
+            <div>
+                <div class="pb-3 mb-3 border-b border-gray-100 flex items-center justify-between">
+                    <div>
+                        <h2 class="text-base sm:text-lg font-bold text-gray-900 tracking-tight">Registrar ponto</h2>
+                        <p class="text-xs text-gray-500">Leitor oficial de QR Code da empresa</p>
                     </div>
-                @elseif($status === 'warning')
-                    <div class="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 text-amber-600">
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
-                    </div>
-                @else
-                    <div class="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 text-red-600">
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                          :class="state === 'scanning' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-slate-100 text-slate-600 border border-slate-200'">
+                        <span class="w-1.5 h-1.5 rounded-full"
+                              :class="state === 'scanning' ? 'bg-indigo-600 animate-pulse' : 'bg-slate-400'"></span>
+                        <span x-text="stateBadgeLabel"></span>
+                    </span>
+                </div>
+
+                <!-- Alertas Inline de Feedback -->
+                @if($message)
+                    <div class="mb-4 rounded-xl p-3 flex items-start gap-2.5 text-left text-xs sm:text-sm {{ $status === 'success' ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' : ($status === 'warning' ? 'bg-amber-50 text-amber-900 border border-amber-200' : 'bg-red-50 text-red-900 border border-red-200') }}">
+                        <div class="w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 {{ $status === 'success' ? 'text-emerald-600' : ($status === 'warning' ? 'text-amber-600' : 'text-red-600') }}">
+                            @if($status === 'success')
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                            @elseif($status === 'warning')
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+                            @else
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+                            @endif
+                        </div>
+                        <p class="font-medium flex-1">{{ $message }}</p>
                     </div>
                 @endif
-                <p class="text-xs sm:text-sm font-semibold">{{ $message }}</p>
-            </div>
-        @endif
 
-        <div x-show="!isProcessing">
-            <!-- QR Scanner Container with mobile friendly dimensions and camera viewfinder -->
-            <div class="time-punch-reader-box relative w-full max-w-[190px] xs:max-w-[210px] sm:max-w-[240px] md:max-w-[250px] mx-auto aspect-square overflow-hidden rounded-2xl border-2 border-dashed border-indigo-300/80 bg-slate-50 flex items-center justify-center transition-all shadow-inner">
-                <div id="qr-reader" class="w-full h-full flex items-center justify-center [&>video]:object-cover [&>video]:w-full [&>video]:h-full [&>video]:rounded-xl"></div>
-                
-                <div x-show="!isScanning" class="absolute inset-0 flex flex-col items-center justify-center p-3 pointer-events-none text-indigo-400 select-none">
-                    <div class="relative w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center mb-1 sm:mb-1.5">
-                        <div class="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-indigo-500 rounded-tl"></div>
-                        <div class="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-indigo-500 rounded-tr"></div>
-                        <div class="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-indigo-500 rounded-bl"></div>
-                        <div class="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-indigo-500 rounded-br"></div>
-                        <svg class="w-7 h-7 sm:w-9 sm:h-9 text-indigo-500/70" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.875 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5Z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M14.25 14.25h1.5v1.5h-1.5zM18.75 14.25h1.5v1.5h-1.5zM14.25 18.75h1.5v1.5h-1.5zM18.75 18.75h1.5v1.5h-1.5zM16.5 16.5h1.5v1.5h-1.5z" />
-                        </svg>
+                <!-- Área Central do Viewfinder / Scanner -->
+                <div class="my-4">
+                    <div class="relative w-full max-w-[210px] sm:max-w-[240px] aspect-square mx-auto overflow-hidden rounded-2xl border-2 border-dashed transition-all duration-200 shadow-inner flex items-center justify-center"
+                         :class="{
+                             'border-indigo-200 bg-slate-50/70': state === 'idle',
+                             'border-indigo-400 bg-indigo-50/40': state === 'starting' || state === 'scanning',
+                             'border-emerald-300 bg-emerald-50/30': state === 'location' || state === 'submitting',
+                             'border-red-200 bg-red-50/50': state === 'error',
+                             'border-amber-200 bg-amber-50/50': state === 'unknown'
+                         }">
+                        
+                        <!-- Elemento real de vídeo do Html5Qrcode -->
+                        <div id="qr-reader" 
+                             class="w-full h-full flex items-center justify-center [&>video]:object-cover [&>video]:w-full [&>video]:h-full [&>video]:rounded-xl"
+                             x-show="state === 'scanning'"></div>
+                        
+                        <!-- Estado 1: Idle (Leitura não iniciada) -->
+                        <div x-show="state === 'idle'" class="flex flex-col items-center justify-center p-4 text-center select-none text-gray-400">
+                            <div class="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center mb-2.5 text-gray-500">
+                                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.875 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5Z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.25 14.25h1.5v1.5h-1.5zM18.75 14.25h1.5v1.5h-1.5zM14.25 18.75h1.5v1.5h-1.5zM18.75 18.75h1.5v1.5h-1.5zM16.5 16.5h1.5v1.5h-1.5z" />
+                                </svg>
+                            </div>
+                            <p class="text-xs font-semibold text-gray-700">Leitura não iniciada</p>
+                            <p class="text-[11px] text-gray-400 mt-0.5">Toque no botão abaixo para ativar a câmera</p>
+                        </div>
+
+                        <!-- Estado 2: Starting (Ativando câmera) -->
+                        <div x-show="state === 'starting'" style="display: none;" class="flex flex-col items-center justify-center p-4 text-center select-none">
+                            <div class="inline-flex p-3 rounded-full bg-indigo-100 text-indigo-600 mb-2">
+                                <svg class="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </div>
+                            <p class="text-xs font-bold text-gray-800">Ativando câmera...</p>
+                            <p class="text-[11px] text-gray-500 mt-0.5">Solicitando permissão no navegador</p>
+                        </div>
+
+                        <!-- Estado 3: Scanning Overlay (Aponte para o QR Code) -->
+                        <div x-show="state === 'scanning'" style="display: none;" class="pointer-events-none absolute inset-0 flex flex-col items-center justify-between p-3 text-indigo-500">
+                            <div class="w-full flex justify-between">
+                                <div class="w-3.5 h-3.5 border-t-2 border-l-2 border-indigo-600 rounded-tl"></div>
+                                <div class="w-3.5 h-3.5 border-t-2 border-r-2 border-indigo-600 rounded-tr"></div>
+                            </div>
+                            <span class="text-[10px] sm:text-[11px] font-semibold text-white bg-gray-900/70 px-2 py-0.5 rounded-full backdrop-blur-xs">
+                                Aponte para o QR Code
+                            </span>
+                            <div class="w-full flex justify-between">
+                                <div class="w-3.5 h-3.5 border-b-2 border-l-2 border-indigo-600 rounded-bl"></div>
+                                <div class="w-3.5 h-3.5 border-b-2 border-r-2 border-indigo-600 rounded-br"></div>
+                            </div>
+                        </div>
+
+                        <!-- Estado 4: Location (QR Code decodificado, obtendo evidência) -->
+                        <div x-show="state === 'location'" style="display: none;" class="flex flex-col items-center justify-center p-4 text-center select-none">
+                            <div class="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center mb-2">
+                                <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </div>
+                            <p class="text-xs font-bold text-gray-900">QR Code identificado</p>
+                            <p class="text-[11px] text-gray-500 mt-0.5">Obtendo localização (opcional)...</p>
+                        </div>
+
+                        <!-- Estado 5: Submitting (Enviando marcação) -->
+                        <div x-show="state === 'submitting'" style="display: none;" class="flex flex-col items-center justify-center p-4 text-center select-none">
+                            <div class="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center mb-2">
+                                <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </div>
+                            <p class="text-xs font-bold text-gray-900">Registrando marcação...</p>
+                            <p class="text-[11px] text-gray-500 mt-0.5">Preservando registro oficial</p>
+                        </div>
+
+                        <!-- Estado 6: Error (Falha confirmada de câmera ou código) -->
+                        <div x-show="state === 'error'" style="display: none;" class="flex flex-col items-center justify-center p-4 text-center select-none">
+                            <div class="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-2">
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+                            </div>
+                            <p class="text-xs font-bold text-red-900" x-text="errorMessage || 'Não foi possível ler o código'"></p>
+                            <p class="text-[11px] text-red-700/80 mt-1 max-w-[200px]" x-text="errorAdvice || 'Verifique o código e tente novamente.'"></p>
+                        </div>
+
+                        <!-- Estado 7: Unknown (Instabilidade de rede com status desconhecido) -->
+                        <div x-show="state === 'unknown'" style="display: none;" class="flex flex-col items-center justify-center p-4 text-center select-none">
+                            <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mb-2">
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+                            </div>
+                            <p class="text-xs font-bold text-amber-900">Conexão instável</p>
+                            <p class="text-[11px] text-amber-800 mt-1 max-w-[200px]">Não foi possível confirmar o resultado da solicitação.</p>
+                        </div>
                     </div>
-                    <p class="text-[11px] sm:text-xs text-indigo-900/60 font-medium text-center">Câmera pronta</p>
                 </div>
             </div>
-            
-            <div class="mt-3 sm:mt-4 flex flex-col sm:flex-row justify-center items-center gap-2">
-                <button @click="startScanner()" 
-                        x-show="!isScanning" 
-                        :disabled="isProcessing"
-                        :class="{ 'opacity-60 cursor-not-allowed': isProcessing }"
-                        type="button" 
-                        class="time-punch-btn w-full sm:w-auto min-w-[220px] inline-flex items-center justify-center px-6 py-3 sm:py-3.5 border border-transparent text-sm sm:text-base font-bold rounded-xl shadow-lg shadow-indigo-600/20 text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 active:scale-[0.98] transition-all touch-manipulation cursor-pointer">
+
+            <!-- Botões de Ação Dinâmicos por Estado (Área de Toque >= 44px) -->
+            <div class="pt-2">
+                <!-- Botão 1: Idle -> Iniciar Leitura -->
+                <button x-show="state === 'idle'"
+                        @click="startScanner($el)"
+                        type="button"
+                        class="w-full min-h-[44px] inline-flex items-center justify-center px-6 py-3 border border-transparent text-sm sm:text-base font-bold rounded-xl shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 transition touch-manipulation cursor-pointer">
                     <svg class="w-5 h-5 mr-2 -ml-1" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
                     </svg>
-                    Escanear QR Code
+                    Iniciar leitura do QR Code
                 </button>
-                <button @click="stopScanner()" 
-                        x-show="isScanning" 
-                        style="display: none;" 
-                        :disabled="isProcessing"
-                        type="button" 
-                        class="time-punch-btn w-full sm:w-auto min-w-[200px] inline-flex items-center justify-center px-6 py-3 sm:py-3.5 border border-transparent text-sm sm:text-base font-bold rounded-xl shadow-lg shadow-rose-600/20 text-white bg-rose-600 hover:bg-rose-700 active:bg-rose-800 active:scale-[0.98] transition-all touch-manipulation cursor-pointer">
+
+                <!-- Botão 2: Starting ou Scanning -> Cancelar Leitura -->
+                <button x-show="state === 'starting' || state === 'scanning'"
+                        style="display: none;"
+                        @click="stopScanner()"
+                        type="button"
+                        class="w-full min-h-[44px] inline-flex items-center justify-center px-6 py-3 border border-rose-200 text-sm sm:text-base font-bold rounded-xl shadow-xs text-rose-700 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 transition touch-manipulation cursor-pointer">
                     <svg class="w-5 h-5 mr-2 -ml-1" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
-                    Cancelar Leitura
+                    Cancelar leitura
                 </button>
+
+                <!-- Botão 3: Location ou Submitting -> Desabilitado com Progresso -->
+                <button x-show="state === 'location' || state === 'submitting'"
+                        style="display: none;"
+                        disabled
+                        type="button"
+                        class="w-full min-h-[44px] inline-flex items-center justify-center px-6 py-3 border border-transparent text-sm sm:text-base font-bold rounded-xl text-white bg-indigo-500/80 cursor-not-allowed">
+                    <svg class="animate-spin w-5 h-5 mr-2 -ml-1 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span x-text="state === 'location' ? 'Obtendo localização...' : 'Registrando marcação...'"></span>
+                </button>
+
+                <!-- Botão 4: Error -> Tentar Novamente -->
+                <button x-show="state === 'error'"
+                        style="display: none;"
+                        @click="resetToIdle(); startScanner($el);"
+                        type="button"
+                        class="w-full min-h-[44px] inline-flex items-center justify-center px-6 py-3 border border-transparent text-sm sm:text-base font-bold rounded-xl shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 transition touch-manipulation cursor-pointer">
+                    <svg class="w-5 h-5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                    </svg>
+                    Tentar novamente
+                </button>
+
+                <!-- Botão 5: Unknown -> Ações de Reconciliação sem Duplicidade -->
+                <div x-show="state === 'unknown'" style="display: none;" class="flex flex-col sm:flex-row gap-2 w-full">
+                    <button @click="verifyUnknownStatus()"
+                            :disabled="reconciling"
+                            type="button"
+                            class="flex-1 min-h-[44px] inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 transition cursor-pointer">
+                        <span x-text="reconciling ? 'Verificando...' : 'Verificar se foi registrado'"></span>
+                    </button>
+                    <button @click="retrySameAttempt()"
+                            :disabled="reconciling"
+                            type="button"
+                            class="min-h-[44px] inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition cursor-pointer">
+                        Reenviar
+                    </button>
+                    <button @click="resetToIdle()"
+                            type="button"
+                            class="min-h-[44px] inline-flex items-center justify-center px-3 py-2.5 rounded-xl text-xs font-semibold text-gray-500 hover:text-gray-700 transition cursor-pointer">
+                        Cancelar
+                    </button>
+                </div>
             </div>
         </div>
 
-        <!-- Processing State -->
-        <div x-show="isProcessing" style="display: none;" class="text-center py-6 sm:py-8">
-            <div class="inline-flex p-3 sm:p-4 rounded-full bg-indigo-50 mb-2 sm:mb-3 animate-pulse">
-                <svg class="animate-spin h-8 w-8 sm:h-10 sm:w-10 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
+        <!-- Coluna 2: Card "Sua jornada hoje" (Registros Reais do Colaborador) -->
+        <div class="bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-6 shadow-2xs flex flex-col justify-between">
+            <div>
+                <div class="pb-3 mb-3 border-b border-gray-100 flex items-center justify-between">
+                    <div>
+                        <h2 class="text-base sm:text-lg font-bold text-gray-900 tracking-tight">Sua jornada hoje</h2>
+                        <p class="text-xs text-gray-500">Histórico de batidas no estabelecimento</p>
+                    </div>
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        {{ count($this->todayPunches) }} {{ count($this->todayPunches) === 1 ? 'registro' : 'registros' }}
+                    </span>
+                </div>
+
+                <!-- Lista de Registros Reais do Colaborador -->
+                @if($this->todayPunches->isEmpty())
+                    <div class="py-8 sm:py-12 text-center select-none">
+                        <div class="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-200/60 mx-auto mb-3 flex items-center justify-center text-slate-400">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                            </svg>
+                        </div>
+                        <p class="text-xs sm:text-sm font-bold text-gray-800">Nenhuma marcação registrada hoje</p>
+                        <p class="text-[11px] sm:text-xs text-gray-500 mt-1 max-w-xs mx-auto">
+                            Ao confirmar a leitura do QR Code, seus registros diários e comprovantes serão exibidos aqui.
+                        </p>
+                    </div>
+                @else
+                    <div class="space-y-2.5 my-2">
+                        @foreach($this->todayPunches as $punch)
+                            <div class="flex items-center justify-between py-2.5 px-3.5 rounded-xl bg-slate-50/80 border border-slate-200/70 text-xs sm:text-sm hover:bg-slate-100/60 transition">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="inline-flex items-center justify-center w-6 h-6 rounded-lg text-[10px] font-bold {{ $punch->direction === 'in' ? 'bg-emerald-100 text-emerald-800' : 'bg-indigo-100 text-indigo-800' }}">
+                                        {{ $punch->direction === 'in' ? 'E' : 'S' }}
+                                    </span>
+                                    <div>
+                                        <p class="font-bold text-gray-900 leading-tight">
+                                            {{ $punch->direction === 'in' ? 'Entrada' : 'Saída' }}
+                                        </p>
+                                        <p class="font-mono text-[10px] text-gray-400">
+                                            NSR #{{ str_pad($punch->nsr, 9, '0', STR_PAD_LEFT) }}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2.5 text-right">
+                                    <span class="font-mono text-base font-extrabold text-gray-900 tabular-nums">
+                                        {{ $punch->occurred_at_local->format('H:i') }}
+                                    </span>
+                                    @if($punch->receipt)
+                                        <a href="{{ route('receipts.pdf', ['code' => $punch->receipt->verification_code]) }}"
+                                           target="_blank"
+                                           title="Baixar comprovante fiscal (PDF)"
+                                           class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 border border-indigo-100 transition">
+                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                                            </svg>
+                                        </a>
+                                    @endif
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
             </div>
-            <p class="text-sm sm:text-base font-semibold text-gray-900">Validando QR Code e registrando ponto...</p>
-            <p class="text-[11px] sm:text-xs text-gray-500 mt-1">Garantindo integridade e conformidade REP-P</p>
+
+            <!-- Rodapé do Card com Status e Acesso aos Comprovantes -->
+            <div class="pt-4 mt-3 border-t border-gray-100 flex items-center justify-between text-xs">
+                <div class="flex items-center gap-1.5 text-emerald-700 font-semibold">
+                    <svg class="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                    </svg>
+                    <span>Último registro confirmado</span>
+                </div>
+                <a href="{{ route('receipts.center') }}" 
+                   class="font-semibold text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-1 py-1 px-2 rounded-lg hover:bg-indigo-50/50 transition">
+                    Ver comprovantes &rarr;
+                </a>
+            </div>
         </div>
     </div>
 
-    <!-- Modal de Reconciliação e Resiliência de Rede -->
-    <div x-show="networkErrorModal" 
-         x-cloak 
-         class="fixed inset-0 z-50 overflow-y-auto" 
-         role="dialog" 
-         aria-modal="true">
-        <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-xs transition-opacity" @click="cancelAttempt()"></div>
+    <!-- Modal Específico e Tranquilo de Confirmação de Marcação (Acessível) -->
+    <div x-show="state === 'success' || state === 'warning'"
+         x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="punch-modal-title"
+         @keydown.escape.window="resetToIdle()">
+        
+        <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-xs transition-opacity" @click="resetToIdle()"></div>
 
         <div class="flex min-h-screen items-center justify-center p-4 text-center sm:p-0">
-            <div class="relative z-10 w-full max-w-lg transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-2xl transition-all sm:my-8 border border-gray-100">
-                <div class="flex items-start gap-4">
-                    <div class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-amber-100 text-amber-600 shadow-xs">
-                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                        </svg>
+            <div class="relative z-10 w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-5 sm:p-6 text-left shadow-xl transition-all sm:my-8 border border-gray-100"
+                 @click.stop>
+                
+                <div class="text-center">
+                    <!-- Ícone de Sucesso / Observação -->
+                    <div class="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center mb-3.5 shadow-2xs"
+                         :class="state === 'warning' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'">
+                        <template x-if="state === 'warning'">
+                            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                            </svg>
+                        </template>
+                        <template x-if="state === 'success'">
+                            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                        </template>
                     </div>
 
-                    <div class="flex-1">
-                        <h3 class="text-base font-bold text-gray-900">Falha de Comunicação com o Servidor</h3>
-                        <p class="text-xs text-gray-600 mt-1.5" x-text="networkErrorMsg"></p>
-                    </div>
-                </div>
+                    <!-- Título Operacional -->
+                    <h3 id="punch-modal-title" class="text-lg sm:text-xl font-bold text-gray-900" x-text="punchConfirmation?.direction_title || 'Registro confirmado'"></h3>
+                    <p class="text-xs text-gray-500 mt-0.5" x-text="punchConfirmation?.date"></p>
 
-                <div class="mt-5 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-600">
-                    <p class="font-semibold text-slate-800">Proteção contra duplicidade ativa:</p>
-                    <p class="mt-1">Sua solicitação possui uma chave única identificadora. O sistema verificará se o registro já foi gravado antes de enviar uma nova batida, garantindo que nenhum ponto seja duplicado.</p>
-                </div>
-
-                <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-end">
-                    <button type="button" @click="cancelAttempt()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition">
-                        Cancelar e Voltar
-                    </button>
-                    <button type="button" @click="retrySameAttempt()" class="inline-flex items-center justify-center px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition">
-                        <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
-                        </svg>
-                        Verificar / Reenviar Registro
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal de Reativação de Câmera -->
-    <div x-show="permissionModal" 
-         x-cloak 
-         class="fixed inset-0 z-50 overflow-y-auto" 
-         role="dialog" 
-         aria-modal="true">
-        <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-xs transition-opacity" @click="permissionModal = false"></div>
-
-        <div class="flex min-h-screen items-center justify-center p-4 text-center sm:p-0">
-            <div class="relative z-10 w-full max-w-lg transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-2xl transition-all sm:my-8 border border-gray-100">
-                <div class="flex items-start gap-4">
-                    <div class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-xs bg-amber-100 text-amber-600">
-                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
-                        </svg>
+                    <!-- Mostrador com Horário Oficial e NSR Retornados pelo Servidor -->
+                    <div class="my-4 py-3.5 px-4 bg-slate-50 border border-slate-200/80 rounded-xl">
+                        <div class="font-mono text-3xl sm:text-4xl font-extrabold text-indigo-950 tracking-tight tabular-nums" x-text="punchConfirmation?.time"></div>
+                        <div class="mt-1 font-mono text-xs font-semibold text-indigo-700" x-text="'NSR ' + (punchConfirmation?.nsr_formatted || punchConfirmation?.nsr)"></div>
                     </div>
 
-                    <div class="flex-1">
-                        <h3 class="text-base font-bold text-gray-900">Permissão de Câmera Necessária</h3>
-                        <p class="text-xs text-gray-500 mt-1" x-text="permissionErrorMsg"></p>
+                    <!-- Observação de Localização (Quando fora do raio, exibida como advertência contextual) -->
+                    <template x-if="punchConfirmation?.has_warning">
+                        <div class="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-left flex items-start gap-2.5 text-xs text-amber-900 leading-relaxed">
+                            <svg class="w-4 h-4 text-amber-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                            </svg>
+                            <span x-text="punchConfirmation?.warning_message"></span>
+                        </div>
+                    </template>
+
+                    <!-- Situação do Comprovante (Tratado separadamente do registro do ponto) -->
+                    <div class="mb-5 p-3 rounded-xl border text-left text-xs"
+                         :class="punchConfirmation?.receipt_status === 'available' ? 'bg-emerald-50/60 border-emerald-200 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-700'">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2">
+                                <svg class="w-4 h-4 shrink-0 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                                </svg>
+                                <div>
+                                    <p class="font-bold text-xs" x-text="punchConfirmation?.receipt_status === 'available' ? 'Comprovante emitido' : 'Comprovante em emissão'"></p>
+                                    <p class="font-mono text-[10px] text-gray-500" x-text="punchConfirmation?.receipt_code || 'Acesse na Central de Comprovantes'"></p>
+                                </div>
+                            </div>
+
+                            <template x-if="punchConfirmation?.receipt_url">
+                                <a :href="punchConfirmation?.receipt_url"
+                                   target="_blank"
+                                   class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition">
+                                    Ver comprovante
+                                </a>
+                            </template>
+                        </div>
                     </div>
-                </div>
 
-                <div class="mt-5 p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2 text-xs text-slate-700">
-                    <p class="font-bold text-slate-900 text-xs">Como liberar a câmera no navegador:</p>
-                    <ol class="list-decimal pl-4 space-y-1.5 text-slate-600">
-                        <li>No topo da tela, clique no ícone de <strong>cadeado</strong> ou <strong>ajustes de site</strong> ao lado do endereço.</li>
-                        <li>Localize a permissão de <strong>Câmera</strong> e marque <strong>"Permitir"</strong>.</li>
-                        <li>Clique no botão abaixo para tentar abrir a câmera novamente.</li>
-                    </ol>
-                </div>
-
-                <div class="mt-6 flex gap-3 justify-end">
-                    <button type="button" @click="permissionModal = false" class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition">
-                        Fechar
-                    </button>
-                    <button type="button" @click="permissionModal = false; startScanner();" class="inline-flex items-center justify-center px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition">
-                        Tentar Novamente
+                    <!-- Botão de Conclusão -->
+                    <button type="button" 
+                            @click="resetToIdle()" 
+                            class="w-full min-h-[44px] inline-flex items-center justify-center px-6 py-3 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 transition cursor-pointer">
+                        Concluir
                     </button>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Script Alpine.js com Máquina de Estados e Resiliência -->
     <script>
         document.addEventListener('alpine:init', () => {
             Alpine.data('timePunchComponent', (config = {}) => ({
+                state: 'idle', // idle, starting, scanning, location, submitting, success, warning, error, unknown
                 html5QrcodeScanner: null,
-                isScanning: false,
-                isProcessing: false,
-                timezone: config.timezone || '{{ $establishmentTimezone }}',
-                timezoneLabel: config.timezoneLabel || '{{ $timezoneLabel }}',
+                timezone: config.timezone || 'America/Maceio',
+                timezoneLabel: config.timezoneLabel || 'Horário do estabelecimento',
                 currentTime: '',
                 currentDate: '',
-                permissionModal: false,
-                permissionErrorMsg: '',
                 currentAttemptId: null,
+                errorMessage: '',
+                errorAdvice: '',
+                punchConfirmation: @json($confirmationData),
+                networkErrorMsg: '',
+                reconciling: false,
                 lastDecodedText: null,
                 lastCoords: null,
-                networkErrorModal: false,
-                networkErrorMsg: '',
+                triggerElement: null,
 
                 init() {
                     this.updateClock();
                     setInterval(() => this.updateClock(), 1000);
                 },
 
+                get stateBadgeLabel() {
+                    switch (this.state) {
+                        case 'starting': return 'Ativando câmera...';
+                        case 'scanning': return 'Leitor ativo';
+                        case 'location': return 'Localizando...';
+                        case 'submitting': return 'Registrando...';
+                        case 'error': return 'Falha na leitura';
+                        case 'unknown': return 'Verificando conexão';
+                        default: return 'Leitor pronto';
+                    }
+                },
+
+                get statusAnnouncement() {
+                    switch (this.state) {
+                        case 'starting': return 'Ativando câmera do dispositivo.';
+                        case 'scanning': return 'Câmera ativada. Aponte para o QR Code da empresa.';
+                        case 'location': return 'QR Code identificado. Obtendo evidência de localização.';
+                        case 'submitting': return 'Registrando marcação oficial no servidor.';
+                        case 'success': return 'Ponto confirmado com sucesso.';
+                        case 'warning': return 'Ponto confirmado com observação de perímetro.';
+                        case 'error': return 'Falha na leitura do QR Code.';
+                        case 'unknown': return 'Resultado pendente de confirmação com o servidor.';
+                        default: return 'Leitura de ponto pronta para iniciar.';
+                    }
+                },
+
                 updateClock() {
                     const now = new Date();
                     try {
                         this.currentTime = now.toLocaleTimeString('pt-BR', { timeZone: this.timezone });
-                        this.currentDate = now.toLocaleDateString('pt-BR', { 
-                            timeZone: this.timezone,
-                            weekday: 'long', 
-                            day: '2-digit', 
-                            month: 'long', 
-                            year: 'numeric' 
-                        });
                     } catch (e) {
-                        // Fallback defensivo caso o timezone local do browser falhe
                         this.currentTime = now.toLocaleTimeString('pt-BR');
-                        this.currentDate = now.toLocaleDateString('pt-BR', { 
-                            weekday: 'long', 
-                            day: '2-digit', 
-                            month: 'long', 
-                            year: 'numeric' 
-                        });
                     }
                 },
 
@@ -559,8 +775,34 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                     return 'pf_' + Date.now() + '_' + Math.random().toString(36).substring(2, 12);
                 },
 
-                startScanner() {
-                    if (this.isProcessing) return;
+                startScanner(triggerEl = null) {
+                    if (this.state === 'starting' || this.state === 'scanning' || this.state === 'location' || this.state === 'submitting') {
+                        return;
+                    }
+
+                    if (triggerEl) {
+                        this.triggerElement = triggerEl;
+                    }
+
+                    // Validação de contexto seguro (HTTPS)
+                    if (typeof window !== 'undefined' && window.isSecureContext === false && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                        this.state = 'error';
+                        this.errorMessage = 'O acesso à câmera requer uma conexão segura (HTTPS).';
+                        this.errorAdvice = 'Acesse o sistema utilizando um endereço com https:// para utilizar a câmera.';
+                        return;
+                    }
+
+                    // Validação de suporte a getUserMedia
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        this.state = 'error';
+                        this.errorMessage = 'Navegador sem suporte a captura de câmera.';
+                        this.errorAdvice = 'Utilize uma versão recente de Chrome, Edge, Safari ou Firefox.';
+                        return;
+                    }
+
+                    this.state = 'starting';
+                    this.errorMessage = '';
+                    this.errorAdvice = '';
 
                     if (!this.html5QrcodeScanner) {
                         this.html5QrcodeScanner = new Html5Qrcode("qr-reader");
@@ -582,44 +824,75 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                         (decodedText) => this.onScanSuccess(decodedText),
                         () => { /* frames intermediários silenciosos */ }
                     ).then(() => {
-                        this.isScanning = true;
+                        this.state = 'scanning';
                     }).catch((err) => {
                         console.error("Scanner start error:", err);
-                        this.permissionErrorMsg = 'Acesso à câmera foi recusado ou não está disponível. Por favor, libere a câmera nas permissões do navegador.';
-                        this.permissionModal = true;
+                        this.handleCameraError(err);
                     });
                 },
 
                 stopScanner() {
-                    if (this.html5QrcodeScanner && this.isScanning) {
+                    if (this.html5QrcodeScanner && (this.state === 'starting' || this.state === 'scanning')) {
                         this.html5QrcodeScanner.stop().then(() => {
-                            this.isScanning = false;
+                            if (this.state === 'starting' || this.state === 'scanning') {
+                                this.state = 'idle';
+                            }
                         }).catch(() => {
-                            this.isScanning = false;
+                            if (this.state === 'starting' || this.state === 'scanning') {
+                                this.state = 'idle';
+                            }
                         });
+                    } else {
+                        this.state = 'idle';
+                    }
+                },
+
+                handleCameraError(err) {
+                    this.state = 'error';
+                    const name = err.name || '';
+                    const msg = (err.message || '').toLowerCase();
+
+                    if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || msg.includes('permission') || msg.includes('denied')) {
+                        this.errorMessage = 'Permissão de câmera não concedida.';
+                        this.errorAdvice = 'Para liberar o acesso, abra as permissões do site nas configurações do navegador (ícone de ajustes ou cadeado ao lado do endereço).';
+                    } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError' || msg.includes('not found') || msg.includes('no camera')) {
+                        this.errorMessage = 'Nenhuma câmera encontrada no aparelho.';
+                        this.errorAdvice = 'Verifique se o dispositivo possui câmera habilitada e conectada.';
+                    } else if (name === 'NotReadableError' || name === 'TrackStartError' || msg.includes('in use') || msg.includes('could not start')) {
+                        this.errorMessage = 'A câmera está ocupada por outro aplicativo.';
+                        this.errorAdvice = 'Feche outros aplicativos ou abas que possam estar usando a câmera e tente novamente.';
+                    } else if (name === 'OverconstrainedError') {
+                        this.errorMessage = 'Não foi possível selecionar a câmera adequada.';
+                        this.errorAdvice = 'O aparelho não atende aos requisitos de resolução do leitor.';
+                    } else {
+                        this.errorMessage = 'Não foi possível inicializar a câmera.';
+                        this.errorAdvice = 'Verifique as configurações do dispositivo ou tente novamente.';
                     }
                 },
 
                 onScanSuccess(decodedText) {
-                    // 1. Bloqueio imediato de callbacks concorrentes ou repetidos do scanner
-                    if (this.isProcessing) {
+                    // Bloqueio imediato de callbacks concorrentes durante a mesma tentativa
+                    if (this.state !== 'scanning') {
                         return;
                     }
-                    this.isProcessing = true;
 
-                    // 2. Desativação imediata do scanner após leitura bem-sucedida
-                    this.stopScanner();
+                    // Desativação imediata da câmera após decodificação
+                    if (this.html5QrcodeScanner) {
+                        this.html5QrcodeScanner.stop().catch(() => {});
+                    }
 
-                    // 3. Chave de idempotência única vinculada a esta tentativa de batida
+                    this.state = 'location';
+                    this.lastDecodedText = decodedText;
+
                     if (!this.currentAttemptId) {
                         this.currentAttemptId = this.generateIdempotencyKey();
                     }
                     const attemptKey = this.currentAttemptId;
-                    this.lastDecodedText = decodedText;
 
-                    // 4. Coleta de GPS não-bloqueante com timeout de 5 segundos
+                    // Coleta não-bloqueante de GPS com timeout de 5 segundos
                     this.getCoordinates().then((coords) => {
                         this.lastCoords = coords;
+                        this.state = 'submitting';
                         this.sendPunchRequest(attemptKey, decodedText, coords);
                     });
                 },
@@ -631,11 +904,9 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                         }
 
                         let resolved = false;
-                        // Timeout rígido de 5 segundos para não reter o trabalhador indefinidamente
                         const timeoutId = setTimeout(() => {
                             if (!resolved) {
                                 resolved = true;
-                                console.warn("GPS request timed out (5s); registrando batida sem coordenadas.");
                                 resolve(null);
                             }
                         }, 5000);
@@ -656,7 +927,6 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                                 if (!resolved) {
                                     resolved = true;
                                     clearTimeout(timeoutId);
-                                    console.warn("GPS indisponível ou negado (" + error.message + "); registrando batida sem coordenadas.");
                                     resolve(null);
                                 }
                             },
@@ -671,61 +941,81 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                     const acc = coords ? coords.accuracy : null;
 
                     @this.call('registerPunch', decodedText, lat, lon, acc, attemptKey)
-                        .then(() => {
-                            this.isProcessing = false;
+                        .then((result) => {
+                            if (result && result.status === 'warning') {
+                                this.state = 'warning';
+                                this.punchConfirmation = result.punch || result;
+                            } else if (result && result.status === 'error') {
+                                this.state = 'error';
+                                this.errorMessage = result.message || 'QR Code não autorizado.';
+                                this.errorAdvice = 'Aponte a câmera para o QR Code oficial da sua empresa.';
+                            } else {
+                                this.state = 'success';
+                                this.punchConfirmation = result ? (result.punch || result) : null;
+                            }
+
                             this.currentAttemptId = null;
                             this.lastDecodedText = null;
                             this.lastCoords = null;
-                            this.networkErrorModal = false;
                         })
                         .catch((error) => {
                             console.error("Erro na comunicação com o servidor:", error);
-                            this.handleNetworkFailure(attemptKey, decodedText, coords, error);
+                            this.state = 'unknown';
+                            this.networkErrorMsg = 'Não foi possível confirmar o resultado da solicitação devido a uma oscilação na conexão.';
                         });
                 },
 
-                handleNetworkFailure(attemptKey, decodedText, coords, error) {
-                    this.networkErrorModal = true;
-                    this.networkErrorMsg = "A conexão com a rede oscilou. Verificando junto ao servidor se a batida foi confirmada...";
+                verifyUnknownStatus() {
+                    if (!this.currentAttemptId) {
+                        this.resetToIdle();
+                        return;
+                    }
 
-                    // Reconciliação imediata consultando o status da tentativa pela chave de idempotência
-                    @this.call('checkPunchStatus', attemptKey)
-                        .then((existing) => {
-                            if (existing) {
-                                // O servidor recebeu e gravou com sucesso
-                                this.networkErrorModal = false;
-                                this.isProcessing = false;
+                    this.reconciling = true;
+                    @this.call('checkPunchStatus', this.currentAttemptId)
+                        .then((reconciled) => {
+                            this.reconciling = false;
+                            if (reconciled) {
+                                this.state = reconciled.has_warning ? 'warning' : 'success';
+                                this.punchConfirmation = reconciled;
                                 this.currentAttemptId = null;
                                 this.lastDecodedText = null;
                                 this.lastCoords = null;
                             } else {
-                                // Servidor confirma que a requisição não chegou
-                                this.networkErrorMsg = "A conexão caiu antes do registro alcançar o servidor. Você pode reenviar com segurança agora.";
-                                this.isProcessing = false;
+                                this.networkErrorMsg = 'O servidor confirma que a tentativa anterior não foi gravada. Você pode reenviar o registro agora.';
                             }
                         })
                         .catch(() => {
-                            // Conexão continua indisponível
-                            this.networkErrorMsg = "Não foi possível confirmar o status do registro devido à instabilidade de rede. Clique em Reenviar para tentar novamente.";
-                            this.isProcessing = false;
+                            this.reconciling = false;
+                            this.networkErrorMsg = 'A conexão continua instável. Tente novamente em instantes.';
                         });
                 },
 
                 retrySameAttempt() {
                     if (!this.lastDecodedText || !this.currentAttemptId) {
-                        this.cancelAttempt();
+                        this.resetToIdle();
                         return;
                     }
-                    this.isProcessing = true;
+                    this.state = 'submitting';
                     this.sendPunchRequest(this.currentAttemptId, this.lastDecodedText, this.lastCoords);
                 },
 
-                cancelAttempt() {
-                    this.networkErrorModal = false;
-                    this.isProcessing = false;
+                resetToIdle() {
+                    this.state = 'idle';
+                    this.errorMessage = '';
+                    this.errorAdvice = '';
+                    this.punchConfirmation = null;
                     this.currentAttemptId = null;
                     this.lastDecodedText = null;
                     this.lastCoords = null;
+                    this.networkErrorMsg = '';
+                    this.reconciling = false;
+
+                    if (this.triggerElement && typeof this.triggerElement.focus === 'function') {
+                        this.$nextTick(() => {
+                            this.triggerElement.focus();
+                        });
+                    }
                 }
             }));
         });

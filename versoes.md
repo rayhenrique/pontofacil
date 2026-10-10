@@ -1,6 +1,33 @@
 # Histórico de Versões (Changelog)
 
-## v2.5.3 (Atual)
+## v2.5.4 (Atual)
+- **Refatoração UX do Registro de Ponto (`/ponto` - Mobile-First Operacional):**
+  - **Máquina de Estados Explícita (Alpine.js + Livewire):**
+    - Estados rigorosos e mutuamente exclusivos: `idle`, `starting`, `scanning`, `location`, `submitting`, `success`, `warning`, `error`, `unknown`.
+    - Eliminação de estados contraditórios e transições visuais claras sem travamentos.
+  - **Aprimoramento de UX Writing e Correção de Textos:**
+    - Substituição de termos imprecisos como "Câmera pronta" e "Registro inviolável".
+    - Textos objetivos e operacionais: "Leitura não iniciada", "Ativando câmera...", "Aponte para o QR Code da empresa", "QR Code identificado", "Registrando marcação...".
+  - **Botão de Ação Dinâmico e Ergonomia Touch:**
+    - Ações adaptativas conforme o estado ("Iniciar leitura do QR Code", "Cancelar leitura", "Tentar novamente", "Verificar se foi registrado").
+    - Área de toque mínima de 44px (`min-h-[44px]`) e prevenção de múltiplos envios concorrentes.
+  - **Diagnóstico e Permissões de Câmera Contextualizadas:**
+    - Mensagens amigáveis para permissão negada, ausência de câmera, dispositivo ocupado por outro app e contexto não-seguro (HTTP), sem instruções indiscriminadas de Safari para outros navegadores.
+  - **GPS como Evidência Opcional Descomplicada:**
+    - O registro prossegue normalmente e de forma transparente caso a localização esteja indisponível ou seja negada.
+    - Advertência de perímetro exibida apenas como observação de auditoria após a confirmação bem-sucedida do ponto.
+  - **Confirmação Específica, Tranquila e Acessível:**
+    - Modal operacional exibindo exclusivamente dados persistidos do servidor (direção, horário no fuso do estabelecimento, data, NSR formatado).
+    - Diferenciação clara entre registro de ponto confirmado e status da emissão do comprovante (emitido vs. em processamento).
+    - Cores funcionais com emerald para sucesso, amber para observações e red para erros reais.
+  - **Recuperação e Reconciliação Pós-Instabilidade de Rede:**
+    - Estado `unknown` com opção de verificar status antes de qualquer reenvio, prevenindo tentativas desnecessárias.
+  - **Layout de Duas Colunas (Desktop) e Card "Sua Jornada Hoje":**
+    - Apresentação dos registros reais do dia do colaborador autenticado, com links diretos para comprovantes e relógio digital oficial.
+  - **Acessibilidade:**
+    - Atributos `aria-live`, fechamento por tecla Escape, retorno de foco e suporte a `prefers-reduced-motion`.
+
+## v2.5.3
 - **Segurança, Idempotência e Resiliência do Módulo Bater Ponto (`/ponto`):**
   - **Prevenção de Duplicidade e Idempotência:**
     - Bloqueio imediato e síncrono de callbacks concorrentes no scanner durante a mesma leitura de QR Code.
