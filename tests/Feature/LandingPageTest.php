@@ -12,7 +12,7 @@ class LandingPageTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('PontoFácil');
-        $response->assertSee('Arquitetura preparada para a Portaria 671');
+        $response->assertSee('Estrutura preparada para a Portaria 671');
         $response->assertSee('https://kltecnologia.com');
     }
 
@@ -22,7 +22,7 @@ class LandingPageTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('PontoFácil');
-        $response->assertSee('Arquitetura preparada para a Portaria 671');
+        $response->assertSee('Estrutura preparada para a Portaria 671');
         $response->assertSee('https://kltecnologia.com');
     }
 
@@ -193,6 +193,38 @@ class LandingPageTest extends TestCase
         // Ausência de termos obsoletos e seções removidas
         $response->assertDontSee('SaaS REP-A');
         $response->assertDontSee('Evolução');
+    }
+
+    public function test_landing_page_has_proper_seo_and_metadata(): void
+    {
+        $response = $this->get(route('landing'));
+
+        $response->assertOk();
+
+        // Title e Meta Description
+        $response->assertSee('<title>PontoFácil | Controle de Ponto e Gestão de Jornada</title>', false);
+        $response->assertSee('name="description" content="Sistema de controle de ponto e gestão de jornada com registro pelo celular, comprovantes, espelho de ponto, banco de horas, tratamentos e trilha de auditoria."', false);
+
+        // Keywords coerentes sem keyword stuffing
+        $response->assertSee('ponto eletrônico');
+        $response->assertSee('controle de jornada');
+        $response->assertSee('REP-P');
+        $response->assertSee('PTRP');
+        $response->assertSee('Portaria 671');
+        $response->assertSee('banco de horas');
+        $response->assertSee('espelho de ponto');
+
+        // Open Graph & Twitter Cards
+        $response->assertSee('property="og:type" content="website"', false);
+        $response->assertSee('property="og:title" content="PontoFácil | Controle de Ponto e Gestão de Jornada"', false);
+        $response->assertSee('property="og:description" content="Sistema de controle de ponto e gestão de jornada com registro pelo celular, comprovantes, espelho de ponto, banco de horas, tratamentos e trilha de auditoria."', false);
+        $response->assertSee('name="twitter:card" content="summary"', false);
+
+        // Ausência de termos proibidos em metadados e SEO
+        $response->assertDontSee('REP-A');
+        $response->assertDontSee('homologação');
+        $response->assertDontSee('homologado');
+        $response->assertDontSee('ponto GPS');
     }
 
     public function test_login_page_contains_link_to_landing(): void

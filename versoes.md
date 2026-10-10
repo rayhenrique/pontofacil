@@ -52,6 +52,12 @@
       - **Hierarquia Tipográfica Mobile:** Títulos principais contidos em até `text-4xl` no celular, evitando quebras de linha excessivas em telas pequenas (< 400px).
       - **Grid Responsivo Estrito & Zero Overflow:** Progressão de 1 coluna no mobile evoluindo para 2 ou mais colunas apenas quando há espaço real; ausência total de overflow horizontal (`scrollWidth === innerWidth` verificado em 375px e 1280px).
       - **Protagonismo da Interface Real:** O mockup do Hero e as prévias interativas espelham a interface autêntica do PontoFácil (saudação, relógio em tempo real, status da jornada, último registro e comprovante após a marcação).
+    - **Revisão de SEO, Metadados e Open Graph:**
+      - **Título Otimizado:** `<title>PontoFácil | Controle de Ponto e Gestão de Jornada</title>`, alinhado à proposta central do produto.
+      - **Meta Description & Open Graph:** Descrição concisa e objetiva: *"Sistema de controle de ponto e gestão de jornada com registro pelo celular, comprovantes, espelho de ponto, banco de horas, tratamentos e trilha de auditoria."*.
+      - **Keywords Coerentes (Sem Keyword Stuffing):** `ponto eletrônico, controle de jornada, REP-P, PTRP, Portaria 671, banco de horas, espelho de ponto, controle de ponto`.
+      - **Cards de Compartilhamento Social:** Tags Open Graph (`og:type`, `og:title`, `og:description`, `og:url`, `og:locale`) e Twitter Cards (`twitter:card`, `twitter:title`, `twitter:description`) sincronizadas.
+      - **Saneamento Terminológico:** Removidas menções a REP-A, homologação estatal precoce, promessas de conformidade absoluta e menções a GPS como fator de bloqueio.
   - **Preservação Arquitetural & Remoção da Timeline Comercial:** A timeline técnica de versões foi removida da landing comercial pública por se tratar de informação técnica interna. O histórico completo segue rigorosamente preservado neste documento (`versoes.md`), na documentação e no modal interno do sistema (`components/help.blade.php`). Foram eliminados links (`#evolucao`), IDs e animações GSAP residuais da landing, mantendo a página enxuta e focada na proposta de valor.
   - **Congelamento Documental das Referências Oficiais MTE (31/07/2026):**
     - Os leiautes oficiais de referência usados na implementação foram congelados em `ref/mte/2026-07-31/` (`afd.pdf` e `aej.pdf`).
