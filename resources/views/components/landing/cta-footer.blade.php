@@ -1,5 +1,5 @@
 <!-- CTA Final Full-Width Banner -->
-<section id="contato" class="relative py-12 sm:py-14 md:py-16 lg:py-20 overflow-hidden bg-slate-950 text-white border-t border-slate-900">
+<section id="contato" class="relative py-10 sm:py-14 lg:py-16 overflow-hidden bg-slate-950 text-white border-t border-slate-900">
     <!-- Efeito Sutil de Fundo -->
     <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-indigo-900/20 rounded-full blur-3xl pointer-events-none"></div>
     

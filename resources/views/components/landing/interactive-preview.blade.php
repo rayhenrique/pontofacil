@@ -1,8 +1,8 @@
-<section id="demonstracao" class="py-12 sm:py-14 md:py-16 lg:py-20 relative">
+<section id="demonstracao" class="py-10 sm:py-14 lg:py-16 relative">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         <!-- Cabeçalho da Seção -->
-        <div class="text-center max-w-3xl mx-auto mb-8 sm:mb-12 space-y-2.5 sm:space-y-3">
+        <div class="text-center max-w-3xl mx-auto mb-8 sm:mb-10 lg:mb-12 space-y-2">
             <p class="text-xs font-bold uppercase tracking-widest text-indigo-600">06 — Demonstração da interface</p>
             <h2 class="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 tracking-tight">
                 Simplicidade na Ponta do Dedo. <br class="hidden sm:inline" />

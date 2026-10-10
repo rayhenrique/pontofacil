@@ -1,6 +1,23 @@
 # Histórico de Versões (Changelog)
 
 ## v2.5.1 (Atual)
+- **Aprimoramento de Ritmo, Composição Editorial e Hierarquia Visual (Landing Page):**
+  - **Eliminação da Repetição Estrutural (Cards Repetitivos):**
+    - Redução de mais de 40% das caixas/cards isolados da landing page, substituindo padrões monótonos por fluxos conectados, matrizes de capacidades e diagramas visuais.
+  - **Como Funciona em Fluxo Conectado:**
+    - Substituição de 4 cards isolados por um fluxo de processo contínuo com linha conectora (horizontal no desktop e vertical no mobile).
+  - **Assimetria Visual em Colaborador x Empresa:**
+    - Fim dos dois cards idênticos: experiência do colaborador com preview da interface mobile e capacidades da empresa/RH em matriz estruturada de duas colunas.
+  - **Hierarquia Editorial em Recursos Principais:**
+    - Fim da sensação de catálogo: 1 recurso principal destacado com visual de apuração CLT (*Espelho Automatizado em Tempo Real*) e 3 recursos secundários integrados.
+  - **Narrativa de Trilha de Auditoria em Segurança:**
+    - Substituição de 4 cards genéricos por um fluxo narrativo de segurança real ancorado por evento auditado (`08:01:32 • NSR 000004281 • SHA-256`) e etapas sequenciais de integridade.
+  - **Diagrama Arquitetural da Portaria 671:**
+    - Substituição dos 6 cards anteriores por um diagrama de pipeline funcional (`REP-P → ARP → PTRP → Espelho/AEJ`), 3 princípios normativos fundamentais e nota técnica de transparência regulatória.
+  - **Correção Crítica no GSAP (Visibilidade Sem Dependência de JS):**
+    - Remoção de `opacity: 0` inicial via GSAP. Todo o conteúdo é renderizado 100% visível por padrão, prevenindo áreas vazias em screenshots full-page ou carregamento rápido.
+  - **Calibração de Ritmo e Espaçamento Vertical:**
+    - Otimização do espaçamento vertical (`py-10` a `py-16`), aproximando títulos de conteúdos para manter engajamento a cada scroll.
 - **Refinamento de Direção de Arte e Identidade Visual (Landing Page):**
   - **Identidade Corporativa e Sóbria:**
     - Redução significativa da estética genérica de template SaaS / IA, alinhando a landing page a um padrão visual de software corporativo maduro (Linear na disciplina visual, Stripe na sobriedade e clareza para RH).
