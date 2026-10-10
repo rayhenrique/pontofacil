@@ -1,7 +1,15 @@
 # Histórico de Versões (Changelog)
 
-## v2.5.4 (Atual)
-- **Refatoração UX do Registro de Ponto (`/ponto` - Mobile-First Operacional):**
+## v2.5.3 (Atual)
+- **Refatoração UX e Resiliência do Registro de Ponto (`/ponto`):**
+  - **Experiência de Câmera Mobile-First e Suporte Amplo a Notebooks/Desktops:**
+    - Inicialização inteligente via `Html5Qrcode.getCameras()`, com seleção automática da webcam integrada em computadores e da câmera traseira em dispositivos móveis.
+    - Fallback resiliente para `{ facingMode: 'user' }` caso restrições de orientação ambiental não sejam suportadas pelo hardware.
+    - Viewfinder com dimensões permanentes no DOM para evitar renderização com largura e altura nulas.
+    - Liberação física total de `MediaStreamTrack` ao cancelar, garantindo desligamento imediato do sensor e do LED da câmera.
+  - **Geolocalização Opcional e Não-Bloqueante com Prefetch:**
+    - Solicitação proativa de permissão de geolocalização em segundo plano logo ao iniciar a leitura, sem interromper nem atrasar a câmera.
+    - O registro do ponto prossegue normalmente mesmo se o GPS estiver desativado, for negado ou atingir timeout.
   - **Máquina de Estados Explícita (Alpine.js + Livewire):**
     - Estados rigorosos e mutuamente exclusivos: `idle`, `starting`, `scanning`, `location`, `submitting`, `success`, `warning`, `error`, `unknown`.
     - Eliminação de estados contraditórios e transições visuais claras sem travamentos.
@@ -12,10 +20,7 @@
     - Ações adaptativas conforme o estado ("Iniciar leitura do QR Code", "Cancelar leitura", "Tentar novamente", "Verificar se foi registrado").
     - Área de toque mínima de 44px (`min-h-[44px]`) e prevenção de múltiplos envios concorrentes.
   - **Diagnóstico e Permissões de Câmera Contextualizadas:**
-    - Mensagens amigáveis para permissão negada, ausência de câmera, dispositivo ocupado por outro app e contexto não-seguro (HTTP), sem instruções indiscriminadas de Safari para outros navegadores.
-  - **GPS como Evidência Opcional Descomplicada:**
-    - O registro prossegue normalmente e de forma transparente caso a localização esteja indisponível ou seja negada.
-    - Advertência de perímetro exibida apenas como observação de auditoria após a confirmação bem-sucedida do ponto.
+    - Mensagens amigáveis para permissão negada, ausência de câmera, dispositivo ocupado por outro app e contexto não-seguro (HTTP).
   - **Confirmação Específica, Tranquila e Acessível:**
     - Modal operacional exibindo exclusivamente dados persistidos do servidor (direção, horário no fuso do estabelecimento, data, NSR formatado).
     - Diferenciação clara entre registro de ponto confirmado e status da emissão do comprovante (emitido vs. em processamento).
@@ -26,8 +31,6 @@
     - Apresentação dos registros reais do dia do colaborador autenticado, com links diretos para comprovantes e relógio digital oficial.
   - **Acessibilidade:**
     - Atributos `aria-live`, fechamento por tecla Escape, retorno de foco e suporte a `prefers-reduced-motion`.
-
-## v2.5.3
 - **Segurança, Idempotência e Resiliência do Módulo Bater Ponto (`/ponto`):**
   - **Prevenção de Duplicidade e Idempotência:**
     - Bloqueio imediato e síncrono de callbacks concorrentes no scanner durante a mesma leitura de QR Code.

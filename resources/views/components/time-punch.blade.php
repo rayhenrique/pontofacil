@@ -369,22 +369,21 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
 
                 <!-- Área Central do Viewfinder / Scanner -->
                 <div class="my-4">
-                    <div class="relative w-full max-w-[210px] sm:max-w-[240px] aspect-square mx-auto overflow-hidden rounded-2xl border-2 border-dashed transition-all duration-200 shadow-inner flex items-center justify-center"
+                    <div class="relative w-full max-w-[210px] sm:max-w-[240px] aspect-square mx-auto overflow-hidden rounded-2xl border-2 border-dashed transition-all duration-200 shadow-inner flex items-center justify-center bg-slate-50"
                          :class="{
-                             'border-indigo-200 bg-slate-50/70': state === 'idle',
-                             'border-indigo-400 bg-indigo-50/40': state === 'starting' || state === 'scanning',
-                             'border-emerald-300 bg-emerald-50/30': state === 'location' || state === 'submitting',
-                             'border-red-200 bg-red-50/50': state === 'error',
-                             'border-amber-200 bg-amber-50/50': state === 'unknown'
+                             'border-indigo-200': state === 'idle',
+                             'border-indigo-400': state === 'starting' || state === 'scanning',
+                             'border-emerald-300': state === 'location' || state === 'submitting',
+                             'border-red-200': state === 'error',
+                             'border-amber-200': state === 'unknown'
                          }">
                         
-                        <!-- Elemento real de vídeo do Html5Qrcode -->
+                        <!-- Elemento real de vídeo do Html5Qrcode (Permanece no DOM sempre com dimensões reais) -->
                         <div id="qr-reader" 
-                             class="w-full h-full flex items-center justify-center [&>video]:object-cover [&>video]:w-full [&>video]:h-full [&>video]:rounded-xl"
-                             x-show="state === 'scanning'"></div>
+                             class="absolute inset-0 w-full h-full overflow-hidden rounded-2xl flex items-center justify-center [&_video]:w-full [&_video]:h-full [&_video]:object-cover [&_video]:rounded-2xl [&_#qr-reader__scan_region]:w-full [&_#qr-reader__scan_region]:h-full"></div>
                         
                         <!-- Estado 1: Idle (Leitura não iniciada) -->
-                        <div x-show="state === 'idle'" class="flex flex-col items-center justify-center p-4 text-center select-none text-gray-400">
+                        <div x-show="state === 'idle'" class="absolute inset-0 z-10 bg-slate-50 flex flex-col items-center justify-center p-4 text-center select-none text-gray-400">
                             <div class="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center mb-2.5 text-gray-500">
                                 <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.875 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5Z" />
@@ -396,7 +395,7 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                         </div>
 
                         <!-- Estado 2: Starting (Ativando câmera) -->
-                        <div x-show="state === 'starting'" style="display: none;" class="flex flex-col items-center justify-center p-4 text-center select-none">
+                        <div x-show="state === 'starting'" style="display: none;" class="absolute inset-0 z-10 bg-indigo-50/90 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center select-none">
                             <div class="inline-flex p-3 rounded-full bg-indigo-100 text-indigo-600 mb-2">
                                 <svg class="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -408,7 +407,7 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                         </div>
 
                         <!-- Estado 3: Scanning Overlay (Aponte para o QR Code) -->
-                        <div x-show="state === 'scanning'" style="display: none;" class="pointer-events-none absolute inset-0 flex flex-col items-center justify-between p-3 text-indigo-500">
+                        <div x-show="state === 'scanning'" style="display: none;" class="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-3 text-indigo-500">
                             <div class="w-full flex justify-between">
                                 <div class="w-3.5 h-3.5 border-t-2 border-l-2 border-indigo-600 rounded-tl"></div>
                                 <div class="w-3.5 h-3.5 border-t-2 border-r-2 border-indigo-600 rounded-tr"></div>
@@ -423,7 +422,7 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                         </div>
 
                         <!-- Estado 4: Location (QR Code decodificado, obtendo evidência) -->
-                        <div x-show="state === 'location'" style="display: none;" class="flex flex-col items-center justify-center p-4 text-center select-none">
+                        <div x-show="state === 'location'" style="display: none;" class="absolute inset-0 z-10 bg-slate-50 flex flex-col items-center justify-center p-4 text-center select-none">
                             <div class="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center mb-2">
                                 <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -435,7 +434,7 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                         </div>
 
                         <!-- Estado 5: Submitting (Enviando marcação) -->
-                        <div x-show="state === 'submitting'" style="display: none;" class="flex flex-col items-center justify-center p-4 text-center select-none">
+                        <div x-show="state === 'submitting'" style="display: none;" class="absolute inset-0 z-10 bg-slate-50 flex flex-col items-center justify-center p-4 text-center select-none">
                             <div class="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center mb-2">
                                 <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -447,7 +446,7 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                         </div>
 
                         <!-- Estado 6: Error (Falha confirmada de câmera ou código) -->
-                        <div x-show="state === 'error'" style="display: none;" class="flex flex-col items-center justify-center p-4 text-center select-none">
+                        <div x-show="state === 'error'" style="display: none;" class="absolute inset-0 z-10 bg-red-50/95 flex flex-col items-center justify-center p-4 text-center select-none">
                             <div class="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-2">
                                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
                             </div>
@@ -456,7 +455,7 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                         </div>
 
                         <!-- Estado 7: Unknown (Instabilidade de rede com status desconhecido) -->
-                        <div x-show="state === 'unknown'" style="display: none;" class="flex flex-col items-center justify-center p-4 text-center select-none">
+                        <div x-show="state === 'unknown'" style="display: none;" class="absolute inset-0 z-10 bg-amber-50/95 flex flex-col items-center justify-center p-4 text-center select-none">
                             <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mb-2">
                                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
                             </div>
@@ -727,6 +726,8 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                 lastDecodedText: null,
                 lastCoords: null,
                 triggerElement: null,
+                isStartingCancelled: false,
+                coordsPromise: null,
 
                 init() {
                     this.updateClock();
@@ -775,7 +776,54 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                     return 'pf_' + Date.now() + '_' + Math.random().toString(36).substring(2, 12);
                 },
 
-                startScanner(triggerEl = null) {
+                prefetchCoordinates() {
+                    if (!navigator.geolocation) {
+                        this.coordsPromise = Promise.resolve(null);
+                        return;
+                    }
+
+                    this.coordsPromise = new Promise((resolve) => {
+                        let resolved = false;
+                        const timeoutId = setTimeout(() => {
+                            if (!resolved) {
+                                resolved = true;
+                                resolve(null);
+                            }
+                        }, 5000);
+
+                        navigator.geolocation.getCurrentPosition(
+                            (position) => {
+                                if (!resolved) {
+                                    resolved = true;
+                                    clearTimeout(timeoutId);
+                                    resolve({
+                                        latitude: position.coords.latitude,
+                                        longitude: position.coords.longitude,
+                                        accuracy: position.coords.accuracy
+                                    });
+                                }
+                            },
+                            (error) => {
+                                if (!resolved) {
+                                    resolved = true;
+                                    clearTimeout(timeoutId);
+                                    resolve(null);
+                                }
+                            },
+                            { enableHighAccuracy: true, timeout: 4500, maximumAge: 10000 }
+                        );
+                    });
+                },
+
+                getCoordinates() {
+                    if (this.coordsPromise) {
+                        return this.coordsPromise;
+                    }
+                    this.prefetchCoordinates();
+                    return this.coordsPromise;
+                },
+
+                async startScanner(triggerEl = null) {
                     if (this.state === 'starting' || this.state === 'scanning' || this.state === 'location' || this.state === 'submitting') {
                         return;
                     }
@@ -803,47 +851,135 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                     this.state = 'starting';
                     this.errorMessage = '';
                     this.errorAdvice = '';
+                    this.isStartingCancelled = false;
 
-                    if (!this.html5QrcodeScanner) {
-                        this.html5QrcodeScanner = new Html5Qrcode("qr-reader");
+                    // Solicita localização proativamente em segundo plano (aciona permissão de GPS no navegador)
+                    this.prefetchCoordinates();
+
+                    // Limpeza de estado de sessões anteriores
+                    await this.cleanupScanner();
+
+                    if (this.isStartingCancelled) {
+                        return;
                     }
-                    
-                    const qrboxFunction = (viewfinderWidth, viewfinderHeight) => {
-                        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-                        const qrboxSize = Math.floor(minEdge * 0.8);
-                        return {
-                            width: Math.max(120, Math.min(qrboxSize, 220)),
-                            height: Math.max(120, Math.min(qrboxSize, 220))
-                        };
+
+                    this.html5QrcodeScanner = new Html5Qrcode("qr-reader");
+
+                    const scanConfig = {
+                        fps: 15,
+                        qrbox: (viewfinderWidth, viewfinderHeight) => {
+                            const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                            const qrboxSize = Math.floor(minEdge * 0.8);
+                            return {
+                                width: Math.max(120, Math.min(qrboxSize, 220)),
+                                height: Math.max(120, Math.min(qrboxSize, 220))
+                            };
+                        }
                     };
-                    const scanConfig = { fps: 15, qrbox: qrboxFunction };
-                    
-                    this.html5QrcodeScanner.start(
-                        { facingMode: "environment" },
-                        scanConfig,
-                        (decodedText) => this.onScanSuccess(decodedText),
-                        () => { /* frames intermediários silenciosos */ }
-                    ).then(() => {
+
+                    try {
+                        let cameras = [];
+                        try {
+                            cameras = await Html5Qrcode.getCameras();
+                        } catch (e) {
+                            console.warn("Não foi possível listar câmeras antecipadamente:", e);
+                        }
+
+                        if (this.isStartingCancelled) {
+                            await this.cleanupScanner();
+                            return;
+                        }
+
+                        let cameraConfig = { facingMode: "environment" };
+
+                        if (cameras && cameras.length > 0) {
+                            // Em smartphones (mais de uma câmera), prioriza a traseira
+                            const backCam = cameras.find(c => {
+                                const label = (c.label || '').toLowerCase();
+                                return label.includes('back') || label.includes('traseira') || label.includes('rear') || label.includes('environment');
+                            });
+
+                            if (backCam) {
+                                cameraConfig = backCam.id;
+                            } else if (cameras.length > 1) {
+                                cameraConfig = cameras[cameras.length - 1].id;
+                            } else {
+                                // Notebook / desktop com câmera única
+                                cameraConfig = cameras[0].id;
+                            }
+                        }
+
+                        await this.html5QrcodeScanner.start(
+                            cameraConfig,
+                            scanConfig,
+                            (decodedText) => this.onScanSuccess(decodedText),
+                            () => { /* frames intermediários silenciosos */ }
+                        );
+
+                        if (this.isStartingCancelled) {
+                            await this.cleanupScanner();
+                            return;
+                        }
+
                         this.state = 'scanning';
-                    }).catch((err) => {
-                        console.error("Scanner start error:", err);
-                        this.handleCameraError(err);
-                    });
+                    } catch (err) {
+                        console.warn("Falha na seleção inicial de câmera, tentando modo padrão/frontal:", err);
+
+                        // Fallback para câmera user/frontal (comum em notebooks com restrição em environment)
+                        if (!this.isStartingCancelled) {
+                            try {
+                                await this.html5QrcodeScanner.start(
+                                    { facingMode: "user" },
+                                    scanConfig,
+                                    (decodedText) => this.onScanSuccess(decodedText),
+                                    () => {}
+                                );
+
+                                if (this.isStartingCancelled) {
+                                    await this.cleanupScanner();
+                                    return;
+                                }
+
+                                this.state = 'scanning';
+                                return;
+                            } catch (fallbackErr) {
+                                console.error("Falha final ao inicializar câmera:", fallbackErr);
+                                if (!this.isStartingCancelled) {
+                                    this.handleCameraError(fallbackErr || err);
+                                }
+                            }
+                        }
+                    }
                 },
 
-                stopScanner() {
-                    if (this.html5QrcodeScanner && (this.state === 'starting' || this.state === 'scanning')) {
-                        this.html5QrcodeScanner.stop().then(() => {
-                            if (this.state === 'starting' || this.state === 'scanning') {
-                                this.state = 'idle';
+                async stopScanner() {
+                    this.isStartingCancelled = true;
+                    this.state = 'idle';
+                    await this.cleanupScanner();
+                },
+
+                async cleanupScanner() {
+                    if (this.html5QrcodeScanner) {
+                        try {
+                            if (this.html5QrcodeScanner.isScanning) {
+                                await this.html5QrcodeScanner.stop();
                             }
-                        }).catch(() => {
-                            if (this.state === 'starting' || this.state === 'scanning') {
-                                this.state = 'idle';
-                            }
-                        });
-                    } else {
-                        this.state = 'idle';
+                            await this.html5QrcodeScanner.clear();
+                        } catch (e) {
+                            console.warn("Aviso ao liberar Html5Qrcode:", e);
+                        } finally {
+                            this.html5QrcodeScanner = null;
+                        }
+                    }
+
+                    // Garante liberação física de quaisquer MediaStreamTracks de vídeo da webcam
+                    const videoEl = document.querySelector('#qr-reader video');
+                    if (videoEl && videoEl.srcObject) {
+                        try {
+                            const tracks = videoEl.srcObject.getTracks();
+                            tracks.forEach(track => track.stop());
+                            videoEl.srcObject = null;
+                        } catch (e) {}
                     }
                 },
 
@@ -876,62 +1012,22 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                         return;
                     }
 
-                    // Desativação imediata da câmera após decodificação
-                    if (this.html5QrcodeScanner) {
-                        this.html5QrcodeScanner.stop().catch(() => {});
-                    }
-
                     this.state = 'location';
                     this.lastDecodedText = decodedText;
+
+                    // Desativação imediata da câmera após decodificação
+                    this.cleanupScanner();
 
                     if (!this.currentAttemptId) {
                         this.currentAttemptId = this.generateIdempotencyKey();
                     }
                     const attemptKey = this.currentAttemptId;
 
-                    // Coleta não-bloqueante de GPS com timeout de 5 segundos
+                    // Coleta não-bloqueante de GPS
                     this.getCoordinates().then((coords) => {
                         this.lastCoords = coords;
                         this.state = 'submitting';
                         this.sendPunchRequest(attemptKey, decodedText, coords);
-                    });
-                },
-
-                getCoordinates() {
-                    return new Promise((resolve) => {
-                        if (!navigator.geolocation) {
-                            return resolve(null);
-                        }
-
-                        let resolved = false;
-                        const timeoutId = setTimeout(() => {
-                            if (!resolved) {
-                                resolved = true;
-                                resolve(null);
-                            }
-                        }, 5000);
-
-                        navigator.geolocation.getCurrentPosition(
-                            (position) => {
-                                if (!resolved) {
-                                    resolved = true;
-                                    clearTimeout(timeoutId);
-                                    resolve({
-                                        latitude: position.coords.latitude,
-                                        longitude: position.coords.longitude,
-                                        accuracy: position.coords.accuracy
-                                    });
-                                }
-                            },
-                            (error) => {
-                                if (!resolved) {
-                                    resolved = true;
-                                    clearTimeout(timeoutId);
-                                    resolve(null);
-                                }
-                            },
-                            { enableHighAccuracy: true, timeout: 4500, maximumAge: 10000 }
-                        );
                     });
                 },
 
@@ -1008,8 +1104,12 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                     this.currentAttemptId = null;
                     this.lastDecodedText = null;
                     this.lastCoords = null;
+                    this.coordsPromise = null;
                     this.networkErrorMsg = '';
                     this.reconciling = false;
+                    this.isStartingCancelled = true;
+
+                    this.cleanupScanner();
 
                     if (this.triggerElement && typeof this.triggerElement.focus === 'function') {
                         this.$nextTick(() => {
