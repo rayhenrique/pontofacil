@@ -15,54 +15,105 @@
         <!-- Composição com Hierarquia Visual: 1 Recurso Principal + 3 Recursos Secundários -->
         <div class="max-w-6xl mx-auto space-y-5 sm:space-y-6">
             
-            <!-- Recurso Principal: Espelho Automatizado em Tempo Real (Destaque Amplo) -->
+            <!-- Recurso Principal: Espelho Automatizado em Tempo Real (Destaque Amplo com Tabela Real) -->
             <div class="gsap-feature-card bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-8 md:p-9 shadow-xs hover:border-slate-300 transition-all duration-200">
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
                     
-                    <div class="lg:col-span-7 space-y-3.5">
+                    <div class="lg:col-span-5 space-y-3.5">
                         <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 text-xs font-bold">
                             <span class="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
-                            <span>Recurso Principal • Motor de Cálculo</span>
+                            <span>Recurso Principal • Motor de Cálculo CLT</span>
                         </div>
 
                         <h3 class="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
                             Espelho Automatizado em Tempo Real
                         </h3>
 
-                        <p class="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-xl">
+                        <!-- Frase Central Solicitada -->
+                        <div class="border-l-2 border-indigo-600 pl-3 py-0.5">
+                            <p class="text-sm sm:text-base font-bold text-slate-900 leading-snug">
+                                Do registro ao fechamento sem perder rastreabilidade.
+                            </p>
+                        </div>
+
+                        <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
                             Cálculo imediato de horas normais, extras, atrasos, adicionais noturnos e intervalos conforme a CLT. Acompanhe a apuração diária e mensal sem depender de planilhas paralelas ou conferências manuais.
                         </p>
 
-                        <div class="pt-1 flex items-center gap-2 text-xs font-semibold text-indigo-600">
+                        <div class="pt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-indigo-600">
                             <span>Sem conferência manual</span>
-                            <span>•</span>
-                            <span class="text-slate-500 font-normal">Atualização instantânea a cada batida</span>
+                            <span class="text-slate-300">•</span>
+                            <span class="text-slate-600 font-normal">Atualização instantânea a cada batida</span>
                         </div>
                     </div>
 
-                    <!-- Mini Visual de Apuração do Espelho -->
-                    <div class="lg:col-span-5 bg-slate-50 border border-slate-200/80 rounded-xl p-4 sm:p-5 space-y-3">
-                        <div class="flex items-center justify-between text-xs pb-2 border-b border-slate-200/70">
-                            <span class="font-bold text-slate-800">Apuração Automática • CLT</span>
-                            <span class="text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded text-[11px]">Consolidado</span>
+                    <!-- Interface Incorporada: Espelho de Ponto Real -->
+                    <div class="lg:col-span-7 bg-slate-50 border border-slate-200/90 rounded-xl p-3.5 sm:p-5 space-y-3">
+                        <div class="flex items-center justify-between text-xs pb-2.5 border-b border-slate-200">
+                            <div class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                <span class="font-bold text-slate-900 text-xs sm:text-sm">Espelho de Ponto • Apuração Diária</span>
+                            </div>
+                            <span class="text-slate-500 font-mono text-[11px] font-semibold bg-white px-2 py-0.5 rounded border border-slate-200">
+                                Horário Matutino / Vespertino
+                            </span>
                         </div>
-                        <div class="grid grid-cols-2 gap-2 text-xs">
-                            <div class="bg-white p-2.5 rounded-lg border border-slate-200/60">
-                                <span class="text-[11px] text-slate-500 block">Horas Normais</span>
-                                <span class="font-bold text-slate-900 font-mono">08:00h</span>
-                            </div>
-                            <div class="bg-white p-2.5 rounded-lg border border-slate-200/60">
-                                <span class="text-[11px] text-slate-500 block">Horas Extras</span>
-                                <span class="font-bold text-indigo-600 font-mono">+01:15h</span>
-                            </div>
-                            <div class="bg-white p-2.5 rounded-lg border border-slate-200/60">
-                                <span class="text-[11px] text-slate-500 block">Adic. Noturno</span>
-                                <span class="font-bold text-slate-900 font-mono">00:45h</span>
-                            </div>
-                            <div class="bg-white p-2.5 rounded-lg border border-slate-200/60">
-                                <span class="text-[11px] text-slate-500 block">Intervalo</span>
-                                <span class="font-bold text-emerald-600 font-mono">Conforme</span>
-                            </div>
+
+                        <!-- Tabela Fiel do Espelho Real -->
+                        <div class="overflow-x-auto rounded-lg border border-slate-200/80 bg-white">
+                            <table class="w-full text-center text-xs border-collapse font-mono">
+                                <thead>
+                                    <tr class="bg-slate-50/80 text-slate-600 font-bold border-b border-slate-200 text-[11px]">
+                                        <th class="py-2.5 px-3 text-left font-sans text-slate-900">Dia</th>
+                                        <th class="py-2.5 px-2">Entrada</th>
+                                        <th class="py-2.5 px-2">Saída</th>
+                                        <th class="py-2.5 px-2">Entrada</th>
+                                        <th class="py-2.5 px-2">Saída</th>
+                                        <th class="py-2.5 px-3 text-right text-slate-900 font-sans">Saldo</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 text-[11px] text-slate-700">
+                                    <tr class="hover:bg-slate-50/60 transition-colors">
+                                        <td class="py-2 px-3 text-left font-sans font-bold text-slate-900">Seg 05</td>
+                                        <td class="py-2 px-2 font-bold text-slate-900">08:01</td>
+                                        <td class="py-2 px-2 text-slate-600">12:02</td>
+                                        <td class="py-2 px-2 text-slate-600">13:01</td>
+                                        <td class="py-2 px-2 font-bold text-slate-900">17:11</td>
+                                        <td class="py-2 px-3 text-right font-bold text-emerald-700">
+                                            <span class="bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60">+09m</span>
+                                        </td>
+                                    </tr>
+                                    <tr class="hover:bg-slate-50/60 transition-colors">
+                                        <td class="py-2 px-3 text-left font-sans font-bold text-slate-900">Ter 06</td>
+                                        <td class="py-2 px-2 font-bold text-slate-900">07:58</td>
+                                        <td class="py-2 px-2 text-slate-600">12:00</td>
+                                        <td class="py-2 px-2 text-slate-600">13:03</td>
+                                        <td class="py-2 px-2 font-bold text-slate-900">17:00</td>
+                                        <td class="py-2 px-3 text-right font-bold text-amber-700">
+                                            <span class="bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60">-01m</span>
+                                        </td>
+                                    </tr>
+                                    <tr class="hover:bg-slate-50/60 transition-colors">
+                                        <td class="py-2 px-3 text-left font-sans font-bold text-slate-900">Qua 07</td>
+                                        <td class="py-2 px-2 font-bold text-slate-900">08:04</td>
+                                        <td class="py-2 px-2 text-slate-600">12:01</td>
+                                        <td class="py-2 px-2 text-slate-600">13:00</td>
+                                        <td class="py-2 px-2 font-bold text-slate-900">17:21</td>
+                                        <td class="py-2 px-3 text-right font-bold text-emerald-700">
+                                            <span class="bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60">+16m</span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Rodapé Informativo da Tabela -->
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 text-[11px] text-slate-500 font-sans">
+                            <span class="flex items-center gap-1.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                                Saldo apurado no período: <strong class="text-slate-800 font-mono">+24 minutos</strong>
+                            </span>
+                            <span class="text-slate-400">Demonstração visual ilustrativa</span>
                         </div>
                     </div>
 

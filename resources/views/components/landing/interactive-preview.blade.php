@@ -3,10 +3,10 @@
         
         <!-- Cabeçalho da Seção -->
         <div class="text-center max-w-3xl mx-auto mb-8 sm:mb-10 lg:mb-12 space-y-2">
-            <p class="text-xs font-bold uppercase tracking-widest text-indigo-600">06 — Demonstração da interface</p>
+            <p class="text-xs font-bold uppercase tracking-widest text-indigo-600">06 — Demonstração da interface • Simplicidade na Ponta do Dedo</p>
             <h2 class="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 tracking-tight">
-                Simplicidade na Ponta do Dedo. <br class="hidden sm:inline" />
-                <span class="text-indigo-600">Poder total na gestão.</span>
+                Registrar leva segundos. <br class="hidden sm:inline" />
+                <span class="text-indigo-600">Gerenciar continua completo.</span>
             </h2>
             <p class="text-sm sm:text-base md:text-lg text-slate-600 font-normal leading-relaxed">
                 Alterne entre a experiência ágil do colaborador e a visão completa de auditoria do gestor de RH.
@@ -247,30 +247,30 @@
                         </div>
                     </div>
 
-                    <!-- Métricas Principais (Cards de KPI) -->
+                    <!-- Métricas Principais (Cards de KPI com Linguagem Real do PTRP) -->
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div class="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-1">
                             <div class="text-xs font-semibold text-slate-500">Colaboradores Ativos</div>
-                            <div class="text-2xl font-bold text-slate-900">48 <span class="text-xs font-normal text-slate-400">/ 50</span></div>
-                            <div class="text-[11px] text-emerald-600 font-semibold">96% presentes hoje</div>
+                            <div class="text-2xl font-bold text-slate-900 font-mono">48 <span class="text-xs font-normal text-slate-400">/ 50</span></div>
+                            <div class="text-[11px] text-emerald-600 font-semibold">96% em jornada hoje</div>
                         </div>
 
                         <div class="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-1">
                             <div class="text-xs font-semibold text-slate-500">Horas Computadas</div>
-                            <div class="text-2xl font-bold text-slate-900">384h <span class="text-xs font-normal text-slate-400">15m</span></div>
-                            <div class="text-[11px] text-indigo-600 font-semibold">Cálculo automatizado</div>
+                            <div class="text-2xl font-bold text-slate-900 font-mono">384h <span class="text-xs font-normal text-slate-400">15m</span></div>
+                            <div class="text-[11px] text-indigo-600 font-semibold">Cálculo PTRP em tempo real</div>
                         </div>
 
                         <div class="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-1">
-                            <div class="text-xs font-semibold text-slate-500">Ajustes Pendentes</div>
-                            <div class="text-2xl font-bold text-emerald-600">0</div>
-                            <div class="text-[11px] text-emerald-600 font-semibold">Tudo conciliado</div>
+                            <div class="text-xs font-semibold text-slate-500">Tratamentos Pendentes</div>
+                            <div class="text-2xl font-bold text-amber-600 font-mono">1</div>
+                            <div class="text-[11px] text-slate-500 font-medium">Atestado em análise</div>
                         </div>
 
                         <div class="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-1">
-                            <div class="text-xs font-semibold text-slate-500">Conformidade 671</div>
-                            <div class="text-2xl font-bold text-indigo-600">100%</div>
-                            <div class="text-[11px] text-indigo-600 font-semibold">Hash SHA-256 ativo</div>
+                            <div class="text-xs font-semibold text-slate-500">Fechamento Mensal</div>
+                            <div class="text-2xl font-bold text-indigo-600 font-mono">99.4%</div>
+                            <div class="text-[11px] text-indigo-600 font-semibold">Integridade SHA-256 ativa</div>
                         </div>
                     </div>
 
@@ -282,41 +282,45 @@
                         </div>
 
                         <div class="overflow-x-auto border border-slate-200/70 rounded-xl">
-                            <table class="w-full text-left text-xs">
-                                <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200/70">
+                            <table class="w-full text-left text-xs font-mono">
+                                <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200/70 text-[11px] font-sans">
                                     <tr>
                                         <th class="py-3 px-4">Colaborador</th>
                                         <th class="py-3 px-4">Setor</th>
                                         <th class="py-3 px-4">Horário</th>
-                                        <th class="py-3 px-4">Tipo</th>
-                                        <th class="py-3 px-4">Evidências / Apoio</th>
+                                        <th class="py-3 px-4">Operação</th>
+                                        <th class="py-3 px-4">NSR</th>
+                                        <th class="py-3 px-4">Evidência de Contexto</th>
                                         <th class="py-3 px-4 text-right">Status</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-100 text-slate-700">
+                                <tbody class="divide-y divide-slate-100 text-slate-700 text-xs">
                                     <tr class="hover:bg-indigo-50/30 transition-colors">
-                                        <td class="py-3 px-4 font-semibold text-slate-900">Carlos Mendes</td>
-                                        <td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">TI & Suporte</span></td>
-                                        <td class="py-3 px-4 font-mono font-bold text-slate-900">08:02:14</td>
-                                        <td class="py-3 px-4 text-emerald-600 font-semibold">Entrada Manhã</td>
-                                        <td class="py-3 px-4">QR Setor + GPS (4m)</td>
-                                        <td class="py-3 px-4 text-right"><span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px]">Auditado</span></td>
+                                        <td class="py-3 px-4 font-semibold text-slate-900 font-sans">Carlos Mendes</td>
+                                        <td class="py-3 px-4 font-sans"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium text-[11px]">TI & Suporte</span></td>
+                                        <td class="py-3 px-4 font-bold text-slate-900">08:02:14</td>
+                                        <td class="py-3 px-4 text-emerald-700 font-bold font-sans">ENTRADA</td>
+                                        <td class="py-3 px-4 font-bold text-indigo-600">#000004281</td>
+                                        <td class="py-3 px-4 font-sans text-slate-600 text-[11px]">QR Setor • Evidência de localização (4m)</td>
+                                        <td class="py-3 px-4 text-right font-sans"><span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px]">Auditado</span></td>
                                     </tr>
                                     <tr class="hover:bg-indigo-50/30 transition-colors">
-                                        <td class="py-3 px-4 font-semibold text-slate-900">Mariana Silva</td>
-                                        <td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">Recursos Humanos</span></td>
-                                        <td class="py-3 px-4 font-mono font-bold text-slate-900">08:15:30</td>
-                                        <td class="py-3 px-4 text-emerald-600 font-semibold">Entrada Manhã</td>
-                                        <td class="py-3 px-4">QR Setor + GPS (12m)</td>
-                                        <td class="py-3 px-4 text-right"><span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px]">Auditado</span></td>
+                                        <td class="py-3 px-4 font-semibold text-slate-900 font-sans">Mariana Silva</td>
+                                        <td class="py-3 px-4 font-sans"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium text-[11px]">Recursos Humanos</span></td>
+                                        <td class="py-3 px-4 font-bold text-slate-900">08:15:30</td>
+                                        <td class="py-3 px-4 text-emerald-700 font-bold font-sans">ENTRADA</td>
+                                        <td class="py-3 px-4 font-bold text-indigo-600">#000004282</td>
+                                        <td class="py-3 px-4 font-sans text-slate-600 text-[11px]">QR Setor • Evidência de localização (12m)</td>
+                                        <td class="py-3 px-4 text-right font-sans"><span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px]">Auditado</span></td>
                                     </tr>
                                     <tr class="hover:bg-indigo-50/30 transition-colors">
-                                        <td class="py-3 px-4 font-semibold text-slate-900">Roberto Alves</td>
-                                        <td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">Operações / Matriz</span></td>
-                                        <td class="py-3 px-4 font-mono font-bold text-slate-900">12:01:05</td>
-                                        <td class="py-3 px-4 text-amber-600 font-semibold">Saída Almoço</td>
-                                        <td class="py-3 px-4">QR Matriz + GPS (7m)</td>
-                                        <td class="py-3 px-4 text-right"><span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px]">Auditado</span></td>
+                                        <td class="py-3 px-4 font-semibold text-slate-900 font-sans">Roberto Alves</td>
+                                        <td class="py-3 px-4 font-sans"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium text-[11px]">Operações / Matriz</span></td>
+                                        <td class="py-3 px-4 font-bold text-slate-900">12:01:05</td>
+                                        <td class="py-3 px-4 text-amber-700 font-bold font-sans">SAÍDA</td>
+                                        <td class="py-3 px-4 font-bold text-indigo-600">#000004283</td>
+                                        <td class="py-3 px-4 font-sans text-slate-600 text-[11px]">QR Matriz • Evidência de localização (7m)</td>
+                                        <td class="py-3 px-4 text-right font-sans"><span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px]">Auditado</span></td>
                                     </tr>
                                 </tbody>
                             </table>

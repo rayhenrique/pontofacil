@@ -1,6 +1,19 @@
 # Histórico de Versões (Changelog)
 
 ## v2.5.1 (Atual)
+- **Identidade Própria e Design com Elementos Reais do Domínio de Ponto (Landing Page):**
+  - **Identidade do Produto Sem Dependência de Ícones Genéricos:**
+    - O próprio dado de jornada virou elemento de design: horário (`08:01:32`), operação (`ENTRADA`/`SAÍDA`), `NSR #000004281`, jornadas, saldos (`+09m`, `-01m`, `+16m`), comprovantes (`PF-2026-8942-01`), espelhos de ponto e conciliação.
+  - **Mockup Hero Fiel à Interface Real (`/ponto`):**
+    - Reprodução dos elementos reais de `time-punch.blade.php`: relógio digital com gradiente da marca, data em caixa alta, horário oficial GMT-3 com pulso em tempo real, contexto de jornada do colaborador, viewfinder de leitor de QR Code com cantos de mira e evidências de contexto.
+  - **Novo Componente Proprietário: Ciclo do Registro de Ponto:**
+    - Criação de `punch-lifecycle.blade.php`: "O que acontece quando alguém registra o ponto?", apresentando a sequência técnica da batida (08:01:32 • Entrada • NSR 000004281 → Registro original preservado na ARP → Comprovante disponível → Jornada atualizada no PTRP) com segregação explícita entre dado bruto e tratamentos posteriores.
+  - **Demonstração Integrada de Espelho de Ponto Real (`recursos`):**
+    - Incorporação de tabela real de apuração diária no card principal de recursos com colunas `Dia | Entrada | Saída | Entrada | Saída | Saldo` (`Seg 05`, `Ter 06`, `Qua 07`) e a diretriz central *"Do registro ao fechamento sem perder rastreabilidade."*.
+  - **Demonstração Interativa Revisitada (`demonstracao`):**
+    - Revisão do título para *"Registrar leva segundos. Gerenciar continua completo."*, preservando o badge de categoria e incorporando métricas reais de acompanhamento de equipe e tabela auditada com NSR e evidência de localização no painel do gestor.
+  - **Conformidade Normativa e Evidência de Localização:**
+    - Tratamento uniforme da localização como evidência contextual de conformidade (sem bloqueios indevidos nem linguagem proibida).
 - **Aprimoramento de Ritmo, Composição Editorial e Hierarquia Visual (Landing Page):**
   - **Eliminação da Repetição Estrutural (Cards Repetitivos):**
     - Redução de mais de 40% das caixas/cards isolados da landing page, substituindo padrões monótonos por fluxos conectados, matrizes de capacidades e diagramas visuais.

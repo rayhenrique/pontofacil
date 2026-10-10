@@ -92,18 +92,24 @@
                             </p>
                         </div>
 
-                        <!-- Mini Representação Visual da Interface do Colaborador -->
-                        <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2">
+                        <!-- Mini Representação Visual da Interface do Colaborador com Dados Reais -->
+                        <div class="bg-slate-50 border border-slate-200/90 rounded-xl p-3.5 space-y-2 font-mono">
                             <div class="flex items-center justify-between text-xs">
-                                <span class="font-bold text-slate-800 flex items-center gap-1.5">
+                                <span class="font-bold text-slate-900 flex items-center gap-1.5 font-sans">
                                     <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                    Marcação Confirmada
+                                    Entrada Confirmada
                                 </span>
-                                <span class="text-[11px] font-mono text-slate-500 font-semibold">08:02:14</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-bold text-slate-900">08:02:14</span>
+                                    <span class="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/60">#000004281</span>
+                                </div>
                             </div>
-                            <div class="text-[11px] text-slate-600 flex items-center justify-between">
-                                <span>Localização vinculada à batida</span>
-                                <span class="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">Recibo emitido</span>
+                            <div class="text-[11px] text-slate-600 flex items-center justify-between font-sans">
+                                <span class="flex items-center gap-1 text-[11px]">
+                                    <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
+                                    Localização registrada (4m)
+                                </span>
+                                <span class="font-mono text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60">PF-2026-8942</span>
                             </div>
                         </div>
 
@@ -210,6 +216,24 @@
                             <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
                                 Ferramentas completas para acompanhamento de equipes e fechamento de folha sem complicação.
                             </p>
+                        </div>
+
+                        <!-- Mini Representação Visual da Gestão / PTRP com Dados Reais -->
+                        <div class="bg-slate-50 border border-slate-200/90 rounded-xl p-3.5 space-y-2 font-mono">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="font-bold text-slate-900 flex items-center gap-1.5 font-sans">
+                                    <span class="w-2 h-2 rounded-full bg-indigo-600"></span>
+                                    Painel Gerencial • Apuração PTRP
+                                </span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-bold text-slate-900 font-sans">48 em jornada</span>
+                                    <span class="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60">Folha 99.4%</span>
+                                </div>
+                            </div>
+                            <div class="text-[11px] text-slate-600 flex items-center justify-between font-sans">
+                                <span class="text-[11px]">Banco de horas consolidado sem planilhas</span>
+                                <span class="font-mono text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200/60">+01h15m saldo</span>
+                            </div>
                         </div>
 
                         <!-- Matriz de Capacidades Estruturada (2 Colunas no Desktop) -->

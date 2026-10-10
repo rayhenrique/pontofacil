@@ -9,6 +9,9 @@
         <!-- 1. Hero -->
         <x-landing.hero />
 
+        <!-- Ciclo Técnico do Registro de Ponto -->
+        <x-landing.punch-lifecycle />
+
         <!-- 2. Como funciona -->
         <x-landing.how-it-works />
 
