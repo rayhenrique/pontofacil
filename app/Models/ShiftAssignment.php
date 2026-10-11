@@ -115,6 +115,14 @@ class ShiftAssignment extends Model
     }
 
     /**
+     * Indica se o plantão é de trabalho efetivo (não é folga de escala).
+     */
+    public function isWorkShift(): bool
+    {
+        return ! $this->is_day_off;
+    }
+
+    /**
      * Verifica se o plantão sobrepõe outro período de tempo.
      */
     public function overlapsWith(CarbonInterface $start, CarbonInterface $end): bool

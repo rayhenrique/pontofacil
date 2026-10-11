@@ -3,13 +3,19 @@
 namespace App\Domain\PTRP\Actions;
 
 use App\Domain\Calendar\Services\WorkCalendarService;
+use App\Domain\LaborRules\Actions\CalculateNightWorkAction;
+use App\Domain\LaborRules\DTOs\WorkInterval;
 use App\Domain\PTRP\DTOs\CalculatedJourney;
 use App\Domain\PTRP\Enums\TreatmentEventStatus;
 use App\Domain\PTRP\Enums\TreatmentEventType;
 use App\Domain\PTRP\Policies\LaborPolicy;
+use App\Enums\ShiftType;
+use App\Enums\WorkScheduleModality;
 use App\Models\Employee;
 use App\Models\Establishment;
+use App\Models\LaborRuleProfile;
 use App\Models\PunchEvent;
+use App\Models\ShiftAssignment;
 use App\Models\TimeEntry;
 use App\Models\TreatmentEvent;
 use App\Models\WorkSchedule;
@@ -20,8 +26,8 @@ class CalculateDailyJourneyAction
 {
     /**
      * Combina fatos brutos do REP (PunchEvent) + Tratamentos Aprovados (TreatmentEvent)
-     * + Escala de Trabalho (WorkSchedule) + Calendário Laboral (CalendarEvent)
-     * + Diretrizes Legais (LaborPolicy) para apurar a jornada analítica do trabalhador.
+     * + Escala de Trabalho e Plantões (WorkSchedule / ShiftAssignment) + Calendário Laboral (CalendarEvent)
+     * + Diretrizes Legais e Perfil Normativo (LaborRuleProfile / LaborPolicy) para apurar a jornada analítica do trabalhador.
      *
      * A MARCAÇÃO ORIGINAL EM PUNCH_EVENTS NUNCA É ALTERADA.
      */
@@ -33,32 +39,83 @@ class CalculateDailyJourneyAction
     ): CalculatedJourney {
         $dateStr = $date->format('Y-m-d');
 
-        // 1. Escala de trabalho esperada
-        $workSchedule = $schedule ?? $employee->getWorkScheduleForDate($date) ?? $employee->workSchedule ?? WorkSchedule::first();
-        if (! $workSchedule) {
-            $workSchedule = WorkSchedule::createDefault40h();
+        // 1. Resolver Plantão (ShiftAssignment) e Escala de Trabalho (WorkSchedule)
+        $shift = ShiftAssignment::where('employee_id', $employee->id)
+            ->active()
+            ->whereDate('start_at_local', $dateStr)
+            ->first();
+
+        $workSchedule = $schedule ?? $shift?->workSchedule ?? $employee->getWorkScheduleForDate($date);
+        $isScheduleAuthorized = $workSchedule ? $workSchedule->isAuthorizedForRegime($employee->legal_regime) : false;
+
+        $hasSchedule = ($shift !== null) || ($workSchedule !== null && $isScheduleAuthorized);
+        $isPendingConfiguration = ! $hasSchedule;
+
+        $workScheduleId = $shift?->work_schedule_id ?? ($isScheduleAuthorized ? $workSchedule?->id : null);
+        $workScheduleCode = $shift?->workSchedule?->code ?? ($isScheduleAuthorized ? $workSchedule?->code : null);
+        $shiftAssignmentId = $shift?->id;
+        $shiftCode = $shift?->shift_code;
+
+        if ($shift) {
+            if ($shift->is_day_off) {
+                $scheduledMinutes = 0;
+                $expectedPeriods = [];
+                $expectedBreakMinutes = 0;
+            } else {
+                $scheduledMinutes = $shift->expected_work_minutes > 0
+                    ? $shift->expected_work_minutes
+                    : max(0, $shift->durationInMinutes() - $shift->break_minutes);
+                $expectedPeriods = [
+                    [
+                        'start' => $shift->start_at_local->format('H:i'),
+                        'end' => $shift->end_at_local->format('H:i'),
+                    ],
+                ];
+                $expectedBreakMinutes = $shift->break_minutes;
+            }
+        } elseif ($workSchedule && $isScheduleAuthorized) {
+            $daySchedule = $workSchedule->getScheduleForDay($date->dayOfWeek);
+            $scheduledMinutes = (int) ($daySchedule['expected_minutes'] ?? 0);
+            $expectedPeriods = $daySchedule['periods'] ?? [];
+            $expectedBreakMinutes = (int) ($daySchedule['break_minutes'] ?? 0);
+        } else {
+            $scheduledMinutes = 0;
+            $expectedPeriods = [];
+            $expectedBreakMinutes = 0;
         }
 
-        $daySchedule = $workSchedule->getScheduleForDay($date->dayOfWeek);
-        $originalScheduledMinutes = (int) ($daySchedule['expected_minutes'] ?? 0);
-        $expectedPeriods = $daySchedule['periods'] ?? [];
+        // 2. Perfil de regras jurídicas aplicável (CLT, Estatutário Federal, Estadual ou Municipal)
+        $ruleProfile = $employee->getLaborRuleProfileForDate($date);
+        $laborRuleProfileId = $ruleProfile?->id;
+        $laborRuleProfileCode = $ruleProfile?->code;
 
-        // 2. Política de tolerância CLT (Art. 58, § 1º)
+        // 3. Política de tolerância CLT (Art. 58, § 1º)
         $laborPolicy = $policy ?? new LaborPolicy(
-            $workSchedule->tolerance_minutes ?? 5,
-            $workSchedule->daily_tolerance_minutes ?? 10
+            $workSchedule?->tolerance_minutes ?? 5,
+            $workSchedule?->daily_tolerance_minutes ?? 10
         );
 
-        // 3. Consultar Calendário Laboral (20.18.8)
+        // 4. Consultar Calendário Laboral (20.18.8)
         $establishment = $employee->sector?->establishment ?? Establishment::first();
         $calendarService = app(WorkCalendarService::class);
-        $calendarDay = $calendarService->resolveDay($date, $establishment, $originalScheduledMinutes, $expectedPeriods);
+        $calendarDay = $calendarService->resolveDay($date, $establishment, $scheduledMinutes, $expectedPeriods);
 
-        // Os minutos esperados podem ser alterados pelo calendário
-        $scheduledMinutes = $calendarDay->expectedMinutes;
+        $is12x36 = ($shift?->shift_type === ShiftType::Shift12x36) || ($workSchedule?->modality === WorkScheduleModality::TwelveByThirtySix);
+
+        if ($hasSchedule) {
+            if ($is12x36 && (($shift && ! $shift->is_day_off) || ($workSchedule && $scheduledMinutes > 0))) {
+                // Em escala 12x36 com jornada prevista, a escala contratual é mantida no feriado (CLT Art. 59-A)
+            } else {
+                $scheduledMinutes = $calendarDay->expectedMinutes;
+            }
+        }
         $calendarSnapshot = $calendarDay->toSnapshotArray();
 
         $treatmentNotes = [];
+
+        if ($isPendingConfiguration) {
+            $treatmentNotes[] = 'Ausência de escala de trabalho válida ou autorizada para a data. Apuração financeira pendente de parametrização.';
+        }
 
         // Anotar eventos de calendário aplicados
         foreach ($calendarDay->appliedEvents as $event) {
@@ -71,7 +128,7 @@ class CalculateDailyJourneyAction
             );
         }
 
-        // 4. Obter marcações brutas do REP (somente leitura)
+        // 5. Obter marcações brutas do REP (somente leitura)
         $rawPunches = PunchEvent::where(function ($q) use ($employee) {
             $q->where('employee_id', $employee->id)
                 ->orWhere('user_id', $employee->user_id);
@@ -80,7 +137,7 @@ class CalculateDailyJourneyAction
             ->orderBy('occurred_at_local', 'asc')
             ->get();
 
-        // 5. Obter eventos de tratamento aprovados (PTRP)
+        // 6. Obter eventos de tratamento aprovados (PTRP)
         $approvedTreatments = TreatmentEvent::where(function ($q) use ($employee) {
             $q->where('employee_id', $employee->id)
                 ->orWhere('employment_id', $employee->id);
@@ -89,7 +146,6 @@ class CalculateDailyJourneyAction
             ->whereDate('effective_at', $dateStr)
             ->get();
 
-        // Identificar desconsiderações e justificativas de ausência
         $disregardedPunchIds = $approvedTreatments
             ->where('type', TreatmentEventType::PunchDisregarded)
             ->pluck('reference_punch_id')
@@ -100,7 +156,7 @@ class CalculateDailyJourneyAction
             ->where('type', TreatmentEventType::AbsenceJustified)
             ->first();
 
-        // 6. Construir lista de batidas efetivas (Efetivo = Bruto - Desconsideradas + Inclusões Manuais)
+        // 7. Construir lista de batidas efetivas (Efetivo = Bruto - Desconsideradas + Inclusões Manuais)
         $effectivePunches = [];
 
         foreach ($rawPunches as $punch) {
@@ -116,6 +172,7 @@ class CalculateDailyJourneyAction
                 'time' => $punch->occurred_at_local->format('H:i'),
                 'timestamp' => $punch->occurred_at_local,
                 'type' => $punch->direction ?? 'punch',
+                'direction' => $punch->direction ?? 'in',
                 'source' => 'rep_p',
             ];
         }
@@ -129,12 +186,18 @@ class CalculateDailyJourneyAction
 
             foreach ($legacyEntries as $entry) {
                 $entryTime = Carbon::parse($entry->timestamp);
+                $dir = match ($entry->type) {
+                    'clock_in', 'in' => 'in',
+                    'clock_out', 'out' => 'out',
+                    default => 'punch',
+                };
                 $effectivePunches[] = [
                     'id' => (string) $entry->id,
                     'nsr' => 0,
                     'time' => $entryTime->format('H:i'),
                     'timestamp' => $entryTime,
-                    'type' => $entry->type ?? 'punch',
+                    'type' => $dir,
+                    'direction' => $dir,
                     'source' => 'time_entry_projection',
                 ];
             }
@@ -142,12 +205,14 @@ class CalculateDailyJourneyAction
 
         // Adicionar batidas manuais tratadas
         foreach ($approvedTreatments->where('type', TreatmentEventType::ManualPunchAdded) as $manual) {
+            $dir = $manual->new_value_json['direction'] ?? 'manual';
             $effectivePunches[] = [
                 'id' => $manual->id,
                 'nsr' => 0,
                 'time' => $manual->effective_at->format('H:i'),
                 'timestamp' => $manual->effective_at,
-                'type' => 'manual',
+                'type' => $dir,
+                'direction' => $dir,
                 'source' => 'ptrp_manual',
                 'reason' => $manual->reason_text,
             ];
@@ -157,44 +222,66 @@ class CalculateDailyJourneyAction
         // Ordenar cronologicamente
         usort($effectivePunches, fn ($a, $b) => strcmp($a['time'], $b['time']));
 
-        // Verificar se a primeira batida do dia é a saída de uma jornada noturna iniciada na véspera
-        if (! empty($effectivePunches) && $effectivePunches[0]['type'] === 'out') {
-            $prevDateStr = $date->copy()->subDay()->format('Y-m-d');
-            $prevPunches = PunchEvent::where(function ($q) use ($employee) {
-                $q->where('employee_id', $employee->id)
-                    ->orWhere('user_id', $employee->user_id);
-            })
-                ->whereDate('occurred_at_local', $prevDateStr)
-                ->orderBy('occurred_at_local', 'asc')
-                ->get();
+        // 8. Verificar se a primeira batida do dia é a saída de uma jornada noturna iniciada na véspera
+        if (! empty($effectivePunches)) {
+            $firstDir = $effectivePunches[0]['direction'] ?? $effectivePunches[0]['type'];
+            if ($firstDir === 'out') {
+                $prevDate = $date->copy()->subDay();
+                $prevDateStr = $prevDate->format('Y-m-d');
+                $prevShift = ShiftAssignment::where('employee_id', $employee->id)
+                    ->active()
+                    ->whereDate('start_at_local', $prevDateStr)
+                    ->where('crosses_midnight', true)
+                    ->first();
 
-            if ($prevPunches->isEmpty() && $employee->user_id) {
-                $prevPunches = TimeEntry::where('user_id', $employee->user_id)
-                    ->whereDate('timestamp', $prevDateStr)
-                    ->orderBy('timestamp', 'asc')
+                $prevPunches = PunchEvent::where(function ($q) use ($employee) {
+                    $q->where('employee_id', $employee->id)
+                        ->orWhere('user_id', $employee->user_id);
+                })
+                    ->whereDate('occurred_at_local', $prevDateStr)
+                    ->orderBy('occurred_at_local', 'asc')
                     ->get();
-            }
 
-            if ($prevPunches->isNotEmpty()) {
-                $lastPrev = $prevPunches->last();
-                $lastPrevType = $lastPrev->direction ?? $lastPrev->type;
-                $lastPrevTime = Carbon::parse($lastPrev->occurred_at_local ?? $lastPrev->timestamp);
-                $currTime = Carbon::parse($effectivePunches[0]['timestamp'] ?? ($dateStr.' '.$effectivePunches[0]['time']));
+                if ($prevPunches->isEmpty() && $employee->user_id) {
+                    $prevPunches = TimeEntry::where('user_id', $employee->user_id)
+                        ->whereDate('timestamp', $prevDateStr)
+                        ->orderBy('timestamp', 'asc')
+                        ->get();
+                }
 
-                if ($lastPrevType === 'in' && $lastPrevTime->hour >= 18 && $currTime->diffInHours($lastPrevTime) <= 16) {
-                    $effectivePunches[0]['is_previous_day_exit'] = true;
-                    $treatmentNotes[] = sprintf('Saída das %s vinculada à jornada noturna iniciada no dia anterior.', $effectivePunches[0]['time']);
+                if ($prevPunches->isNotEmpty()) {
+                    $lastPrev = $prevPunches->last();
+                    $lastPrevDir = $lastPrev->direction ?? (match ($lastPrev->type ?? '') {
+                        'clock_in', 'in' => 'in',
+                        'clock_out', 'out' => 'out',
+                        default => 'in',
+                    });
+                    $lastPrevTime = Carbon::parse($lastPrev->occurred_at_local ?? $lastPrev->timestamp);
+                    $currTime = Carbon::parse($effectivePunches[0]['timestamp'] ?? ($dateStr.' '.$effectivePunches[0]['time']));
+
+                    $isNightShiftCross = ($prevShift !== null && $prevShift->crosses_midnight);
+                    $isHeuristicCross = ($lastPrevDir === 'in' && ($lastPrevTime->hour >= 18 || $isNightShiftCross) && $currTime->diffInHours($lastPrevTime) <= 24);
+
+                    if ($isNightShiftCross || $isHeuristicCross) {
+                        $effectivePunches[0]['is_previous_day_exit'] = true;
+                        $treatmentNotes[] = sprintf('Saída das %s vinculada à jornada noturna iniciada no dia anterior (%s).', $effectivePunches[0]['time'], $prevDateStr);
+                    }
                 }
             }
         }
 
-        // Se o último registro do dia for uma entrada noturna (>=18h), verificar se há saída no dia seguinte
-        $unpairedCount = count(array_filter($effectivePunches, fn ($p) => empty($p['is_previous_day_exit'])));
-        if ($unpairedCount % 2 !== 0 && end($effectivePunches)['type'] === 'in') {
-            $lastEntry = end($effectivePunches);
-            $lastEntryTime = Carbon::parse($lastEntry['timestamp'] ?? ($dateStr.' '.$lastEntry['time']));
-            if ($lastEntryTime->hour >= 18) {
-                $nextDateStr = $date->copy()->addDay()->format('Y-m-d');
+        // 9. Se o último registro do dia for uma entrada noturna sem saída, buscar saída no dia seguinte
+        $unpairedToday = array_values(array_filter($effectivePunches, fn ($p) => empty($p['is_previous_day_exit'])));
+        $lastTodayPunch = ! empty($unpairedToday) ? end($unpairedToday) : null;
+        $lastTodayDir = $lastTodayPunch ? ($lastTodayPunch['direction'] ?? $lastTodayPunch['type']) : null;
+
+        if ($lastTodayPunch && $lastTodayDir === 'in') {
+            $lastEntryTime = Carbon::parse($lastTodayPunch['timestamp'] ?? ($dateStr.' '.$lastTodayPunch['time']));
+            $isNightShift = ($shift !== null && $shift->crosses_midnight) || ($lastEntryTime->hour >= 18);
+
+            if ($isNightShift) {
+                $nextDate = $date->copy()->addDay();
+                $nextDateStr = $nextDate->format('Y-m-d');
                 $nextPunches = PunchEvent::where(function ($q) use ($employee) {
                     $q->where('employee_id', $employee->id)
                         ->orWhere('user_id', $employee->user_id);
@@ -212,16 +299,20 @@ class CalculateDailyJourneyAction
 
                 if ($nextPunches->isNotEmpty()) {
                     $firstNext = $nextPunches->first();
-                    $firstNextType = $firstNext->direction ?? $firstNext->type;
+                    $firstNextDir = $firstNext->direction ?? (match ($firstNext->type ?? '') {
+                        'clock_out', 'out' => 'out',
+                        default => 'out',
+                    });
                     $firstNextTime = Carbon::parse($firstNext->occurred_at_local ?? $firstNext->timestamp);
 
-                    if ($firstNextType === 'out' && $firstNextTime->diffInHours($lastEntryTime) <= 16) {
+                    if ($firstNextDir === 'out' && $firstNextTime->diffInHours($lastEntryTime) <= 24 && $firstNextTime->greaterThan($lastEntryTime)) {
                         $effectivePunches[] = [
                             'id' => (string) $firstNext->id,
                             'nsr' => $firstNext->nsr ?? 0,
                             'time' => $firstNextTime->format('H:i'),
                             'timestamp' => $firstNextTime,
                             'type' => 'out',
+                            'direction' => 'out',
                             'source' => 'rep_p_next_day_nocturnal',
                             'is_next_day_exit' => true,
                         ];
@@ -231,31 +322,85 @@ class CalculateDailyJourneyAction
             }
         }
 
+        // 10. Pareamento Direcional e Cálculo de Minutos Trabalhados e Intervalos
         $punchesToCalculate = array_values(array_filter($effectivePunches, fn ($p) => empty($p['is_previous_day_exit'])));
-        $punchCount = count($punchesToCalculate);
-        $isIncomplete = ($punchCount % 2 !== 0);
-
-        // 7. Calcular minutos trabalhados e intervalos intrajornada
         $workedMinutes = 0;
         $breakMinutes = 0;
+        $workedIntervals = [];
+        $breakIntervals = [];
+        $isIncomplete = false;
+        $currentEntry = null;
+        $lastExitTime = null;
 
-        for ($i = 0; $i + 1 < $punchCount; $i += 2) {
-            $entry = Carbon::parse($punchesToCalculate[$i]['timestamp'] ?? ($dateStr.' '.$punchesToCalculate[$i]['time']));
-            $exit = Carbon::parse($punchesToCalculate[$i + 1]['timestamp'] ?? ($dateStr.' '.$punchesToCalculate[$i + 1]['time']));
-            if ($exit->greaterThanOrEqualTo($entry)) {
-                $workedMinutes += $entry->diffInMinutes($exit);
+        foreach ($punchesToCalculate as $p) {
+            $dir = $p['direction'] ?? $p['type'] ?? 'punch';
+            if ($dir === 'clock_in') {
+                $dir = 'in';
+            } elseif ($dir === 'clock_out') {
+                $dir = 'out';
             }
 
-            // Intervalo entre a saída do período anterior e a entrada do próximo
-            if ($i + 2 < $punchCount) {
-                $nextEntry = Carbon::parse($punchesToCalculate[$i + 2]['timestamp'] ?? ($dateStr.' '.$punchesToCalculate[$i + 2]['time']));
-                if ($nextEntry->greaterThanOrEqualTo($exit)) {
-                    $breakMinutes += $exit->diffInMinutes($nextEntry);
+            $pTime = Carbon::parse($p['timestamp'] ?? ($dateStr.' '.$p['time']));
+
+            if ($dir === 'in') {
+                if ($currentEntry !== null) {
+                    $isIncomplete = true;
+                    $treatmentNotes[] = sprintf('Sequência ambígua: entrada às %s sem saída anterior (nova entrada às %s).', $currentEntry['time'], $p['time']);
+                    $currentEntry = ['punch' => $p, 'time' => $p['time'], 'time_obj' => $pTime];
+                } else {
+                    $currentEntry = ['punch' => $p, 'time' => $p['time'], 'time_obj' => $pTime];
+                    if ($lastExitTime !== null && $pTime->greaterThanOrEqualTo($lastExitTime)) {
+                        $brk = $lastExitTime->diffInMinutes($pTime);
+                        $breakMinutes += $brk;
+                        $breakIntervals[] = new WorkInterval($lastExitTime, $pTime, 'break', true);
+                    }
+                }
+            } elseif ($dir === 'out') {
+                if ($currentEntry !== null) {
+                    $entryTime = $currentEntry['time_obj'];
+                    if ($pTime->greaterThanOrEqualTo($entryTime)) {
+                        $dur = $entryTime->diffInMinutes($pTime);
+                        $workedMinutes += $dur;
+                        $workedIntervals[] = new WorkInterval($entryTime, $pTime, 'worked');
+                        $lastExitTime = $pTime;
+                    }
+                    $currentEntry = null;
+                } else {
+                    $isIncomplete = true;
+                    $treatmentNotes[] = sprintf('Marcação de saída às %s sem entrada correspondente registrada.', $p['time']);
+                }
+            } else {
+                // Fallback para batidas legadas onde direção não foi especificada
+                if ($currentEntry === null) {
+                    $currentEntry = ['punch' => $p, 'time' => $p['time'], 'time_obj' => $pTime];
+                    if ($lastExitTime !== null && $pTime->greaterThanOrEqualTo($lastExitTime)) {
+                        $brk = $lastExitTime->diffInMinutes($pTime);
+                        $breakMinutes += $brk;
+                        $breakIntervals[] = new WorkInterval($lastExitTime, $pTime, 'break', true);
+                    }
+                } else {
+                    $entryTime = $currentEntry['time_obj'];
+                    if ($pTime->greaterThanOrEqualTo($entryTime)) {
+                        $dur = $entryTime->diffInMinutes($pTime);
+                        $workedMinutes += $dur;
+                        $workedIntervals[] = new WorkInterval($entryTime, $pTime, 'worked');
+                        $lastExitTime = $pTime;
+                    }
+                    $currentEntry = null;
                 }
             }
         }
 
-        // 8. Apuração comparativa com a escala e aplicação da tolerância legal (Art. 58 CLT)
+        if ($currentEntry !== null) {
+            $isIncomplete = true;
+            $treatmentNotes[] = sprintf('Marcação de entrada às %s em aberto (sem registro de saída).', $currentEntry['time']);
+        }
+
+        if (count($punchesToCalculate) % 2 !== 0) {
+            $isIncomplete = true;
+        }
+
+        // 11. Apuração comparativa com a escala e aplicação da tolerância legal (Art. 58 CLT)
         $ordinaryMinutes = 0;
         $overtimeMinutes = 0;
         $lateMinutes = 0;
@@ -263,37 +408,51 @@ class CalculateDailyJourneyAction
         $absenceMinutes = 0;
         $missingBreakMinutes = 0;
         $holidayMinutes = 0;
+        $requiresCompensation = false;
 
-        $expectedBreakMinutes = (int) ($daySchedule['break_minutes'] ?? 0);
         if ($expectedBreakMinutes > 0 && $breakMinutes > 0 && $breakMinutes < $expectedBreakMinutes) {
             $missingBreakMinutes = $expectedBreakMinutes - $breakMinutes;
         }
 
-        // 8.1 — Integração com Calendário Laboral
-        if ($calendarDay->isHoliday && ! $calendarDay->expectedWork) {
-            // 20.18.9 — Feriado com jornada suspensa
+        $is12x36 = ($shift?->shift_type === ShiftType::Shift12x36) || ($workSchedule?->modality === WorkScheduleModality::TwelveByThirtySix);
+
+        if (! $hasSchedule) {
+            // Ausência de escala configurada: preservar batidas, mas NÃO inventar horas previstas ou extras
+            $ordinaryMinutes = 0;
+            $overtimeMinutes = 0;
+            $lateMinutes = 0;
+            $earlyLeaveMinutes = 0;
+            $absenceMinutes = 0;
+            $holidayMinutes = 0;
+        } elseif ($is12x36 && $calendarDay->isHoliday && $workedMinutes > 0) {
+            // CLT Art. 59-A, parágrafo único: feriados em regime 12x36 são compensados pelo descanso das 36 horas
+            $ordinaryMinutes = min($workedMinutes, $scheduledMinutes);
+            $overtimeMinutes = max(0, $workedMinutes - $scheduledMinutes);
+            $holidayMinutes = 0;
+            $requiresCompensation = true;
+            $treatmentNotes[] = 'Feriado trabalhado em escala 12x36: compensado pela folga de 36 horas (CLT, Art. 59-A, parágrafo único).';
+        } elseif ($calendarDay->isHoliday && ! $calendarDay->expectedWork) {
+            // Feriado civil regular com jornada suspensa
             if ($workedMinutes === 0) {
                 $absenceMinutes = 0;
                 $ordinaryMinutes = 0;
             } else {
-                // 20.18.10 — Trabalho em feriado: classificar separadamente como holiday_minutes
                 $holidayMinutes = $workedMinutes;
                 $ordinaryMinutes = 0;
-                $overtimeMinutes = 0; // NÃO assumir hora extra automaticamente
+                $overtimeMinutes = 0;
             }
         } elseif (! $calendarDay->expectedWork && ($calendarDay->isOptionalDay || ! empty($calendarDay->appliedEvents))) {
-            // 20.18.11, 20.18.12 — Ponto facultativo ou recesso sem expediente
+            // Ponto facultativo ou recesso sem expediente
             if ($workedMinutes === 0) {
                 $absenceMinutes = 0;
                 $ordinaryMinutes = 0;
             } else {
-                // Trabalho em dia de ponto facultativo/recesso sem expediente
                 $holidayMinutes = $workedMinutes;
                 $ordinaryMinutes = 0;
                 $overtimeMinutes = 0;
             }
         } elseif ($scheduledMinutes > 0) {
-            // Dia com expediente previsto (normal, reduzido, ou ponto fac. com expediente normal)
+            // Dia com expediente previsto
             if ($workedMinutes === 0) {
                 if ($justifiedAbsence) {
                     $absenceMinutes = 0;
@@ -305,7 +464,6 @@ class CalculateDailyJourneyAction
                 $netDifference = $workedMinutes - $scheduledMinutes;
 
                 if ($netDifference > 0) {
-                    // Sobrejornada: verificar tolerância
                     $toleratedOvertime = $laborPolicy->applyPunchTolerance($netDifference);
                     if ($toleratedOvertime === 0) {
                         $ordinaryMinutes = $workedMinutes;
@@ -315,7 +473,6 @@ class CalculateDailyJourneyAction
                         $overtimeMinutes = $netDifference;
                     }
                 } elseif ($netDifference < 0) {
-                    // Déficit: verificar tolerância
                     $deficit = abs($netDifference);
                     $toleratedDeficit = $laborPolicy->applyPunchTolerance($deficit);
                     if ($toleratedDeficit === 0) {
@@ -330,15 +487,50 @@ class CalculateDailyJourneyAction
                 }
             }
         } else {
-            // Dia sem expediente previsto (DSR/Folga): todo o tempo trabalhado é hora extra
+            // Dia sem expediente previsto (DSR/Folga da escala)
             $overtimeMinutes = $workedMinutes;
             $ordinaryMinutes = 0;
         }
 
-        // 9. Crédito e Débito de Banco de Horas
-        // holiday_minutes NÃO entram automaticamente no banco — será definido pela política trabalhista
-        $bankCreditMinutes = $overtimeMinutes;
-        $bankDebitMinutes = $lateMinutes + $earlyLeaveMinutes + $absenceMinutes;
+        // 12. Crédito e Débito de Banco de Horas
+        // Não incluir automaticamente adicional noturno ou feriados no banco de horas.
+        $compensableOvertimeMinutes = $hasSchedule ? $overtimeMinutes : 0;
+        $nonCompensableOvertimeMinutes = 0;
+        $bankCreditMinutes = $compensableOvertimeMinutes;
+        $bankDebitMinutes = $hasSchedule ? ($lateMinutes + $earlyLeaveMinutes + $absenceMinutes) : 0;
+
+        // 13. Apuração de trabalho noturno (CalculateNightWorkAction)
+        $nightWorkAction = app(CalculateNightWorkAction::class);
+        $nightWorkResult = $nightWorkAction->execute(
+            workedIntervals: $workedIntervals,
+            timezone: $establishment?->timezone ?? 'America/Sao_Paulo',
+            profile: $ruleProfile,
+            schedule: $workSchedule,
+            breakIntervals: $breakIntervals,
+            context: [
+                'is_holiday' => $calendarDay->isHoliday,
+                'calendar_day' => $calendarDay,
+                'shift' => $shift,
+                'legal_regime' => $employee->legal_regime,
+                'is_12x36' => $is12x36,
+            ]
+        );
+
+        $physicalNightMinutes = (int) round($nightWorkResult->physicalNightSeconds / 60);
+        $legalNightEquivalentMinutes = (int) round($nightWorkResult->legalNightEquivalentSeconds / 60);
+        $nightFictionalBonusMinutes = max(0, $legalNightEquivalentMinutes - $physicalNightMinutes);
+
+        if ($physicalNightMinutes > 0 || $nightWorkResult->nightExtensionSeconds > 0) {
+            $notesSuffix = $nightWorkResult->nightAdditionalPercentage
+                ? sprintf(' com adicional de %s%%', $nightWorkResult->nightAdditionalPercentage)
+                : '';
+            $treatmentNotes[] = sprintf(
+                'Trabalho noturno apurado: %s físicos (%s legal equivalente com hora de 52m30s)%s.',
+                $nightWorkResult->formattedPhysicalNight(),
+                $nightWorkResult->formattedLegalNightEquivalent(),
+                $notesSuffix
+            );
+        }
 
         return new CalculatedJourney(
             date: $dateStr,
@@ -355,10 +547,24 @@ class CalculateDailyJourneyAction
             bankCreditMinutes: $bankCreditMinutes,
             bankDebitMinutes: $bankDebitMinutes,
             holidayMinutes: $holidayMinutes,
-            requiresCompensation: $calendarDay->requiresCompensation,
+            requiresCompensation: $calendarDay->requiresCompensation || $requiresCompensation,
             effectivePunches: $effectivePunches,
             treatmentNotes: $treatmentNotes,
             calendarSnapshot: $calendarSnapshot,
+            nightWorkResult: $nightWorkResult,
+            physicalNightMinutes: $physicalNightMinutes,
+            legalNightEquivalentMinutes: $legalNightEquivalentMinutes,
+            nightFictionalBonusMinutes: $nightFictionalBonusMinutes,
+            compensableOvertimeMinutes: $compensableOvertimeMinutes,
+            nonCompensableOvertimeMinutes: $nonCompensableOvertimeMinutes,
+            hasSchedule: $hasSchedule,
+            isPendingConfiguration: $isPendingConfiguration,
+            laborRuleProfileId: $laborRuleProfileId,
+            laborRuleProfileCode: $laborRuleProfileCode,
+            workScheduleId: $workScheduleId,
+            workScheduleCode: $workScheduleCode,
+            shiftAssignmentId: $shiftAssignmentId,
+            shiftCode: $shiftCode,
         );
     }
 }

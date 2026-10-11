@@ -10,6 +10,7 @@ use App\Models\ClosedPeriod;
 use App\Models\ClosedPeriodEmployeeSnapshot;
 use App\Models\Employee;
 use App\Models\Establishment;
+use App\Models\ShiftAssignment;
 use App\Models\TimeBankAccount;
 use App\Models\TimeBankPolicy;
 use App\Models\TimeBankTransaction;
@@ -122,31 +123,73 @@ class CloseMonthlyPeriodAction
                     'registration_number' => $employee->registration_number,
                     'job_title' => $employee->job_title,
                     'department' => $employee->sector?->name,
+                    'legal_regime' => $employee->legal_regime?->value,
+                    'labor_rule_profile_id' => $employee->labor_rule_profile_id,
+                    'workload_modality' => $employee->workload_modality?->value,
+                    'workload_description' => $employee->getWorkloadDescription(),
                     'establishment_id' => $establishment?->id,
                     'establishment_name' => $establishment?->name,
                     'establishment_identifier' => $establishment?->identifier_number,
                 ];
 
-                // b) Snapshot de escala
-                $schedule = $employee->workSchedule ?? WorkSchedule::first() ?? WorkSchedule::createDefault40h();
+                // b) Snapshot de escala e sua vigência
+                $schedule = $employee->getWorkScheduleForDate($periodEnd) ?? $employee->workSchedule ?? WorkSchedule::first();
+                $activeAssignment = $employee->workScheduleAssignments()->activeAt($periodEnd)->first();
                 $scheduleSnapshot = [
-                    'id' => $schedule->id,
-                    'name' => $schedule->name,
-                    'type' => $schedule->type,
-                    'weekly_hours' => $schedule->weekly_hours,
-                    'tolerance_minutes' => $schedule->tolerance_minutes,
-                    'daily_tolerance_minutes' => $schedule->daily_tolerance_minutes,
-                    'days_config' => $schedule->days_config,
+                    'id' => $schedule?->id,
+                    'name' => $schedule?->name ?? 'Sem escala atribuída',
+                    'code' => $schedule?->code,
+                    'modality' => $schedule?->modality?->value,
+                    'type' => $schedule?->modality?->value ?? 'standard',
+                    'weekly_hours' => $schedule?->expected_weekly_minutes ? round($schedule->expected_weekly_minutes / 60, 1) : 40.0,
+                    'tolerance_minutes' => $schedule?->tolerance_minutes ?? 5,
+                    'daily_tolerance_minutes' => $schedule?->daily_tolerance_minutes ?? 10,
+                    'expected_daily_minutes' => $schedule?->expected_daily_minutes,
+                    'expected_weekly_minutes' => $schedule?->expected_weekly_minutes,
+                    'cycle_days' => $schedule?->cycle_days,
+                    'schedule_data' => $schedule?->schedule_data ?? [],
+                    'days_config' => $schedule?->days_config ?? null,
+                    'cycle_data' => $schedule?->cycle_data ?? [],
+                    'assignment' => $activeAssignment ? [
+                        'id' => $activeAssignment->id,
+                        'effective_from' => $activeAssignment->effective_from->format('Y-m-d'),
+                        'effective_until' => $activeAssignment->effective_until?->format('Y-m-d'),
+                        'reason' => $activeAssignment->reason,
+                    ] : null,
                 ];
 
-                // c) Apuração diária e snapshot de jornadas
+                // c) Snapshot de plantões e escalas cíclicas previstos/realizados
+                $shifts = ShiftAssignment::where('employee_id', $employee->id)
+                    ->forPeriod($periodStart, $periodEnd)
+                    ->get();
+                $shiftsSnapshot = $shifts->map(fn ($s) => [
+                    'id' => $s->id,
+                    'shift_code' => $s->shift_code,
+                    'start_at_local' => $s->start_at_local->toDateTimeString(),
+                    'end_at_local' => $s->end_at_local->toDateTimeString(),
+                    'timezone' => $s->timezone,
+                    'shift_type' => $s->shift_type?->value,
+                    'origin' => $s->origin?->value,
+                    'status' => $s->status?->value,
+                    'is_day_off' => $s->is_day_off,
+                    'is_night_shift' => $s->is_night_shift,
+                    'crosses_midnight' => $s->crosses_midnight,
+                    'break_minutes' => $s->break_minutes,
+                    'expected_work_minutes' => $s->expected_work_minutes,
+                ])->values()->all();
+
+                // d) Snapshot do perfil de regras jurídicas aplicado
+                $ruleProfile = $employee->getLaborRuleProfileForDate($periodEnd);
+                $ruleProfileSnapshot = $ruleProfile?->snapshot();
+
+                // e) Apuração diária e snapshot de jornadas
                 $daysInMonth = $periodEnd->day;
                 $journeysData = [];
                 $empPunchesCount = 0;
 
                 for ($day = 1; $day <= $daysInMonth; $day++) {
                     $dayDate = Carbon::createFromDate($year, $month, $day);
-                    $calculated = $calculateJourneyAction->execute($employee, $dayDate, $schedule);
+                    $calculated = $calculateJourneyAction->execute($employee, $dayDate);
                     $journeyArray = $calculated->toArray();
                     $journeysData[] = $journeyArray;
 
@@ -155,7 +198,7 @@ class CloseMonthlyPeriodAction
 
                 $totalPunchesCount += $empPunchesCount;
 
-                // d) Snapshot de tratamentos aprovados na competência
+                // f) Snapshot de tratamentos aprovados na competência
                 $treatments = TreatmentEvent::where(function ($q) use ($employee) {
                     $q->where('employee_id', $employee->id)
                         ->orWhere('employment_id', $employee->id);
@@ -174,7 +217,7 @@ class CloseMonthlyPeriodAction
 
                 $totalTreatmentsCount += count($treatmentsData);
 
-                // e) Snapshot e movimentação de Banco de Horas (21.0 - saldo estritamente até o fim da competência)
+                // g) Snapshot e movimentação de Banco de Horas (21.0 - saldo estritamente até o fim da competência)
                 $account = TimeBankAccount::getOrCreateForEmployee($employee);
                 $balanceBefore = $account->balanceUntil($periodStart->copy()->subSecond());
                 $balanceAtClosing = $account->balanceUntil($periodEnd);
@@ -231,22 +274,17 @@ class CloseMonthlyPeriodAction
                     'transactions' => $periodTransactions,
                 ];
 
-                // f) Snapshot do calendário laboral utilizado na competência (20.18.18)
+                // h) Snapshot do calendário laboral utilizado na competência (20.18.18)
                 $calendarEvents = CalendarEvent::forMonth($year, $month, $establishment)
                     ->get();
                 $calendarSnapshotData = $calendarEvents->map(fn (CalendarEvent $e) => $e->toSnapshotArray())->values()->all();
 
-                // Extrair calendar_snapshot dos journeys individuais (apenas dias que possuem eventos)
-                $journeyCalendarSnapshots = collect($journeysData)
-                    ->pluck('calendar_snapshot')
-                    ->filter(fn ($s) => ! empty($s))
-                    ->values()
-                    ->all();
-
-                // g) Hash individual do snapshot do trabalhador (SHA-256 canônico)
+                // i) Hash individual do snapshot do trabalhador (SHA-256 canônico)
                 $canonicalPayload = json_encode([
                     'employee' => $employeeSnapshot,
                     'schedule' => $scheduleSnapshot,
+                    'shifts' => $shiftsSnapshot,
+                    'rule_profile' => $ruleProfileSnapshot,
                     'journey' => $journeysData,
                     'treatments' => $treatmentsData,
                     'time_bank' => $timeBankSnapshot,
@@ -256,13 +294,15 @@ class CloseMonthlyPeriodAction
                 $empSnapshotHash = hash('sha256', $canonicalPayload);
                 $employeeHashes[$employee->id] = $empSnapshotHash;
 
-                // h) Gravar snapshot imutável
+                // j) Gravar snapshot imutável
                 ClosedPeriodEmployeeSnapshot::create([
                     'closed_period_id' => $closedPeriod->id,
                     'employee_id' => $employee->id,
                     'version' => $snapshotVersion,
                     'employee_snapshot' => $employeeSnapshot,
                     'schedule_snapshot' => $scheduleSnapshot,
+                    'shifts_snapshot' => $shiftsSnapshot,
+                    'rule_profile_snapshot' => $ruleProfileSnapshot,
                     'journey_snapshot' => $journeysData,
                     'treatment_snapshot' => $treatmentsData,
                     'time_bank_snapshot' => $timeBankSnapshot,

@@ -36,5 +36,7 @@ class DatabaseSeeder extends Seeder
         }
 
         CurrentCompany::get();
+
+        $this->call(LaborRuleProfileSeeder::class);
     }
 }

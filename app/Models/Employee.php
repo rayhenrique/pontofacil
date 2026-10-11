@@ -26,6 +26,7 @@ class Employee extends Model
         'job_title',
         'contract_type',
         'legal_regime',
+        'labor_rule_profile_id',
         'workload',
         'daily_workload_minutes',
         'weekly_workload_minutes',
@@ -69,6 +70,11 @@ class Employee extends Model
         return $this->belongsTo(WorkSchedule::class);
     }
 
+    public function laborRuleProfile(): BelongsTo
+    {
+        return $this->belongsTo(LaborRuleProfile::class);
+    }
+
     public function workScheduleAssignments(): HasMany
     {
         return $this->hasMany(WorkScheduleAssignment::class)->orderBy('effective_from', 'desc');
@@ -82,6 +88,50 @@ class Employee extends Model
     public function timeBankAccount(): HasOne
     {
         return $this->hasOne(TimeBankAccount::class);
+    }
+
+    /**
+     * Resolve o perfil de regras jurídicas aplicável para a data especificada.
+     * Estatutários estaduais e municipais NÃO herdam automaticamente regras federais ou CLT.
+     */
+    public function getLaborRuleProfileForDate(?CarbonInterface $date = null): ?LaborRuleProfile
+    {
+        $targetDate = $date ?? Carbon::today();
+
+        // 1. Se houver perfil atribuído diretamente ao colaborador:
+        if ($this->labor_rule_profile_id) {
+            $assigned = $this->laborRuleProfile;
+            if ($assigned && $assigned->isApproved() && $assigned->isEffectiveAt($targetDate)) {
+                return $assigned;
+            }
+        }
+
+        // 2. Regime CLT: fallback para o perfil padrão da CLT urbana
+        if ($this->legal_regime === LegalRegime::CLT) {
+            return LaborRuleProfile::where('legal_regime', LegalRegime::CLT->value)
+                ->approved()
+                ->activeAt($targetDate)
+                ->first() ?? LaborRuleProfile::createStandardCltProfile();
+        }
+
+        // 3. Servidor Federal: fallback para o perfil padrão da Lei 8.112/1990
+        if ($this->legal_regime === LegalRegime::FederalStatutory) {
+            return LaborRuleProfile::where('legal_regime', LegalRegime::FederalStatutory->value)
+                ->approved()
+                ->activeAt($targetDate)
+                ->first() ?? LaborRuleProfile::createFederalStatutoryProfile();
+        }
+
+        // 4. Estatutários estaduais ou municipais: NÃO herdam automaticamente
+        // Somente se houver perfil explicitamente cadastrado e aprovado para o regime
+        if ($this->legal_regime?->isStatutory()) {
+            return LaborRuleProfile::where('legal_regime', $this->legal_regime->value)
+                ->approved()
+                ->activeAt($targetDate)
+                ->first();
+        }
+
+        return null;
     }
 
     /**

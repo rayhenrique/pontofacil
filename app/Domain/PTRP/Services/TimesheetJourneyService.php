@@ -13,7 +13,6 @@ use App\Models\TimeBankPolicy;
 use App\Models\TimeEntry;
 use App\Models\TreatmentEvent;
 use App\Models\User;
-use App\Models\WorkSchedule;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -147,6 +146,13 @@ class TimesheetJourneyService
                     'is_open' => false,
                     'notes' => $j['treatment_notes'] ?? [],
                     'scheduled_minutes' => $j['scheduled_minutes'] ?? 0,
+                    'night_minutes' => (int) ($j['physical_night_minutes'] ?? ($j['night_work']['physical_night_minutes'] ?? 0)),
+                    'night_equivalent_minutes' => (int) ($j['legal_night_equivalent_minutes'] ?? ($j['night_work']['legal_night_equivalent_minutes'] ?? 0)),
+                    'overtime_minutes' => (int) ($j['overtime_minutes'] ?? 0),
+                    'has_schedule' => (bool) ($j['has_schedule'] ?? true),
+                    'is_pending_configuration' => (bool) ($j['is_pending_configuration'] ?? false),
+                    'is_day_off' => ((int) ($j['scheduled_minutes'] ?? 0)) === 0 && ($j['has_schedule'] ?? true),
+                    'shift_code' => $j['shift_code'] ?? null,
                     'treatments' => collect([]),
                 ];
 
@@ -219,11 +225,6 @@ class TimesheetJourneyService
             ->sortDesc()
             ->values();
 
-        $schedule = $employee->workSchedule ?? WorkSchedule::first();
-        if (! $schedule) {
-            $schedule = WorkSchedule::createDefault40h();
-        }
-
         $groupedEntries = [];
         $daysCalculated = [];
         $totalWorkedMinutes = 0;
@@ -235,7 +236,7 @@ class TimesheetJourneyService
 
         foreach ($activeDates as $dateStr) {
             $date = Carbon::parse($dateStr);
-            $calculated = $this->calculateDailyJourneyAction->execute($employee, $date, $schedule);
+            $calculated = $this->calculateDailyJourneyAction->execute($employee, $date);
 
             $workedMinutes = $calculated->workedMinutes;
             $isIncomplete = $calculated->isIncomplete;
@@ -277,6 +278,13 @@ class TimesheetJourneyService
                 'is_open' => ($statusInfo['key'] === 'in_progress'),
                 'notes' => $calculated->treatmentNotes,
                 'scheduled_minutes' => $calculated->scheduledMinutes,
+                'night_minutes' => $calculated->nightWorkedMinutes(),
+                'night_equivalent_minutes' => $calculated->legalNightEquivalentMinutes(),
+                'overtime_minutes' => $calculated->overtimeMinutes,
+                'has_schedule' => $calculated->hasSchedule,
+                'is_pending_configuration' => $calculated->isPendingConfiguration,
+                'is_day_off' => $calculated->scheduledMinutes === 0 && $calculated->hasSchedule,
+                'shift_code' => $calculated->shiftCode,
                 'has_pending_treatment' => $hasPendingTreatment,
                 'treatments' => $dayTreatments,
             ];

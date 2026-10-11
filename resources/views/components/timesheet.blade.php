@@ -869,6 +869,33 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                     <div class="flex items-center gap-2 flex-wrap">
                         @if(isset($daysCalculated[$date]))
                             @php $dayCalc = $daysCalculated[$date]; @endphp
+
+                            @if(!empty($dayCalc['is_pending_configuration']))
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200" title="Apuração pendente de escala configurada">
+                                    Sem escala
+                                </span>
+                            @elseif(!empty($dayCalc['shift_code']))
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                    Plantão
+                                </span>
+                            @elseif(!empty($dayCalc['is_day_off']))
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                    Folga
+                                </span>
+                            @endif
+
+                            @if(($dayCalc['night_minutes'] ?? 0) > 0)
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-50 text-purple-800 border border-purple-200" title="Horas Noturnas: {{ intdiv($dayCalc['night_minutes'], 60) }}h {{ $dayCalc['night_minutes'] % 60 }}m">
+                                    🌙 {{ sprintf('%02dh %02dm', intdiv($dayCalc['night_minutes'], 60), $dayCalc['night_minutes'] % 60) }}
+                                </span>
+                            @endif
+
+                            @if(($dayCalc['overtime_minutes'] ?? 0) > 0)
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                    +{{ sprintf('%02dh %02dm', intdiv($dayCalc['overtime_minutes'], 60), $dayCalc['overtime_minutes'] % 60) }}
+                                </span>
+                            @endif
+
                             <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border {{ $dayCalc['status_badge_class'] }}">
                                 @if($dayCalc['is_open'])
                                     <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
