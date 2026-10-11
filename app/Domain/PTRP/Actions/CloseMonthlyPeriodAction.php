@@ -3,9 +3,7 @@
 namespace App\Domain\PTRP\Actions;
 
 use App\Domain\PTRP\Enums\TimeBankClosingMode;
-use App\Domain\PTRP\Enums\TimeBankTransactionType;
 use App\Domain\PTRP\Enums\TreatmentEventStatus;
-use App\Domain\Settlement\Enums\SettlementDischargeType;
 use App\Domain\Settlement\Enums\SettlementModality;
 use App\Domain\Settlement\Enums\SettlementOriginType;
 use App\Domain\Settlement\Enums\WorkTimeSettlementStatus;
@@ -25,8 +23,6 @@ use App\Models\TreatmentEvent;
 use App\Models\User;
 use App\Models\WorkSchedule;
 use App\Models\WorkTimeSettlement;
-use App\Models\WorkTimeSettlementDischarge;
-use App\Models\WorkTimeSettlementPolicy;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -70,7 +66,7 @@ class CloseMonthlyPeriodAction
         // Localizar política de banco de horas vigente na competência
         $policy = TimeBankPolicy::forDate($periodEnd);
 
-        return DB::transaction(function () use ($year, $month, $closedBy, $notes, $existingPeriod, $periodStart, $periodEnd, $policy, $allowLegacyUnprovenReset) {
+        return DB::transaction(function () use ($year, $month, $closedBy, $notes, $existingPeriod, $periodStart, $periodEnd, $policy) {
             $snapshotVersion = $existingPeriod ? ($existingPeriod->snapshot_version + 1) : 1;
 
             // 1. Criar ou atualizar registro de ClosedPeriod
@@ -259,119 +255,58 @@ class CloseMonthlyPeriodAction
                     ($settlementPolicy->modality === SettlementModality::LegacyMonthlyReset);
 
                 // 2. Tratamento conforme a modalidade da política
+                // Regra Fundamental: Fechar competência não significa quitar saldo.
+                // Zeramento automático sem quitação documental prévia é expressamente vedado para novos fechamentos.
                 if ($isResetMode) {
                     if ($balanceAtClosing !== 0) {
-                        $authorizedSettlement = $existingSettlements->first(fn ($s) => in_array($s->status, [
-                            WorkTimeSettlementStatus::Approved,
-                            WorkTimeSettlementStatus::Executed,
-                        ], true));
+                        // Preserva o saldo do trabalhador: não zera no banco sem quitação fática comprovada
+                        $resetApplied = 0;
 
-                        // Se há política de destinação moderna explicitamente configurada e NÃO há autorização fática
-                        $hasCustomSettlementPolicy = WorkTimeSettlementPolicy::activeAt($periodEnd)
-                            ->where(function ($q) use ($employee) {
-                                $q->where('employee_id', $employee->id)
-                                    ->orWhere('establishment_id', $employee->sector?->establishment_id)
-                                    ->orWhere('company_id', $employee->sector?->establishment?->company_id);
-                            })->exists();
-
-                        if ($hasCustomSettlementPolicy && ! $authorizedSettlement && ! $allowLegacyUnprovenReset) {
-                            // ZERAMENTO SEM COMPROVAÇÃO: O fechamento NÃO zera o saldo no banco de forma fictícia.
-                            // Registra o saldo como Pendente em WorkTimeSettlement, preservando os minutos do trabalhador.
+                        $hasExistingSettlement = $existingSettlements->contains(fn ($s) => $s->reference_period === $referencePeriod);
+                        if (! $hasExistingSettlement) {
                             $settlementManager->createSettlement([
                                 'employee_id' => $employee->id,
                                 'closed_period_id' => $closedPeriod->id,
                                 'settlement_policy_id' => $settlementPolicy->id,
                                 'reference_period' => $referencePeriod,
                                 'minutes' => $balanceAtClosing,
-                                'settlement_type' => WorkTimeSettlementType::LegacyMonthlyReset,
+                                'settlement_type' => $balanceAtClosing > 0 ? WorkTimeSettlementType::PayrollPayment : WorkTimeSettlementType::DeficitCompensation,
                                 'status' => WorkTimeSettlementStatus::Pending,
                                 'origin_type' => SettlementOriginType::MonthlyClosingBalance,
                                 'operation_date' => $periodEnd->toDateString(),
-                                'justification' => sprintf('Fechamento de competência %02d/%04d sem destinação comprovada. Saldo de %s permanece registrado como pendente de quitação.', $month, $year, TimeBankAccount::formatMinutes($balanceAtClosing)),
+                                'justification' => sprintf('Fechamento de competência %02d/%04d. Saldo de %s preservado como pendente de destinação/quitação documental.', $month, $year, TimeBankAccount::formatMinutes($balanceAtClosing)),
                                 'idempotency_key' => sprintf('CLOSING-PENDING-%d-%04d-%02d', $employee->id, $year, $month),
                             ], $closedBy);
-
-                            $resetApplied = 0; // Saldo do banco NÃO é apagado
-                        } else {
-                            // Modo de compatibilidade legada com comprovação/autorização ou legado direto
-                            $resetApplied = -$balanceAtClosing; // Inverte o sinal para o ajuste compensatório
-
-                            $recordTimeBankTxAction->execute(
-                                employee: $employee->id,
-                                type: TimeBankTransactionType::MonthlyReset,
-                                minutes: $resetApplied,
-                                referenceDate: $periodEnd,
-                                description: sprintf('Zeramento de fechamento da competência %02d/%04d', $month, $year),
-                                reason: 'Aplicação de política MONTHLY_RESET no fechamento formal do período',
-                                createdBy: $closedBy,
-                                sourceType: ClosedPeriod::class,
-                                sourceId: (string) $closedPeriod->id,
-                            );
-
-                            $settlementManager->createSettlement([
-                                'employee_id' => $employee->id,
-                                'closed_period_id' => $closedPeriod->id,
-                                'settlement_policy_id' => $settlementPolicy->id,
-                                'reference_period' => $referencePeriod,
-                                'minutes' => $balanceAtClosing,
-                                'settlement_type' => WorkTimeSettlementType::LegacyMonthlyReset,
-                                'status' => WorkTimeSettlementStatus::Executed,
-                                'origin_type' => SettlementOriginType::MonthlyClosingBalance,
-                                'operation_date' => $periodEnd->toDateString(),
-                                'execution_date' => $periodEnd->toDateString(),
-                                'document_reference' => sprintf('ZERAMENTO-%04d-%02d', $year, $month),
-                                'justification' => sprintf('Zeramento contábil no fechamento formal da competência %02d/%04d', $month, $year),
-                                'idempotency_key' => sprintf('CLOSING-RESET-%d-%04d-%02d', $employee->id, $year, $month),
-                            ], $closedBy);
-
-                            WorkTimeSettlementDischarge::create([
-                                'employee_id' => $employee->id,
-                                'closed_period_id' => $closedPeriod->id,
-                                'discharge_type' => SettlementDischargeType::MonthlyResetLegacy,
-                                'minutes' => $resetApplied,
-                                'reference_period' => sprintf('%04d-%02d', $year, $month),
-                                'execution_date' => $periodEnd->toDateString(),
-                                'document_reference' => sprintf('ZERAMENTO-%04d-%02d', $year, $month),
-                                'description' => sprintf('Zeramento contábil no fechamento formal da competência %02d/%04d', $month, $year),
-                                'approved_by' => $closedBy->id,
-                                'created_by' => $closedBy->id,
-                                'metadata' => [
-                                    'previous_balance' => $balanceAtClosing,
-                                    'reset_minutes' => $resetApplied,
-                                ],
-                            ]);
                         }
                     }
                 } elseif ($settlementPolicy->modality === SettlementModality::CumulativeBank) {
                     if ($balanceAtClosing !== 0) {
-                        $settlementManager->createSettlement([
-                            'employee_id' => $employee->id,
-                            'closed_period_id' => $closedPeriod->id,
-                            'settlement_policy_id' => $settlementPolicy->id,
-                            'reference_period' => $referencePeriod,
-                            'minutes' => $balanceAtClosing,
-                            'settlement_type' => WorkTimeSettlementType::CarryOver,
-                            'status' => WorkTimeSettlementStatus::Executed,
-                            'origin_type' => SettlementOriginType::MonthlyClosingBalance,
-                            'operation_date' => $periodEnd->toDateString(),
-                            'execution_date' => $periodEnd->toDateString(),
-                            'document_reference' => sprintf('TRANSPORTE-%04d-%02d', $year, $month),
-                            'justification' => sprintf('Saldo transportado no banco de horas para a competência seguinte (%s)', TimeBankAccount::formatMinutes($balanceAtClosing)),
-                            'idempotency_key' => sprintf('CARRYOVER-%d-%04d-%02d', $employee->id, $year, $month),
-                        ], $closedBy);
+                        // Saldo transportado no banco de horas registrado como settlement de transporte (sem criar quitação documental fictícia)
+                        $hasCarryOver = $existingSettlements->contains(fn ($s) => $s->settlement_type === WorkTimeSettlementType::CarryOver);
+                        if (! $hasCarryOver) {
+                            $alreadyDestinedMinutes = (int) $existingSettlements
+                                ->where('settlement_type', '!=', WorkTimeSettlementType::CarryOver)
+                                ->sum('minutes');
+                            $remainingToCarryOver = $balanceAtClosing - $alreadyDestinedMinutes;
 
-                        WorkTimeSettlementDischarge::create([
-                            'employee_id' => $employee->id,
-                            'closed_period_id' => $closedPeriod->id,
-                            'discharge_type' => SettlementDischargeType::CarriedOver,
-                            'minutes' => $balanceAtClosing,
-                            'reference_period' => sprintf('%04d-%02d', $year, $month),
-                            'execution_date' => $periodEnd->toDateString(),
-                            'document_reference' => sprintf('TRANSPORTE-%04d-%02d', $year, $month),
-                            'description' => sprintf('Saldo transportado no banco de horas para a competência seguinte (%s)', TimeBankAccount::formatMinutes($balanceAtClosing)),
-                            'approved_by' => $closedBy->id,
-                            'created_by' => $closedBy->id,
-                        ]);
+                            if ($remainingToCarryOver !== 0) {
+                                $settlementManager->createSettlement([
+                                    'employee_id' => $employee->id,
+                                    'closed_period_id' => $closedPeriod->id,
+                                    'settlement_policy_id' => $settlementPolicy->id,
+                                    'reference_period' => $referencePeriod,
+                                    'minutes' => $remainingToCarryOver,
+                                    'settlement_type' => WorkTimeSettlementType::CarryOver,
+                                    'status' => WorkTimeSettlementStatus::Executed,
+                                    'origin_type' => SettlementOriginType::MonthlyClosingBalance,
+                                    'operation_date' => $periodEnd->toDateString(),
+                                    'execution_date' => $periodEnd->toDateString(),
+                                    'document_reference' => sprintf('TRANSPORTE-%04d-%02d', $year, $month),
+                                    'justification' => sprintf('Saldo transportado no banco de horas para a competência seguinte (%s)', TimeBankAccount::formatMinutes($remainingToCarryOver)),
+                                    'idempotency_key' => sprintf('CARRYOVER-%d-%04d-%02d', $employee->id, $year, $month),
+                                ], $closedBy);
+                            }
+                        }
                     }
                 } elseif ($settlementPolicy->modality === SettlementModality::MonthlyCompensation) {
                     if ($balanceAtClosing !== 0) {

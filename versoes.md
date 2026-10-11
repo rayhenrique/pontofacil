@@ -1,6 +1,20 @@
 # Histórico de Versões (Changelog)
 
-## v2.5.3 (Atual)
+## v2.5.4 (Atual)
+- **Segurança e Transparência na Gestão de Horas e Compensações:**
+  - **Proteção Integral do Saldo do Colaborador:**
+    - O fechamento da folha ou do mês não apaga nem zera mais automaticamente as horas trabalhadas.
+    - Qualquer quitação ou compensação de horas passa a exigir comprovação real (como recibo, holerite ou folga concedida), garantindo que nenhum saldo desapareça sem registro.
+  - **Validação Segura de Saldos e Horas Disponíveis:**
+    - O sistema confere automaticamente as horas reais apuradas antes de qualquer autorização, impedindo o pagamento duplicado do mesmo saldo ou a quitação de valores acima do apurado.
+    - Separação clara entre horas extras a receber (créditos) e atrasos a compensar (débitos), evitando misturas indevidas.
+  - **Alçadas e Permissões Claras:**
+    - Gestores operam apenas colaboradores de suas equipes e não podem aprovar as próprias horas, garantindo conformidade e transparência para a empresa.
+    - Colaboradores podem acompanhar seus saldos e solicitações de forma transparente.
+  - **Estornos e Correções Auditáveis:**
+    - Caso uma quitação precise ser desfeita, o sistema registra um estorno rastreável com justificativa, restaurando o saldo com total segurança jurídica para colaboradores e empregadores.
+
+## v2.5.3
 - **Refatoração UX e Resiliência do Registro de Ponto (`/ponto`):**
   - **Experiência de Câmera Mobile-First e Suporte Amplo a Notebooks/Desktops:**
     - Inicialização inteligente via `Html5Qrcode.getCameras()`, com seleção automática da webcam integrada em computadores e da câmera traseira em dispositivos móveis.

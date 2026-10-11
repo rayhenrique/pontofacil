@@ -13,7 +13,11 @@ use App\Domain\Settlement\Services\WorkTimeSettlementManager;
 use App\Enums\LegalRegime;
 use App\Enums\UserRole;
 use App\Models\ClosedPeriodEmployeeSnapshot;
+use App\Models\Company;
 use App\Models\Employee;
+use App\Models\Establishment;
+use App\Models\PunchEvent;
+use App\Models\Sector;
 use App\Models\TimeBankAccount;
 use App\Models\TimeBankTransaction;
 use App\Models\User;
@@ -21,8 +25,10 @@ use App\Models\WorkSchedule;
 use App\Models\WorkTimeSettlement;
 use App\Models\WorkTimeSettlementDischarge;
 use App\Models\WorkTimeSettlementPolicy;
+use Carbon\Carbon;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class WorkTimeSettlementAuditingTest extends TestCase
@@ -32,6 +38,8 @@ class WorkTimeSettlementAuditingTest extends TestCase
     protected User $admin;
 
     protected Employee $employee;
+
+    protected Establishment $establishment;
 
     protected WorkSchedule $standardSchedule;
 
@@ -44,6 +52,21 @@ class WorkTimeSettlementAuditingTest extends TestCase
         $this->admin = User::factory()->create([
             'role' => UserRole::Admin,
             'email' => 'admin.settlement@test.com',
+        ]);
+
+        $company = Company::create(['legal_name' => 'Empresa Teste', 'trade_name' => 'Empresa Teste', 'cnpj' => '12345678000199']);
+        $this->establishment = Establishment::create([
+            'company_id' => $company->id,
+            'name' => 'Sede',
+            'code' => '001',
+            'identifier_type' => 'cnpj',
+            'identifier_number' => '12345678000199',
+            'timezone' => 'America/Sao_Paulo',
+        ]);
+        $sector = Sector::create([
+            'establishment_id' => $this->establishment->id,
+            'name' => 'Administrativo',
+            'code' => 'ADM',
         ]);
 
         $this->standardSchedule = WorkSchedule::create([
@@ -69,6 +92,7 @@ class WorkTimeSettlementAuditingTest extends TestCase
         $empUser = User::factory()->create(['name' => 'Colaborador Teste']);
         $this->employee = Employee::create([
             'user_id' => $empUser->id,
+            'sector_id' => $sector->id,
             'cpf' => '11122233344',
             'registration_number' => 'MAT-SETTLE-01',
             'job_title' => 'Analista Administrativo',
@@ -82,11 +106,63 @@ class WorkTimeSettlementAuditingTest extends TestCase
         $this->settlementManager = app(WorkTimeSettlementManager::class);
     }
 
+    protected function registerDayPunches(Employee $employee, Carbon $date, string $in = '08:00', string $out = '19:00'): void
+    {
+        $inTime = $date->copy()->setTimeFromTimeString($in);
+        $outTime = $date->copy()->setTimeFromTimeString($out);
+
+        PunchEvent::create([
+            'id' => (string) Str::ulid(),
+            'establishment_id' => $this->establishment->id,
+            'employee_id' => $employee->id,
+            'user_id' => $employee->user_id,
+            'nsr' => rand(1000, 99999),
+            'direction' => 'in',
+            'occurred_at_utc' => $inTime->copy()->utc(),
+            'occurred_at_local' => $inTime,
+            'fiscal_hash' => hash('sha256', (string) rand()),
+            'audit_chain_hash' => hash('sha256', (string) rand()),
+            'payload_hash' => hash('sha256', (string) rand()),
+            'hash_type_7' => hash('sha256', 'in-'.$inTime->timestamp),
+            'integrity_hash' => hash('sha256', 'in-'.$inTime->timestamp),
+        ]);
+
+        PunchEvent::create([
+            'id' => (string) Str::ulid(),
+            'establishment_id' => $this->establishment->id,
+            'employee_id' => $employee->id,
+            'user_id' => $employee->user_id,
+            'nsr' => rand(1000, 99999),
+            'direction' => 'out',
+            'occurred_at_utc' => $outTime->copy()->utc(),
+            'occurred_at_local' => $outTime,
+            'fiscal_hash' => hash('sha256', (string) rand()),
+            'audit_chain_hash' => hash('sha256', (string) rand()),
+            'payload_hash' => hash('sha256', (string) rand()),
+            'hash_type_7' => hash('sha256', 'out-'.$outTime->timestamp),
+            'integrity_hash' => hash('sha256', 'out-'.$outTime->timestamp),
+        ]);
+    }
+
+    protected function seedTimeBankCredit(int $minutes, string $date = '2026-10-01'): void
+    {
+        $account = TimeBankAccount::getOrCreateForEmployee($this->employee);
+        TimeBankTransaction::create([
+            'time_bank_account_id' => $account->id,
+            'type' => TimeBankTransactionType::OvertimeCredit,
+            'minutes' => $minutes,
+            'reference_date' => $date,
+            'description' => 'Saldo contábil para teste de destinação',
+        ]);
+    }
+
     /**
      * 1. Saldo positivo: registra valor assinado credor (+120 min) preservando natureza e sinal.
      */
     public function test_saldo_positivo_destinacao_credora(): void
     {
+        $this->registerDayPunches($this->employee, Carbon::parse('2026-10-01'), '08:00', '19:00');
+
         $settlement = $this->settlementManager->createSettlement([
             'employee_id' => $this->employee->id,
             'reference_period' => '2026-10',
@@ -130,13 +206,14 @@ class WorkTimeSettlementAuditingTest extends TestCase
      */
     public function test_compensacao_parcial_conservacao_de_valores(): void
     {
+        $this->seedTimeBankCredit(180, '2026-10-01');
+
         $first = $this->settlementManager->createSettlement([
             'employee_id' => $this->employee->id,
             'reference_period' => '2026-10',
             'minutes' => 120,
             'settlement_type' => WorkTimeSettlementType::TimeOffCompensation,
             'origin_type' => SettlementOriginType::MonthlyClosingBalance,
-            'available_origin_minutes' => 180,
             'justification' => 'Primeira parcela de folga compensatória',
         ], $this->admin);
 
@@ -144,7 +221,7 @@ class WorkTimeSettlementAuditingTest extends TestCase
 
         // Tentativa de destinar +70 minutos (totalizaria 190 min, excedendo os 180 min de origem)
         $this->expectException(DomainException::class);
-        $this->expectExceptionMessage('excede o saldo disponível de origem');
+        $this->expectExceptionMessage('Este saldo já foi destinado ou excede as horas disponíveis');
 
         $this->settlementManager->createSettlement([
             'employee_id' => $this->employee->id,
@@ -152,7 +229,6 @@ class WorkTimeSettlementAuditingTest extends TestCase
             'minutes' => 70,
             'settlement_type' => WorkTimeSettlementType::PayrollPayment,
             'origin_type' => SettlementOriginType::MonthlyClosingBalance,
-            'available_origin_minutes' => 180,
             'justification' => 'Tentativa de exceder saldo remanescente',
         ], $this->admin);
     }
@@ -163,6 +239,8 @@ class WorkTimeSettlementAuditingTest extends TestCase
      */
     public function test_pagamento_aprovado_nao_executado_nao_quita_nem_apaga_saldo(): void
     {
+        $this->registerDayPunches($this->employee, Carbon::parse('2026-10-01'), '08:00', '19:00');
+
         $settlement = $this->settlementManager->createSettlement([
             'employee_id' => $this->employee->id,
             'reference_period' => '2026-10',
@@ -188,6 +266,8 @@ class WorkTimeSettlementAuditingTest extends TestCase
      */
     public function test_pagamento_confirmado_com_comprovante_documental(): void
     {
+        $this->registerDayPunches($this->employee, Carbon::parse('2026-10-01'), '08:00', '19:00');
+
         $settlement = $this->settlementManager->createSettlement([
             'employee_id' => $this->employee->id,
             'reference_period' => '2026-10',
@@ -226,6 +306,8 @@ class WorkTimeSettlementAuditingTest extends TestCase
      */
     public function test_folga_concedida_e_efetivamente_usufruida(): void
     {
+        $this->seedTimeBankCredit(480, '2026-10-01');
+
         $settlement = $this->settlementManager->createSettlement([
             'employee_id' => $this->employee->id,
             'reference_period' => '2026-10',
@@ -298,7 +380,7 @@ class WorkTimeSettlementAuditingTest extends TestCase
 
         $this->assertNotNull($pendingSettlement);
         $this->assertEquals(180, $pendingSettlement->minutes);
-        $this->assertStringContainsString('sem destinação comprovada', $pendingSettlement->justification);
+        $this->assertStringContainsString('preservado como pendente', $pendingSettlement->justification);
     }
 
     /**
@@ -306,6 +388,8 @@ class WorkTimeSettlementAuditingTest extends TestCase
      */
     public function test_quitacao_parcial_e_conservacao_remanescente(): void
     {
+        $this->seedTimeBankCredit(180, '2026-10-01');
+
         // Cria settlement 1 (+120 min) e quita
         $settlement1 = $this->settlementManager->createSettlement([
             'employee_id' => $this->employee->id,
@@ -379,13 +463,14 @@ class WorkTimeSettlementAuditingTest extends TestCase
      */
     public function test_modelo_misto_sem_dupla_contabilizacao(): void
     {
+        $this->seedTimeBankCredit(120, '2026-10-01');
+
         $settlementBank = $this->settlementManager->createSettlement([
             'employee_id' => $this->employee->id,
             'reference_period' => '2026-10',
             'minutes' => 60,
             'settlement_type' => WorkTimeSettlementType::CarryOver,
             'origin_type' => SettlementOriginType::MonthlyClosingBalance,
-            'available_origin_minutes' => 120,
             'justification' => 'Cota máxima mensal para o banco',
         ], $this->admin);
 
@@ -395,7 +480,6 @@ class WorkTimeSettlementAuditingTest extends TestCase
             'minutes' => 60,
             'settlement_type' => WorkTimeSettlementType::PayrollPayment,
             'origin_type' => SettlementOriginType::MonthlyClosingBalance,
-            'available_origin_minutes' => 120,
             'justification' => 'Excedente destinado à folha de pagamento',
         ], $this->admin);
 
@@ -420,6 +504,8 @@ class WorkTimeSettlementAuditingTest extends TestCase
      */
     public function test_tentativa_duplicada_bloqueada_por_idempotencia(): void
     {
+        $this->registerDayPunches($this->employee, Carbon::parse('2026-10-01'), '08:00', '19:00');
+
         $key = 'IDEMP-TEST-2026-10-ABC';
 
         $s1 = $this->settlementManager->createSettlement([
@@ -451,6 +537,8 @@ class WorkTimeSettlementAuditingTest extends TestCase
      */
     public function test_estorno_auditavel_com_operacao_compensatoria(): void
     {
+        $this->registerDayPunches($this->employee, Carbon::parse('2026-10-01'), '08:00', '19:00');
+
         $settlement = $this->settlementManager->createSettlement([
             'employee_id' => $this->employee->id,
             'reference_period' => '2026-10',
@@ -486,6 +574,8 @@ class WorkTimeSettlementAuditingTest extends TestCase
      */
     public function test_concorrencia_e_integridade_transacional(): void
     {
+        $this->seedTimeBankCredit(150, '2026-10-01');
+
         $this->expectException(DomainException::class);
 
         // Simula bloqueio de saldo disponível quando a soma dos dois exceder o limite
@@ -495,7 +585,6 @@ class WorkTimeSettlementAuditingTest extends TestCase
             'minutes' => 100,
             'settlement_type' => WorkTimeSettlementType::TimeOffCompensation,
             'origin_type' => SettlementOriginType::MonthlyClosingBalance,
-            'available_origin_minutes' => 150,
             'justification' => 'Reserva de lote 1',
         ], $this->admin);
 
@@ -505,7 +594,6 @@ class WorkTimeSettlementAuditingTest extends TestCase
             'minutes' => 60,
             'settlement_type' => WorkTimeSettlementType::PayrollPayment,
             'origin_type' => SettlementOriginType::MonthlyClosingBalance,
-            'available_origin_minutes' => 150,
             'justification' => 'Reserva de lote 2 concorrente',
         ], $this->admin);
     }
@@ -555,6 +643,8 @@ class WorkTimeSettlementAuditingTest extends TestCase
      */
     public function test_operacao_posterior_ao_fechamento_nao_altera_snapshot_historico(): void
     {
+        $this->seedTimeBankCredit(120, '2026-01-15');
+
         $settlement = $this->settlementManager->createSettlement([
             'employee_id' => $this->employee->id,
             'reference_period' => '2026-01',

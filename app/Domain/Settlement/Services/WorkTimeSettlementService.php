@@ -2,6 +2,7 @@
 
 namespace App\Domain\Settlement\Services;
 
+use App\Domain\PTRP\Actions\CalculateDailyJourneyAction;
 use App\Domain\PTRP\Enums\TimeBankClosingMode;
 use App\Domain\PTRP\Policies\LaborPolicy;
 use App\Domain\Settlement\DTOs\WorkTimeApuracaoResult;
@@ -9,11 +10,17 @@ use App\Domain\Settlement\DTOs\WorkTimeClassificacaoResult;
 use App\Domain\Settlement\DTOs\WorkTimeDestinacaoResult;
 use App\Domain\Settlement\DTOs\WorkTimeSettlementSummary;
 use App\Domain\Settlement\Enums\SettlementModality;
+use App\Domain\Settlement\Enums\SettlementOriginType;
 use App\Domain\Settlement\Enums\SettlementPolicyApprovalStatus;
+use App\Domain\Settlement\Enums\WorkTimeSettlementStatus;
 use App\Enums\LegalRegime;
+use App\Models\ClosedPeriod;
+use App\Models\ClosedPeriodEmployeeSnapshot;
 use App\Models\Employee;
 use App\Models\LaborRuleProfile;
+use App\Models\TimeBankAccount;
 use App\Models\TimeBankPolicy;
+use App\Models\WorkTimeSettlement;
 use App\Models\WorkTimeSettlementPolicy;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
@@ -458,5 +465,202 @@ class WorkTimeSettlementService
             || str_contains($framework, '8.112')
             || str_contains($framework, 'instrucao normativa')
             || str_contains($framework, 'resolucao');
+    }
+
+    /**
+     * Resolve no servidor a disponibilidade autoritativa de minutos para a origem informada,
+     * diferenciando com rigor créditos e débitos e deduzindo destinações ativas já realizadas.
+     * Não confia em valores enviados externamente pelo chamador.
+     *
+     * @return array{available_credit: int, available_debit: int, source_description: string}
+     */
+    public function resolveAuthoritativeAvailableMinutes(
+        Employee $employee,
+        SettlementOriginType $originType,
+        ?string $originIdentifier,
+        string $referencePeriod,
+        ?string $ignoreSettlementId = null,
+    ): array {
+        return match ($originType) {
+            SettlementOriginType::DailyJourney => $this->resolveDailyJourneyMinutes($employee, $originIdentifier, $referencePeriod, $ignoreSettlementId),
+            SettlementOriginType::MonthlyClosingBalance => $this->resolveMonthlyClosingMinutes($employee, $referencePeriod, $ignoreSettlementId),
+            SettlementOriginType::TimeBankBalance => $this->resolveTimeBankBalanceMinutes($employee, $ignoreSettlementId),
+            SettlementOriginType::AdministrativeDiscrepancy => [
+                'available_credit' => PHP_INT_MAX,
+                'available_debit' => PHP_INT_MAX,
+                'source_description' => 'Ajuste ou discrepância administrativa autorizada',
+            ],
+        };
+    }
+
+    /**
+     * Resolve os minutos disponíveis a partir de uma jornada diária específica (aberta ou fechada).
+     */
+    protected function resolveDailyJourneyMinutes(
+        Employee $employee,
+        ?string $originIdentifier,
+        string $referencePeriod,
+        ?string $ignoreSettlementId,
+    ): array {
+        $dateStr = $originIdentifier ?: "{$referencePeriod}-01";
+        $journeyDate = Carbon::parse($dateStr);
+
+        $closedPeriod = ClosedPeriod::findForPeriod($journeyDate->year, $journeyDate->month);
+        $isClosed = $closedPeriod && $closedPeriod->status === 'closed';
+
+        $grossCredit = 0;
+        $grossDebit = 0;
+        $sourceDesc = '';
+
+        if ($isClosed) {
+            $snapshot = ClosedPeriodEmployeeSnapshot::where('closed_period_id', $closedPeriod->id)
+                ->where('employee_id', $employee->id)
+                ->first();
+
+            $day = collect($snapshot?->journey_snapshot ?? [])->firstWhere('date', $journeyDate->toDateString());
+            if ($day) {
+                $grossCredit = (int) ($day['overtime_minutes'] ?? max(0, $day['daily_difference_minutes'] ?? 0));
+                $grossDebit = (int) ($day['deficit_minutes'] ?? abs(min(0, $day['daily_difference_minutes'] ?? 0)));
+            }
+            $sourceDesc = sprintf('Snapshot congelado da competência fechada %02d/%04d (dia %s)', $journeyDate->month, $journeyDate->year, $journeyDate->format('d/m/Y'));
+        } else {
+            $journey = app(CalculateDailyJourneyAction::class)->execute($employee, $journeyDate);
+            $grossCredit = (int) $journey->overtimeMinutes;
+            $grossDebit = (int) ($journey->lateMinutes + $journey->earlyLeaveMinutes + $journey->absenceMinutes);
+            $sourceDesc = sprintf('Apuração analítica diária do PTRP (dia %s)', $journeyDate->format('d/m/Y'));
+        }
+
+        $existingQuery = WorkTimeSettlement::where('employee_id', $employee->id)
+            ->where('origin_type', SettlementOriginType::DailyJourney->value)
+            ->where(function ($q) use ($journeyDate) {
+                $q->where('origin_identifier', $journeyDate->toDateString())
+                    ->orWhere('operation_date', $journeyDate->toDateString());
+            })
+            ->whereNotIn('status', [WorkTimeSettlementStatus::Cancelled, WorkTimeSettlementStatus::Reversed])
+            ->whereNull('reversal_of_id');
+
+        if ($ignoreSettlementId) {
+            $existingQuery->where('id', '!=', $ignoreSettlementId);
+        }
+
+        $existing = $existingQuery->get();
+        $alreadyCredit = (int) $existing->where('minutes', '>', 0)->sum('minutes');
+        $alreadyDebit = (int) abs($existing->where('minutes', '<', 0)->sum('minutes'));
+
+        return [
+            'available_credit' => max(0, $grossCredit - $alreadyCredit),
+            'available_debit' => max(0, $grossDebit - $alreadyDebit),
+            'source_description' => $sourceDesc,
+        ];
+    }
+
+    /**
+     * Resolve os minutos disponíveis a partir do fechamento de uma competência mensal.
+     */
+    protected function resolveMonthlyClosingMinutes(
+        Employee $employee,
+        string $referencePeriod,
+        ?string $ignoreSettlementId,
+    ): array {
+        $parts = explode('-', $referencePeriod);
+        $year = (int) ($parts[0] ?? now()->year);
+        $month = (int) ($parts[1] ?? now()->month);
+
+        $closedPeriod = ClosedPeriod::findForPeriod($year, $month);
+        $isClosed = $closedPeriod && $closedPeriod->status === 'closed';
+
+        $snapshot = null;
+        if ($isClosed) {
+            $snapshot = ClosedPeriodEmployeeSnapshot::where('closed_period_id', $closedPeriod->id)
+                ->where('employee_id', $employee->id)
+                ->first();
+        }
+
+        if ($snapshot) {
+            $closingBalance = (int) ($snapshot->time_bank_snapshot['balance_at_closing'] ?? 0);
+            $grossCredit = $closingBalance > 0 ? $closingBalance : 0;
+            $grossDebit = $closingBalance < 0 ? abs($closingBalance) : 0;
+
+            if ($grossCredit === 0 && ! empty($snapshot->journey_snapshot)) {
+                $grossCredit = (int) collect($snapshot->journey_snapshot)->sum(fn ($j) => $j['destined_to_payroll_minutes'] ?? $j['overtime_minutes'] ?? 0);
+            }
+            $sourceDesc = sprintf('Snapshot congelado de fechamento da competência %s', $referencePeriod);
+        } else {
+            $timeBank = TimeBankAccount::getOrCreateForEmployee($employee);
+            $endOfMonth = Carbon::createFromDate($year, $month, 1)->endOfMonth();
+            $closingBalance = $timeBank->balanceUntil($endOfMonth);
+
+            $grossCredit = $closingBalance > 0 ? $closingBalance : 0;
+            $grossDebit = $closingBalance < 0 ? abs($closingBalance) : 0;
+
+            if ($grossCredit === 0) {
+                $calculateAction = app(CalculateDailyJourneyAction::class);
+                $totalOvertime = 0;
+                $daysInMonth = $endOfMonth->day;
+                for ($d = 1; $d <= $daysInMonth; $d++) {
+                    $dayDate = Carbon::createFromDate($year, $month, $d);
+                    $journey = $calculateAction->execute($employee, $dayDate);
+                    $totalOvertime += (int) $journey->overtimeMinutes;
+                }
+                if ($totalOvertime > 0) {
+                    $grossCredit = $totalOvertime;
+                }
+            }
+
+            $sourceDesc = sprintf('Saldo apurado para a competência %s', $referencePeriod);
+        }
+
+        $existingQuery = WorkTimeSettlement::where('employee_id', $employee->id)
+            ->where('reference_period', $referencePeriod)
+            ->where('origin_type', SettlementOriginType::MonthlyClosingBalance->value)
+            ->whereNotIn('status', [WorkTimeSettlementStatus::Cancelled, WorkTimeSettlementStatus::Reversed])
+            ->whereNull('reversal_of_id');
+
+        if ($ignoreSettlementId) {
+            $existingQuery->where('id', '!=', $ignoreSettlementId);
+        }
+
+        $existing = $existingQuery->get();
+        $alreadyCredit = (int) $existing->where('minutes', '>', 0)->sum('minutes');
+        $alreadyDebit = (int) abs($existing->where('minutes', '<', 0)->sum('minutes'));
+
+        return [
+            'available_credit' => max(0, $grossCredit - $alreadyCredit),
+            'available_debit' => max(0, $grossDebit - $alreadyDebit),
+            'source_description' => $sourceDesc,
+        ];
+    }
+
+    /**
+     * Resolve os minutos disponíveis no saldo acumulado do banco de horas.
+     */
+    protected function resolveTimeBankBalanceMinutes(
+        Employee $employee,
+        ?string $ignoreSettlementId,
+    ): array {
+        $timeBank = TimeBankAccount::getOrCreateForEmployee($employee);
+        $currentBalance = $timeBank->currentBalance();
+
+        $grossCredit = $currentBalance > 0 ? $currentBalance : 0;
+        $grossDebit = $currentBalance < 0 ? abs($currentBalance) : 0;
+
+        $existingQuery = WorkTimeSettlement::where('employee_id', $employee->id)
+            ->where('origin_type', SettlementOriginType::TimeBankBalance->value)
+            ->whereIn('status', [WorkTimeSettlementStatus::Pending, WorkTimeSettlementStatus::Approved, WorkTimeSettlementStatus::AwaitingExecution])
+            ->whereNull('reversal_of_id');
+
+        if ($ignoreSettlementId) {
+            $existingQuery->where('id', '!=', $ignoreSettlementId);
+        }
+
+        $existing = $existingQuery->get();
+        $alreadyCredit = (int) $existing->where('minutes', '>', 0)->sum('minutes');
+        $alreadyDebit = (int) abs($existing->where('minutes', '<', 0)->sum('minutes'));
+
+        return [
+            'available_credit' => max(0, $grossCredit - $alreadyCredit),
+            'available_debit' => max(0, $grossDebit - $alreadyDebit),
+            'source_description' => sprintf('Ledger de banco de horas (saldo atual: %s)', TimeBankAccount::formatMinutes($currentBalance)),
+        ];
     }
 }

@@ -7,12 +7,14 @@ use App\Domain\PTRP\Actions\CloseMonthlyPeriodAction;
 use App\Domain\PTRP\Actions\RecordTimeBankTransactionAction;
 use App\Domain\PTRP\Enums\TimeBankClosingMode;
 use App\Domain\PTRP\Enums\TimeBankTransactionType;
+use App\Domain\Settlement\Enums\WorkTimeSettlementStatus;
 use App\Enums\UserRole;
 use App\Models\Employee;
 use App\Models\TimeBankAccount;
 use App\Models\TimeBankPolicy;
 use App\Models\TimeBankTransaction;
 use App\Models\User;
+use App\Models\WorkTimeSettlement;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -161,18 +163,24 @@ class TimeBankLedgerTest extends TestCase
             closedBy: $this->admin,
         );
 
-        // Transação compensatória gerada com minutos = -480
-        $this->assertDatabaseHas('time_bank_transactions', [
+        // Nenhuma transação indevida de MonthlyReset é gravada sem execução comprovada
+        $this->assertDatabaseMissing('time_bank_transactions', [
             'type' => TimeBankTransactionType::MonthlyReset->value,
-            'minutes' => -480,
         ]);
 
-        // Auditoria: histórico anterior permanece 100% íntegro (mais 1 transação adicionada)
-        $this->assertEquals($initialTxCount + 1, TimeBankTransaction::count());
+        // Auditoria: histórico anterior permanece 100% íntegro (nenhuma transação fictícia adicionada)
+        $this->assertEquals($initialTxCount, TimeBankTransaction::count());
 
-        // Saldo resultante após fechamento é rigorosamente 0
+        // Saldo do trabalhador é preservado e mantido como pendente
         $account->refresh();
-        $this->assertEquals(0, $account->currentBalance());
+        $this->assertEquals(480, $account->currentBalance());
+
+        $settlement = WorkTimeSettlement::where('employee_id', $this->employee->id)
+            ->where('reference_period', '2026-01')
+            ->first();
+        $this->assertNotNull($settlement);
+        $this->assertEquals(480, $settlement->minutes);
+        $this->assertEquals(WorkTimeSettlementStatus::Pending, $settlement->status);
     }
 
     public function test_monthly_reset_handles_negative_balance_correctly(): void
@@ -203,14 +211,21 @@ class TimeBankLedgerTest extends TestCase
             closedBy: $this->admin,
         );
 
-        // Gera transação compensatória positiva de +150
-        $this->assertDatabaseHas('time_bank_transactions', [
+        // Nenhuma transação fictícia de zeramento
+        $this->assertDatabaseMissing('time_bank_transactions', [
             'type' => TimeBankTransactionType::MonthlyReset->value,
-            'minutes' => 150,
         ]);
 
+        // Débito é preservado para regularização/compensação documentada
         $account->refresh();
-        $this->assertEquals(0, $account->currentBalance());
+        $this->assertEquals(-150, $account->currentBalance());
+
+        $settlement = WorkTimeSettlement::where('employee_id', $this->employee->id)
+            ->where('reference_period', '2026-01')
+            ->first();
+        $this->assertNotNull($settlement);
+        $this->assertEquals(-150, $settlement->minutes);
+        $this->assertEquals(WorkTimeSettlementStatus::Pending, $settlement->status);
     }
 
     public function test_system_does_not_reset_balance_automatically_on_calendar_month_change(): void

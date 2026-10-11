@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class WorkTimeSettlement extends Model
 {
@@ -83,6 +84,11 @@ class WorkTimeSettlement extends Model
     public function reversals(): HasMany
     {
         return $this->hasMany(self::class, 'reversal_of_id');
+    }
+
+    public function discharge(): HasOne
+    {
+        return $this->hasOne(WorkTimeSettlementDischarge::class, 'work_time_settlement_id');
     }
 
     public function createdByUser(): BelongsTo

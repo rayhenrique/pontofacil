@@ -9,6 +9,7 @@ use App\Domain\Settlement\Enums\SettlementOriginType;
 use App\Domain\Settlement\Enums\WorkTimeSettlementStatus;
 use App\Domain\Settlement\Enums\WorkTimeSettlementType;
 use App\Models\Employee;
+use App\Models\Sector;
 use App\Models\TimeBankAccount;
 use App\Models\User;
 use App\Models\WorkTimeSettlement;
@@ -23,15 +24,35 @@ use Illuminate\Support\Facades\Log;
 class WorkTimeSettlementManager
 {
     /**
-     * Cria uma nova operação de destinação/liquidação com controle de idempotência e conservação de saldos.
+     * Cria uma nova operação de destinação/liquidação com controle estrito de concorrência,
+     * idempotência e resolução autoritativa de saldos no servidor.
      */
     public function createSettlement(array $data, User $actor): WorkTimeSettlement
     {
         return DB::transaction(function () use ($data, $actor) {
-            // 1. Idempotência estrita: se a chave já existe, retorna o registro original
+            // 1. Idempotência com validação de payload idêntico
             if (! empty($data['idempotency_key'])) {
-                $existing = WorkTimeSettlement::where('idempotency_key', $data['idempotency_key'])->first();
+                $existing = WorkTimeSettlement::where('idempotency_key', $data['idempotency_key'])
+                    ->lockForUpdate()
+                    ->first();
+
                 if ($existing) {
+                    $expectedMinutes = (int) ($data['minutes'] ?? 0);
+                    $expectedEmployeeId = (int) $data['employee_id'];
+                    $expectedPeriod = (string) $data['reference_period'];
+                    $expectedType = $data['settlement_type'] instanceof WorkTimeSettlementType
+                        ? $data['settlement_type']->value
+                        : (string) $data['settlement_type'];
+
+                    $isMatch = ((int) $existing->employee_id === $expectedEmployeeId)
+                        && ((int) $existing->minutes === $expectedMinutes)
+                        && ((string) $existing->reference_period === $expectedPeriod)
+                        && ($existing->settlement_type->value === $expectedType);
+
+                    if (! $isMatch) {
+                        throw new DomainException('Conflito de idempotência: a chave informada já foi utilizada para uma operação com parâmetros diferentes.');
+                    }
+
                     return $existing;
                 }
             }
@@ -42,7 +63,15 @@ class WorkTimeSettlementManager
             }
 
             $employeeId = (int) $data['employee_id'];
-            $employee = Employee::findOrFail($employeeId);
+            $employee = Employee::where('id', $employeeId)->lockForUpdate()->firstOrFail();
+
+            $initialStatus = isset($data['status'])
+                ? ($data['status'] instanceof WorkTimeSettlementStatus ? $data['status'] : WorkTimeSettlementStatus::from($data['status']))
+                : WorkTimeSettlementStatus::Pending;
+
+            // 2. Autorização rigorosa no servidor
+            $this->authorizeOperation($actor, $employee, 'create', $initialStatus);
+
             $referencePeriod = (string) $data['reference_period'];
             $originType = $data['origin_type'] instanceof SettlementOriginType
                 ? $data['origin_type']
@@ -52,39 +81,52 @@ class WorkTimeSettlementManager
                 ? $data['settlement_type']
                 : WorkTimeSettlementType::from($data['settlement_type']);
 
-            // 2. Não duplicar valores já destinados (conservação de valores)
-            if (isset($data['available_origin_minutes'])) {
-                $availableOriginMinutes = (int) $data['available_origin_minutes'];
-                $alreadyDestinedMinutes = (int) WorkTimeSettlement::where('employee_id', $employeeId)
-                    ->where('reference_period', $referencePeriod)
-                    ->where('origin_type', $originType->value)
-                    ->whereNotIn('status', [WorkTimeSettlementStatus::Cancelled, WorkTimeSettlementStatus::Reversed])
-                    ->whereNull('reversal_of_id')
-                    ->sum('minutes');
-
-                $newTotalDestined = $alreadyDestinedMinutes + $minutes;
-                if ($availableOriginMinutes >= 0 && $newTotalDestined > $availableOriginMinutes) {
-                    throw new DomainException(sprintf(
-                        'A destinação de %d minutos excede o saldo disponível de origem (%d min disponíveis, %d min já destinados).',
-                        $minutes,
-                        $availableOriginMinutes,
-                        $alreadyDestinedMinutes
-                    ));
-                }
-
-                if ($availableOriginMinutes < 0 && $newTotalDestined < $availableOriginMinutes) {
-                    throw new DomainException(sprintf(
-                        'A destinação de débito de %d minutos excede o déficit apurado de origem (%d min disponíveis, %d min já destinados).',
-                        $minutes,
-                        $availableOriginMinutes,
-                        $alreadyDestinedMinutes
-                    ));
-                }
+            // 3. Validação de compatibilidade de natureza (crédito vs débito)
+            if ($minutes > 0 && in_array($settlementType, [WorkTimeSettlementType::DeficitCompensation, WorkTimeSettlementType::PayrollDeduction], true)) {
+                throw new DomainException(sprintf(
+                    'Natureza incompatível: a operação "%s" é de débito, mas a quantidade de minutos é positiva (+%d min).',
+                    $settlementType->label(),
+                    $minutes
+                ));
             }
 
-            $initialStatus = isset($data['status'])
-                ? ($data['status'] instanceof WorkTimeSettlementStatus ? $data['status'] : WorkTimeSettlementStatus::from($data['status']))
-                : WorkTimeSettlementStatus::Pending;
+            if ($minutes < 0 && in_array($settlementType, [WorkTimeSettlementType::TimeOffCompensation, WorkTimeSettlementType::PayrollPayment], true)) {
+                throw new DomainException(sprintf(
+                    'Natureza incompatível: a operação "%s" é de crédito, mas a quantidade de minutos é negativa (%d min).',
+                    $settlementType->label(),
+                    $minutes
+                ));
+            }
+
+            // 4. Bloqueio em TimeBankAccount para evitar concorrência em saldos do mesmo colaborador
+            TimeBankAccount::getOrCreateForEmployee($employee);
+            TimeBankAccount::where('employee_id', $employee->id)->lockForUpdate()->first();
+
+            // 5. Resolução autoritativa da origem dos minutos (não confia no chamador)
+            $originIdentifier = $data['origin_identifier'] ?? null;
+            $settlementService = app(WorkTimeSettlementService::class);
+            $availableOrigin = $settlementService->resolveAuthoritativeAvailableMinutes(
+                $employee,
+                $originType,
+                $originIdentifier,
+                $referencePeriod
+            );
+
+            if ($minutes > 0 && $minutes > $availableOrigin['available_credit']) {
+                throw new DomainException(sprintf(
+                    'Este saldo já foi destinado ou excede as horas disponíveis (%d min disponíveis, %d min solicitados). Confira o histórico antes de continuar.',
+                    $availableOrigin['available_credit'],
+                    $minutes
+                ));
+            }
+
+            if ($minutes < 0 && abs($minutes) > $availableOrigin['available_debit']) {
+                throw new DomainException(sprintf(
+                    'Este débito já foi regularizado ou excede o débito apurado disponível (%d min disponíveis, %d min solicitados). Confira o histórico antes de continuar.',
+                    $availableOrigin['available_debit'],
+                    abs($minutes)
+                ));
+            }
 
             $operationDate = isset($data['operation_date'])
                 ? Carbon::parse($data['operation_date'])
@@ -104,7 +146,7 @@ class WorkTimeSettlementManager
                 'settlement_type' => $settlementType,
                 'status' => $initialStatus,
                 'origin_type' => $originType,
-                'origin_identifier' => $data['origin_identifier'] ?? null,
+                'origin_identifier' => $originIdentifier,
                 'operation_date' => $operationDate->toDateString(),
                 'execution_date' => isset($data['execution_date']) ? Carbon::parse($data['execution_date'])->toDateString() : null,
                 'document_reference' => $data['document_reference'] ?? null,
@@ -114,13 +156,14 @@ class WorkTimeSettlementManager
                 'approved_by' => $initialStatus === WorkTimeSettlementStatus::Approved ? $actor->id : null,
                 'approved_at' => $initialStatus === WorkTimeSettlementStatus::Approved ? now() : null,
                 'metadata' => [
+                    'source_authoritative' => $availableOrigin['source_description'],
                     'history' => [
                         [
                             'status' => $initialStatus->value,
                             'actor_id' => $actor->id,
                             'actor_name' => $actor->name,
                             'timestamp' => now()->toIso8601String(),
-                            'notes' => 'Criação do registro de destinação',
+                            'notes' => 'Criação do registro de destinação com validação autoritativa de saldo',
                         ],
                     ],
                 ],
@@ -146,7 +189,10 @@ class WorkTimeSettlementManager
     public function approveSettlement(WorkTimeSettlement $settlement, User $actor, ?string $notes = null): WorkTimeSettlement
     {
         return DB::transaction(function () use ($settlement, $actor, $notes) {
-            if ($settlement->status !== WorkTimeSettlementStatus::Pending) {
+            $settlement = WorkTimeSettlement::where('id', $settlement->id)->lockForUpdate()->firstOrFail();
+            $this->authorizeOperation($actor, $settlement->employee, 'approve', $settlement);
+
+            if (! $settlement->status->canTransitionTo(WorkTimeSettlementStatus::Approved)) {
                 throw new DomainException(sprintf(
                     'Não é possível aprovar uma destinação com status "%s". Apenas destinações pendentes podem ser aprovadas.',
                     $settlement->status->label()
@@ -159,7 +205,7 @@ class WorkTimeSettlementManager
                 'actor_id' => $actor->id,
                 'actor_name' => $actor->name,
                 'timestamp' => now()->toIso8601String(),
-                'notes' => $notes ?? 'Aprovação administrativa da destinação',
+                'notes' => $notes ?? 'Aprovação administrativa da destinação (não constitui comprovante de quitação fática)',
             ];
 
             $settlement->update([
@@ -184,7 +230,10 @@ class WorkTimeSettlementManager
     public function markAwaitingExecution(WorkTimeSettlement $settlement, User $actor, ?string $documentRef = null, ?string $notes = null): WorkTimeSettlement
     {
         return DB::transaction(function () use ($settlement, $actor, $documentRef, $notes) {
-            if ($settlement->status !== WorkTimeSettlementStatus::Approved) {
+            $settlement = WorkTimeSettlement::where('id', $settlement->id)->lockForUpdate()->firstOrFail();
+            $this->authorizeOperation($actor, $settlement->employee, 'mark_awaiting', $settlement);
+
+            if (! $settlement->status->canTransitionTo(WorkTimeSettlementStatus::AwaitingExecution)) {
                 throw new DomainException(sprintf(
                     'Apenas destinações previamente aprovadas podem aguardar execução. Status atual: "%s".',
                     $settlement->status->label()
@@ -212,7 +261,7 @@ class WorkTimeSettlementManager
 
     /**
      * Confirma a execução fática da destinação (pagamento confirmado, folga usufruída, compensação realizada).
-     * Exige comprovante documental e data de execução.
+     * Exige comprovante documental e data de execução. Impede dupla execução e duplicidade de baixa.
      */
     public function confirmExecution(
         WorkTimeSettlement $settlement,
@@ -223,7 +272,14 @@ class WorkTimeSettlementManager
         bool $dischargeFromTimeBank = false,
     ): WorkTimeSettlement {
         return DB::transaction(function () use ($settlement, $actor, $executionDate, $documentReference, $notes, $dischargeFromTimeBank) {
-            if (! in_array($settlement->status, [WorkTimeSettlementStatus::Approved, WorkTimeSettlementStatus::AwaitingExecution], true)) {
+            $settlement = WorkTimeSettlement::where('id', $settlement->id)->lockForUpdate()->firstOrFail();
+            $this->authorizeOperation($actor, $settlement->employee, 'execute', $settlement);
+
+            if ($settlement->status === WorkTimeSettlementStatus::Executed) {
+                throw new DomainException('Esta destinação já foi efetivada e possui quitação documentada.');
+            }
+
+            if (! $settlement->status->canTransitionTo(WorkTimeSettlementStatus::Executed)) {
                 throw new DomainException(sprintf(
                     'Para registrar quitação efetiva, a destinação precisa estar Aprovada ou Aguardando Execução. Status atual: "%s".',
                     $settlement->status->label()
@@ -235,17 +291,28 @@ class WorkTimeSettlementManager
                 throw new DomainException('A quitação/efetivação exige obrigatoriamente uma referência documental comprobatória (holerite, recibo, portaria ou termo).');
             }
 
+            // Unicidade estrita: impede duas baixas para a mesma execução
+            $existingDischarge = WorkTimeSettlementDischarge::where('work_time_settlement_id', $settlement->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existingDischarge) {
+                throw new DomainException('Já existe uma quitação documentada vinculada a esta destinação.');
+            }
+
             $execDate = $executionDate instanceof CarbonInterface
                 ? $executionDate
                 : Carbon::parse($executionDate);
 
-            // 1. Se a destinação der baixa em horas do banco de horas:
+            // Se a destinação der baixa em horas do banco de horas:
             if ($dischargeFromTimeBank) {
                 $account = TimeBankAccount::getOrCreateForEmployee($settlement->employee);
+                TimeBankAccount::where('id', $account->id)->lockForUpdate()->first();
+
                 $invertMinutes = -$settlement->minutes; // Inverte o sinal para baixar o saldo contábil
                 app(RecordTimeBankTransactionAction::class)->execute(
                     employee: $settlement->employee_id,
-                    type: $settlement->minutes > 0 ? TimeBankTransactionType::CompensatoryDebit : TimeBankTransactionType::ManualCredit,
+                    type: $settlement->minutes > 0 ? TimeBankTransactionType::CompensationDebit : TimeBankTransactionType::ManualCredit,
                     minutes: $invertMinutes,
                     referenceDate: $execDate,
                     description: sprintf('Baixa contábil por quitação comprovada (%s - %s)', $settlement->settlement_type->label(), $docRefTrim),
@@ -276,10 +343,11 @@ class WorkTimeSettlementManager
                 'metadata' => array_merge($settlement->metadata ?? [], ['history' => $history]),
             ]);
 
-            // 2. Registro no ledger de quitações documentadas
+            // 2. Registro no ledger de quitações documentadas com vínculo único
             WorkTimeSettlementDischarge::create([
                 'employee_id' => $settlement->employee_id,
                 'closed_period_id' => $settlement->closed_period_id,
+                'work_time_settlement_id' => $settlement->id,
                 'discharge_type' => match ($settlement->settlement_type) {
                     WorkTimeSettlementType::PayrollPayment => SettlementDischargeType::PayrollPaid,
                     WorkTimeSettlementType::PayrollDeduction => SettlementDischargeType::PayrollDeducted,
@@ -324,7 +392,14 @@ class WorkTimeSettlementManager
         bool $reverseTimeBank = false,
     ): WorkTimeSettlement {
         return DB::transaction(function () use ($settlement, $actor, $justification, $documentReference, $reverseTimeBank) {
-            if ($settlement->status !== WorkTimeSettlementStatus::Executed) {
+            $settlement = WorkTimeSettlement::where('id', $settlement->id)->lockForUpdate()->firstOrFail();
+            $this->authorizeOperation($actor, $settlement->employee, 'reverse', $settlement);
+
+            if ($settlement->status === WorkTimeSettlementStatus::Reversed) {
+                throw new DomainException('Esta destinação já foi estornada anteriormente.');
+            }
+
+            if (! $settlement->status->canTransitionTo(WorkTimeSettlementStatus::Reversed)) {
                 throw new DomainException(sprintf(
                     'Apenas destinações Efetivadas podem ser estornadas. Status atual: "%s". Para outras situações, utilize o cancelamento.',
                     $settlement->status->label()
@@ -353,9 +428,12 @@ class WorkTimeSettlementManager
 
             // 2. Se afetou o TimeBank, estorna a movimentação
             if ($reverseTimeBank) {
+                $account = TimeBankAccount::getOrCreateForEmployee($settlement->employee);
+                TimeBankAccount::where('id', $account->id)->lockForUpdate()->first();
+
                 app(RecordTimeBankTransactionAction::class)->execute(
                     employee: $settlement->employee_id,
-                    type: $settlement->minutes > 0 ? TimeBankTransactionType::ManualCredit : TimeBankTransactionType::CompensatoryDebit,
+                    type: $settlement->minutes > 0 ? TimeBankTransactionType::ManualCredit : TimeBankTransactionType::CompensationDebit,
                     minutes: $settlement->minutes, // Devolve os minutos originais
                     referenceDate: Carbon::today(),
                     description: sprintf('Estorno contábil de quitação ref %s', $settlement->id),
@@ -420,7 +498,14 @@ class WorkTimeSettlementManager
     public function cancelSettlement(WorkTimeSettlement $settlement, User $actor, string $reason): WorkTimeSettlement
     {
         return DB::transaction(function () use ($settlement, $actor, $reason) {
-            if ($settlement->status->isFinal()) {
+            $settlement = WorkTimeSettlement::where('id', $settlement->id)->lockForUpdate()->firstOrFail();
+            $this->authorizeOperation($actor, $settlement->employee, 'cancel', $settlement);
+
+            if ($settlement->status === WorkTimeSettlementStatus::Cancelled) {
+                throw new DomainException('Esta destinação já foi cancelada anteriormente.');
+            }
+
+            if (! $settlement->status->canTransitionTo(WorkTimeSettlementStatus::Cancelled)) {
                 throw new DomainException(sprintf(
                     'Destinações em estado final (%s) não podem ser canceladas. Se já foram efetivadas, utilize o estorno compensatório.',
                     $settlement->status->label()
@@ -456,6 +541,71 @@ class WorkTimeSettlementManager
 
             return $settlement;
         });
+    }
+
+    /**
+     * Valida no servidor permissões, vínculos, escopo e segregação de funções.
+     * Não confia em permissões de rota ou do lado do cliente.
+     */
+    public function authorizeOperation(
+        User $actor,
+        Employee $employee,
+        string $action,
+        WorkTimeSettlementStatus|WorkTimeSettlement|null $targetOrSettlement = null
+    ): void {
+        $targetStatus = $targetOrSettlement instanceof WorkTimeSettlementStatus
+            ? $targetOrSettlement
+            : ($targetOrSettlement instanceof WorkTimeSettlement ? $targetOrSettlement->status : null);
+        if (! $actor->exists) {
+            throw new DomainException('Acesso negado: usuário não autenticado.');
+        }
+
+        if ($actor->isAuditor()) {
+            throw new DomainException('Auditores possuem acesso estritamente para consulta e fiscalização de registros.');
+        }
+
+        if ($actor->isEmployee()) {
+            if (in_array($action, ['approve', 'execute', 'reverse'], true)) {
+                throw new DomainException('Colaboradores não possuem permissão para autorizar, aprovar ou efetivar quitações de horas.');
+            }
+
+            if ($action === 'create' && in_array($targetStatus, [WorkTimeSettlementStatus::Approved, WorkTimeSettlementStatus::Executed], true)) {
+                throw new DomainException('Colaboradores não podem autorizar a própria quitação por manipulação de requisição.');
+            }
+
+            if ($employee->user_id !== $actor->id) {
+                throw new DomainException('Não é permitido operar registros de outro colaborador.');
+            }
+
+            return;
+        }
+
+        if ($actor->isManager()) {
+            // Segregação de Funções: Gestor não pode aprovar nem efetivar quitação dele próprio
+            if (in_array($action, ['approve', 'execute'], true) && $employee->user_id === $actor->id) {
+                throw new DomainException('Segregação de funções: um gestor não pode aprovar ou efetivar a própria quitação.');
+            }
+
+            if ($action === 'create' && $employee->user_id === $actor->id && in_array($targetStatus, [WorkTimeSettlementStatus::Approved, WorkTimeSettlementStatus::Executed], true)) {
+                throw new DomainException('Segregação de funções: um gestor não pode autoaprovar a própria destinação.');
+            }
+
+            // Delimitação por Escopo Setorial
+            $employeeSectorId = $employee->sector_id;
+            $isManaged = $employeeSectorId && Sector::where('manager_id', $actor->id)->where('id', $employeeSectorId)->exists();
+
+            if (! $isManaged) {
+                throw new DomainException('O gestor não possui autorização para operar colaboradores fora de seu escopo de gestão.');
+            }
+
+            return;
+        }
+
+        if ($actor->isAdmin()) {
+            return;
+        }
+
+        throw new DomainException('Acesso negado: perfil sem autorização para operações de destinação.');
     }
 
     /**

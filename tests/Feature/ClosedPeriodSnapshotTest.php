@@ -11,7 +11,9 @@ use App\Domain\PTRP\Actions\RequestTreatmentEventAction;
 use App\Domain\PTRP\Enums\TimeBankClosingMode;
 use App\Domain\PTRP\Enums\TimeBankTransactionType;
 use App\Domain\PTRP\Enums\TreatmentEventType;
+use App\Domain\Settlement\Enums\WorkTimeSettlementStatus;
 use App\Enums\UserRole;
+use App\Models\ClosedPeriodEmployeeSnapshot;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Establishment;
@@ -21,6 +23,7 @@ use App\Models\TimeBankPolicy;
 use App\Models\TimeBankTransaction;
 use App\Models\User;
 use App\Models\WorkSchedule;
+use App\Models\WorkTimeSettlement;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -142,15 +145,28 @@ class ClosedPeriodSnapshotTest extends TestCase
         $this->assertEquals('closed', $closedPeriod->status);
         $this->assertEquals(1, $closedPeriod->snapshot_version);
 
-        // Verifica que o reset compensatório gerado foi de rigorosamente -480 (e não -660)
+        // Verifica que nenhum zeramento automático no ledger foi gerado
         $resetTx = TimeBankTransaction::where('type', TimeBankTransactionType::MonthlyReset)->first();
-        $this->assertNotNull($resetTx);
-        $this->assertEquals(-480, $resetTx->minutes);
-        $this->assertEquals('2026-01-31', $resetTx->reference_date->format('Y-m-d'));
+        $this->assertNull($resetTx, 'Fechamento não pode apagar saldo sem quitação comprovada.');
 
-        // O saldo final atual da conta deve ser exatamente 180 min (saldo de Fevereiro preservado!)
+        // Verifica que o snapshot congelado capturou com precisão cirúrgica o saldo de Janeiro (480 min)
+        $snapshot = ClosedPeriodEmployeeSnapshot::where('closed_period_id', $closedPeriod->id)
+            ->where('employee_id', $this->employee->id)
+            ->first();
+        $this->assertNotNull($snapshot);
+        $this->assertEquals(480, $snapshot->time_bank_snapshot['balance_at_closing']);
+
+        // Verifica que o saldo foi registrado como Pendente de quitação
+        $settlement = WorkTimeSettlement::where('employee_id', $this->employee->id)
+            ->where('reference_period', '2026-01')
+            ->first();
+        $this->assertNotNull($settlement);
+        $this->assertEquals(480, $settlement->minutes);
+        $this->assertEquals(WorkTimeSettlementStatus::Pending, $settlement->status);
+
+        // O saldo da conta preserva as horas do trabalhador (660 min)
         $account->refresh();
-        $this->assertEquals(180, $account->currentBalance());
+        $this->assertEquals(660, $account->currentBalance());
     }
 
     /**

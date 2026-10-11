@@ -19,6 +19,7 @@ class WorkTimeSettlementDischarge extends Model
         'id',
         'employee_id',
         'closed_period_id',
+        'work_time_settlement_id',
         'discharge_type',
         'minutes',
         'reference_period',
@@ -45,6 +46,11 @@ class WorkTimeSettlementDischarge extends Model
     public function closedPeriod(): BelongsTo
     {
         return $this->belongsTo(ClosedPeriod::class);
+    }
+
+    public function workTimeSettlement(): BelongsTo
+    {
+        return $this->belongsTo(WorkTimeSettlement::class);
     }
 
     public function approvedByUser(): BelongsTo

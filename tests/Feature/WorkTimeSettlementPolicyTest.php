@@ -7,9 +7,9 @@ use App\Domain\PTRP\Actions\CalculateDailyJourneyAction;
 use App\Domain\PTRP\Actions\CloseMonthlyPeriodAction;
 use App\Domain\PTRP\Enums\TimeBankClosingMode;
 use App\Domain\PTRP\Enums\TimeBankTransactionType;
-use App\Domain\Settlement\Enums\SettlementDischargeType;
 use App\Domain\Settlement\Enums\SettlementModality;
 use App\Domain\Settlement\Enums\SettlementPolicyApprovalStatus;
+use App\Domain\Settlement\Enums\WorkTimeSettlementStatus;
 use App\Domain\Settlement\Services\WorkTimeSettlementService;
 use App\Enums\LegalRegime;
 use App\Enums\UserRole;
@@ -23,6 +23,7 @@ use App\Models\TimeBankPolicy;
 use App\Models\TimeBankTransaction;
 use App\Models\User;
 use App\Models\WorkSchedule;
+use App\Models\WorkTimeSettlement;
 use App\Models\WorkTimeSettlementDischarge;
 use App\Models\WorkTimeSettlementPolicy;
 use Carbon\Carbon;
@@ -445,8 +446,8 @@ class WorkTimeSettlementPolicyTest extends TestCase
     }
 
     /**
-     * 11. Compatibilidade com dados legados e quitação documentada:
-     * Fechamento sob modo legado MONTHLY_RESET registra transação de zeramento e quitação documentada.
+     * 11. Fechamento seguro: fechamento não zera saldo sem comprovação de quitação fática prévia,
+     * preservando as horas apuradas como pendentes de destinação/quitação em WorkTimeSettlement.
      */
     public function test_legacy_monthly_reset_records_time_bank_transaction_and_discharge(): void
     {
@@ -473,19 +474,22 @@ class WorkTimeSettlementPolicyTest extends TestCase
             closedBy: $this->admin
         );
 
-        // Transação de MonthlyReset gravada
+        // Transação indevida de MonthlyReset NÃO deve ser gravada
         $resetTx = TimeBankTransaction::where('type', TimeBankTransactionType::MonthlyReset)->first();
-        $this->assertNotNull($resetTx);
-        $this->assertEquals(-120, $resetTx->minutes);
+        $this->assertNull($resetTx, 'Fechamento não pode criar zeramento automático sem evidência documental.');
 
-        // Registro de quitação WorkTimeSettlementDischarge gravado
-        $discharge = WorkTimeSettlementDischarge::where('employee_id', $this->cltEmployee->id)
-            ->where('discharge_type', SettlementDischargeType::MonthlyResetLegacy)
+        // Saldo preservado como pendente em WorkTimeSettlement
+        $settlement = WorkTimeSettlement::where('employee_id', $this->cltEmployee->id)
+            ->where('reference_period', '2026-01')
             ->first();
 
-        $this->assertNotNull($discharge);
-        $this->assertEquals(-120, $discharge->minutes);
-        $this->assertEquals('2026-01', $discharge->reference_period);
+        $this->assertNotNull($settlement);
+        $this->assertEquals(120, $settlement->minutes);
+        $this->assertEquals(WorkTimeSettlementStatus::Pending, $settlement->status);
+
+        // Nenhuma quitação fictícia é gerada
+        $discharge = WorkTimeSettlementDischarge::where('employee_id', $this->cltEmployee->id)->first();
+        $this->assertNull($discharge, 'Não deve criar quitação sem confirmação de execução documental.');
     }
 
     protected static int $testNsr = 1;
