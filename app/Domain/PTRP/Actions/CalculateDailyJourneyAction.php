@@ -9,6 +9,8 @@ use App\Domain\PTRP\DTOs\CalculatedJourney;
 use App\Domain\PTRP\Enums\TreatmentEventStatus;
 use App\Domain\PTRP\Enums\TreatmentEventType;
 use App\Domain\PTRP\Policies\LaborPolicy;
+use App\Domain\Settlement\DTOs\WorkTimeApuracaoResult;
+use App\Domain\Settlement\Services\WorkTimeSettlementService;
 use App\Enums\ShiftType;
 use App\Enums\WorkScheduleModality;
 use App\Models\Employee;
@@ -19,6 +21,7 @@ use App\Models\ShiftAssignment;
 use App\Models\TimeEntry;
 use App\Models\TreatmentEvent;
 use App\Models\WorkSchedule;
+use App\Models\WorkTimeSettlementPolicy;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 
@@ -36,6 +39,7 @@ class CalculateDailyJourneyAction
         CarbonInterface $date,
         ?WorkSchedule $schedule = null,
         ?LaborPolicy $policy = null,
+        ?WorkTimeSettlementPolicy $settlementPolicy = null,
     ): CalculatedJourney {
         $dateStr = $date->format('Y-m-d');
 
@@ -112,6 +116,7 @@ class CalculateDailyJourneyAction
         $calendarSnapshot = $calendarDay->toSnapshotArray();
 
         $treatmentNotes = [];
+        $toleratedMinutes = 0;
 
         if ($isPendingConfiguration) {
             $treatmentNotes[] = 'Ausência de escala de trabalho válida ou autorizada para a data. Apuração financeira pendente de parametrização.';
@@ -462,12 +467,14 @@ class CalculateDailyJourneyAction
                 }
             } else {
                 $netDifference = $workedMinutes - $scheduledMinutes;
+                $toleratedMinutes = 0;
 
                 if ($netDifference > 0) {
                     $toleratedOvertime = $laborPolicy->applyPunchTolerance($netDifference);
                     if ($toleratedOvertime === 0) {
                         $ordinaryMinutes = $workedMinutes;
                         $overtimeMinutes = 0;
+                        $toleratedMinutes = $netDifference;
                     } else {
                         $ordinaryMinutes = $scheduledMinutes;
                         $overtimeMinutes = $netDifference;
@@ -478,6 +485,7 @@ class CalculateDailyJourneyAction
                     if ($toleratedDeficit === 0) {
                         $ordinaryMinutes = $scheduledMinutes;
                         $lateMinutes = 0;
+                        $toleratedMinutes = $deficit;
                     } else {
                         $ordinaryMinutes = $workedMinutes;
                         $lateMinutes = $deficit;
@@ -492,12 +500,70 @@ class CalculateDailyJourneyAction
             $ordinaryMinutes = 0;
         }
 
-        // 12. Crédito e Débito de Banco de Horas
-        // Não incluir automaticamente adicional noturno ou feriados no banco de horas.
-        $compensableOvertimeMinutes = $hasSchedule ? $overtimeMinutes : 0;
-        $nonCompensableOvertimeMinutes = 0;
-        $bankCreditMinutes = $compensableOvertimeMinutes;
-        $bankDebitMinutes = $hasSchedule ? ($lateMinutes + $earlyLeaveMinutes + $absenceMinutes) : 0;
+        // 12. Apuração Analítica, Classificação e Destinação de Horas (WorkTimeSettlementService)
+        // Formaliza a separação dos quatro conceitos do domínio:
+        // 1. Apuração (fatos analíticos de previstas, trabalhadas e saldo)
+        // 2. Classificação (tolerado, justificável, extraordinário, déficit, pendente)
+        // 3. Destinação (banco acumulativo, compensação mensal, folha, folga, pendente)
+        $settlementService = app(WorkTimeSettlementService::class);
+        $resolvedSettlementPolicy = $settlementPolicy ?? $settlementService->resolvePolicy($employee, $date);
+
+        $apuracaoResult = new WorkTimeApuracaoResult(
+            date: $dateStr,
+            scheduledMinutes: $scheduledMinutes,
+            workedMinutes: $workedMinutes,
+            grossDifferenceMinutes: $workedMinutes - $scheduledMinutes,
+            grossOvertimeMinutes: $hasSchedule ? $overtimeMinutes : $workedMinutes,
+            grossLateMinutes: $lateMinutes,
+            grossEarlyLeaveMinutes: $earlyLeaveMinutes,
+            grossAbsenceMinutes: $absenceMinutes,
+            breakMinutes: $breakMinutes,
+            missingBreakMinutes: $missingBreakMinutes,
+            physicalNightMinutes: 0,
+            legalNightEquivalentMinutes: 0,
+            hasSchedule: $hasSchedule,
+            isDayOff: $scheduledMinutes === 0,
+            isHoliday: $calendarDay->isHoliday,
+        );
+
+        $classificacaoResult = $settlementService->classify(
+            employee: $employee,
+            date: $date,
+            apuracao: $apuracaoResult,
+            policy: $resolvedSettlementPolicy,
+            ruleProfile: $ruleProfile,
+            laborPolicy: $laborPolicy,
+        );
+
+        $destinacaoResult = $settlementService->destine(
+            classificacao: $classificacaoResult,
+            policy: $resolvedSettlementPolicy,
+        );
+
+        $settlementSummary = $settlementService->summarize(
+            employee: $employee,
+            date: $date,
+            apuracao: $apuracaoResult,
+            classificacao: $classificacaoResult,
+            destinacao: $destinacaoResult,
+            policy: $resolvedSettlementPolicy,
+        );
+
+        $compensableOvertimeMinutes = $classificacaoResult->compensableOvertimeMinutes;
+        $nonCompensableOvertimeMinutes = $destinacaoResult->destinedToPayrollCreditMinutes;
+        $bankCreditMinutes = $destinacaoResult->destinedToBankCreditMinutes;
+        $bankDebitMinutes = $destinacaoResult->destinedToBankDebitMinutes;
+        $destinedToPayrollMinutes = $destinacaoResult->destinedToPayrollCreditMinutes;
+        $destinedToCompensationMinutes = $destinacaoResult->destinedToMonthlyCompensationMinutes;
+        $isPendingSettlement = $classificacaoResult->isPendingLegalDefinition;
+
+        if ($isPendingSettlement && ! empty($classificacaoResult->notes)) {
+            foreach ($classificacaoResult->notes as $cNote) {
+                if (! in_array($cNote, $treatmentNotes, true)) {
+                    $treatmentNotes[] = $cNote;
+                }
+            }
+        }
 
         // 13. Apuração de trabalho noturno (CalculateNightWorkAction)
         $nightWorkAction = app(CalculateNightWorkAction::class);
@@ -565,6 +631,16 @@ class CalculateDailyJourneyAction
             workScheduleCode: $workScheduleCode,
             shiftAssignmentId: $shiftAssignmentId,
             shiftCode: $shiftCode,
+            settlementModality: $destinacaoResult->modality,
+            settlementPolicyId: $resolvedSettlementPolicy->id,
+            settlementPolicyName: $resolvedSettlementPolicy->name,
+            destinedToPayrollMinutes: $destinedToPayrollMinutes,
+            destinedToCompensationMinutes: $destinedToCompensationMinutes,
+            isPendingSettlement: $isPendingSettlement,
+            settlementNotes: $destinacaoResult->notes,
+            settlementSummary: $settlementSummary,
+            toleratedMinutes: $toleratedMinutes ?: ($classificacaoResult->toleratedMinutes ?? 0),
+            justifiedMinutes: $classificacaoResult->justifiedMinutes ?? 0,
         );
     }
 }

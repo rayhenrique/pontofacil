@@ -747,54 +747,337 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
         </div>
     </section>
 
-    {{-- 3. BANCO DE HORAS (SE ATIVADO NA POLÍTICA VIGENTE) --}}
-    @if($policy && $policy->enabled && $timeBankSummary)
-    <section class="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-2xs border border-slate-800">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3 mb-4">
-            <div class="flex items-center gap-2">
-                <div class="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
+    {{-- 3. BANCO DE HORAS (SE ATIVADO NA POLÍTICA VIGENTE E OPERADO PELO VÍNCULO) --}}
+    @if(($operatesTimeBank ?? false) && $timeBankSummary && !($timeBankSummary->isHistoricalLimitation && empty($timeBankSummary->transactions)))
+    <section x-data="{ showReconciliation: false }" class="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-2xs border border-slate-800 space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                     </svg>
                 </div>
                 <div>
                     <h2 class="text-xs sm:text-sm font-bold text-white tracking-tight">Banco de Horas</h2>
-                    <p class="text-[11px] text-slate-400">Regra de apuração: {{ $policy->closing_mode->label() }}</p>
+                    <p class="text-[11px] text-slate-400">
+                        Regra de apuração: {{ $timeBankSummary->policyName ?? ($policy?->closing_mode?->label() ?? 'Banco de Horas Ativo') }}
+                    </p>
                 </div>
             </div>
 
             <div class="text-left sm:text-right">
-                <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Saldo Atual</span>
-                <span class="text-xl sm:text-2xl font-bold font-mono tabular-nums {{ $timeBankSummary->currentBalanceMinutes >= 0 ? 'text-emerald-400' : 'text-rose-400' }}">
-                    {{ $timeBankSummary->formattedCurrentBalance() }}
+                <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">
+                    {{ $isClosedPeriod ? 'Saldo Fechado da Competência' : 'Saldo ao Final da Competência' }}
+                </span>
+                <span class="text-xl sm:text-2xl font-bold font-mono tabular-nums {{ $timeBankSummary->closingBalanceMinutes >= 0 ? 'text-emerald-400' : 'text-rose-400' }}">
+                    {{ $timeBankSummary->formattedClosingBalance() }}
+                </span>
+                @if(!$isClosedPeriod && $timeBankSummary->todayBalanceMinutes !== $timeBankSummary->closingBalanceMinutes)
+                    <span class="text-[10px] text-slate-400 block font-sans">
+                        Saldo geral atual: <strong class="font-mono text-slate-300">{{ $timeBankSummary->formattedTodayBalance() }}</strong>
+                    </span>
+                @endif
+            </div>
+        </div>
+
+        {{-- Grid de Movimentações: 2 colunas no celular, até 6 no desktop --}}
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs font-mono">
+            {{-- 1. Saldo Anterior --}}
+            <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 text-[10px] uppercase font-sans font-semibold block">Saldo Anterior</span>
+                <span class="font-bold text-slate-200 text-sm tabular-nums mt-0.5 block">
+                    {{ $timeBankSummary->formattedPreviousBalance() }}
+                </span>
+            </div>
+
+            {{-- 2. Créditos do Mês --}}
+            <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-800">
+                <span class="text-emerald-400 text-[10px] uppercase font-sans font-semibold block">Créditos</span>
+                <span class="font-bold text-emerald-400 text-sm tabular-nums mt-0.5 block">
+                    +{{ $timeBankSummary->formattedMonthCredits() }}
+                </span>
+            </div>
+
+            {{-- 3. Débitos do Mês --}}
+            <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-800">
+                <span class="text-rose-400 text-[10px] uppercase font-sans font-semibold block">Débitos</span>
+                <span class="font-bold text-rose-400 text-sm tabular-nums mt-0.5 block">
+                    {{ $timeBankSummary->formattedMonthDebits() }}
+                </span>
+            </div>
+
+            {{-- 4. Ajustes Manuais --}}
+            <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-800">
+                <span class="text-amber-400 text-[10px] uppercase font-sans font-semibold block">Ajustes</span>
+                <span class="font-bold text-amber-400 text-sm tabular-nums mt-0.5 block">
+                    {{ $timeBankSummary->formattedMonthAdjustments() }}
+                </span>
+            </div>
+
+            {{-- 5. Compensações / Baixas --}}
+            <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-800">
+                <span class="text-indigo-400 text-[10px] uppercase font-sans font-semibold block">Compensações</span>
+                <span class="font-bold text-indigo-400 text-sm tabular-nums mt-0.5 block">
+                    {{ $timeBankSummary->formattedCompensations() }}
+                </span>
+            </div>
+
+            {{-- 6. Saldo Final da Competência --}}
+            <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-800">
+                <span class="text-slate-300 text-[10px] uppercase font-sans font-semibold block">Saldo Final</span>
+                <span class="font-bold text-sm tabular-nums mt-0.5 block {{ $timeBankSummary->closingBalanceMinutes >= 0 ? 'text-emerald-400' : 'text-rose-400' }}">
+                    {{ $timeBankSummary->formattedClosingBalance() }}
                 </span>
             </div>
         </div>
 
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
-            <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-800">
-                <span class="text-slate-400 text-[10px] uppercase font-sans font-semibold block">Saldo Anterior</span>
-                <span class="font-bold text-slate-200 text-sm tabular-nums">{{ $timeBankSummary->formattedPreviousBalance() }}</span>
+        {{-- Alerta de Zeramento Histórico Registrado (se aplicável) --}}
+        @if($timeBankSummary->closingResetMinutes !== 0)
+            <div class="p-3 border border-amber-900/60 bg-amber-950/40 rounded-xl text-xs space-y-1">
+                <div class="flex items-center justify-between gap-2 flex-wrap font-mono">
+                    <span class="font-sans font-bold text-amber-300">Zeramento histórico registrado:</span>
+                    <span class="font-bold text-amber-400 tabular-nums">{{ $timeBankSummary->formattedClosingReset() }}</span>
+                </div>
+                <p class="text-[11px] text-amber-200/70 font-sans">
+                    Competência encerrada sob regra legada de zeramento automático no fechamento. Este registro não comprova quitação fiscal fática sem evidência financeira anexa.
+                </p>
             </div>
-            <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-800">
-                <span class="text-emerald-400 text-[10px] uppercase font-sans font-semibold block">Créditos do Mês</span>
-                <span class="font-bold text-emerald-400 text-sm tabular-nums">+{{ $timeBankSummary->formattedMonthCredits() }}</span>
+        @endif
+
+        {{-- Destinações Realizadas Após o Fechamento da Competência --}}
+        @if($timeBankSummary->postClosingSettlements && $timeBankSummary->postClosingSettlements->isNotEmpty())
+            <div class="p-3 border border-slate-800 bg-slate-950/80 rounded-xl text-xs space-y-2">
+                <span class="font-sans font-bold text-slate-300 block">
+                    Movimentações posteriores ao fechamento (informativo auditado):
+                </span>
+                <div class="space-y-1 font-mono text-[11px]">
+                    @foreach($timeBankSummary->postClosingSettlements as $pcs)
+                        <div class="flex items-center justify-between text-slate-400">
+                            <span>{{ $pcs->operation_date?->format('d/m/Y') ?? 'Data N/D' }}: {{ $pcs->settlement_type?->label() ?? 'Destinação' }}</span>
+                            <span class="font-bold text-slate-200 tabular-nums">{{ \App\Models\TimeBankAccount::formatMinutes($pcs->minutes) }}</span>
+                        </div>
+                    @endforeach
+                </div>
+                <p class="text-[10px] text-slate-500 font-sans">
+                    Lançamentos ocorridos após o fechamento não alteram o saldo histórico congelado no snapshot.
+                </p>
             </div>
-            <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-800">
-                <span class="text-rose-400 text-[10px] uppercase font-sans font-semibold block">Débitos do Mês</span>
-                <span class="font-bold text-rose-400 text-sm tabular-nums">{{ $timeBankSummary->formattedMonthDebits() }}</span>
+        @endif
+
+        {{-- Conciliação Contábil & Detalhamento Auditado (Acordeão) --}}
+        @if(isset($reconciliationResult))
+            <div class="pt-2 border-t border-slate-800/80">
+                <button type="button"
+                    @click="showReconciliation = !showReconciliation"
+                    class="flex items-center justify-between w-full text-left py-1 text-xs text-slate-400 hover:text-slate-200 transition-colors">
+                    <span class="flex items-center gap-1.5 font-medium">
+                        <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                        </svg>
+                        <span>Auditoria e Conciliação do Ledger</span>
+                        <span class="px-1.5 py-0.2 rounded text-[10px] font-semibold {{ $reconciliationResult->badgeClass }}">
+                            {{ $reconciliationResult->statusLabel }}
+                        </span>
+                    </span>
+                    <span class="text-[11px] text-indigo-400 font-medium" x-text="showReconciliation ? 'Ocultar detalhes ▲' : 'Ver conciliação ▼'"></span>
+                </button>
+
+                <div x-show="showReconciliation" x-cloak class="mt-2.5 p-3 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2 text-xs">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono">
+                        <div class="text-slate-400">
+                            Saldo Inicial + Movimentos: <strong class="text-slate-200">{{ $reconciliationResult->formattedExpectedBalance() }}</strong>
+                        </div>
+                        <div class="text-slate-400">
+                            Saldo Final Apurado: <strong class="text-slate-200">{{ $reconciliationResult->formattedRecordedBalance() }}</strong>
+                        </div>
+                    </div>
+
+                    @if(!empty($reconciliationResult->issues))
+                        <div class="space-y-1 pt-1.5 border-t border-slate-800/60">
+                            <span class="font-bold text-amber-400 text-[11px] block">Ocorrências Auditadas:</span>
+                            @foreach($reconciliationResult->issues as $issue)
+                                <p class="text-[11px] text-slate-300 flex items-start gap-1.5">
+                                    <span class="text-amber-400 shrink-0 select-none">•</span>
+                                    <span>{{ $issue }}</span>
+                                </p>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    @if(!empty($reconciliationResult->divergencesExplanation))
+                        <div class="space-y-1 pt-1.5 border-t border-slate-800/60">
+                            <span class="font-bold text-indigo-300 text-[11px] block">Diferença entre Apuração PTRP e Banco:</span>
+                            @foreach($reconciliationResult->divergencesExplanation as $divExp)
+                                <p class="text-[11px] text-slate-300 flex items-start gap-1.5">
+                                    <span class="text-indigo-400 shrink-0 select-none">•</span>
+                                    <span>{{ $divExp }}</span>
+                                </p>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
             </div>
-            <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-800">
-                <span class="text-amber-400 text-[10px] uppercase font-sans font-semibold block">Ajustes Manuais</span>
-                <span class="font-bold text-amber-400 text-sm tabular-nums">{{ $timeBankSummary->formattedMonthAdjustments() }}</span>
+        @endif
+    </section>
+    @elseif(isset($timeBankSummary) && $timeBankSummary->isHistoricalLimitation)
+        <div class="p-3.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600">
+            <strong>Limitação histórica:</strong> {{ $timeBankSummary->historicalLimitationMessage }}
+        </div>
+    @endif
+
+    {{-- RESUMO DAS DIFERENÇAS DE JORNADA (PTRP) --}}
+    @if(isset($differencesSummary) && ($totalPunches > 0 || $totalWorkedMinutes > 0 || $differencesSummary->concludedDaysCount > 0))
+    <section class="bg-white rounded-2xl border border-gray-200/90 p-4 sm:p-5 shadow-2xs space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+            <div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h2 class="text-xs sm:text-sm font-bold text-gray-900 tracking-tight flex items-center gap-1.5">
+                        <svg class="w-4 h-4 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                        </svg>
+                        <span>Resumo das diferenças de jornada</span>
+                    </h2>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold {{ $differencesSummary->isDefinitive() ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200' }}">
+                        {{ $differencesSummary->statusLabel }}
+                    </span>
+                </div>
+                <p class="text-xs text-gray-500 mt-0.5">
+                    Comparativo analítico entre horas previstas e apuradas na competência (independente de banco de horas).
+                </p>
+            </div>
+
+            @if($differencesSummary->destinationDescription)
+                <div class="text-left sm:text-right">
+                    <span class="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">Destinação</span>
+                    <span class="text-xs font-semibold text-gray-700">
+                        {{ $differencesSummary->settlementModality?->label() ?? 'Regime Padrão' }}
+                    </span>
+                </div>
+            @endif
+        </div>
+
+        {{-- Grid de Diferenças: Positivas, Negativas, Líquida Matemática --}}
+        <div class="grid grid-cols-1 min-[360px]:grid-cols-3 gap-3">
+            {{-- Positivas --}}
+            <div class="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3">
+                <span class="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">Diferenças Positivas</span>
+                <p class="text-xl sm:text-2xl font-bold font-mono tabular-nums text-emerald-700 mt-1">
+                    {{ $differencesSummary->formattedPositive() }}
+                </p>
+                <p class="text-[11px] text-emerald-800/80 mt-0.5">
+                    Horas apuradas acima do previsto
+                </p>
+            </div>
+
+            {{-- Negativas --}}
+            <div class="bg-rose-50/50 border border-rose-100 rounded-xl p-3">
+                <span class="text-[10px] font-bold text-rose-800 uppercase tracking-wider block">Diferenças Negativas</span>
+                <p class="text-xl sm:text-2xl font-bold font-mono tabular-nums text-rose-700 mt-1">
+                    {{ $differencesSummary->formattedNegative() }}
+                </p>
+                <p class="text-[11px] text-rose-800/80 mt-0.5">
+                    Atrasos e ausências não justificadas
+                </p>
+            </div>
+
+            {{-- Líquida Matemática --}}
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <div class="flex items-center justify-between gap-1">
+                    <span class="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">Diferença Líquida</span>
+                    <span class="text-[10px] text-slate-500 font-medium">Cálculo matemático</span>
+                </div>
+                <p class="text-xl sm:text-2xl font-bold font-mono tabular-nums {{ $differencesSummary->netMinutes > 0 ? 'text-emerald-700' : ($differencesSummary->netMinutes < 0 ? 'text-rose-700' : 'text-slate-700') }} mt-1">
+                    {{ $differencesSummary->formattedNet() }}
+                </p>
+                <p class="text-[11px] text-slate-500 mt-0.5">
+                    Saldo matemático da competência
+                </p>
             </div>
         </div>
 
-        @if($timeBankSummary->closingResetMinutes !== 0)
-            <div class="mt-3 pt-2.5 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs font-mono bg-slate-950/70 p-2.5 rounded-xl">
-                <span class="text-slate-300 font-sans font-medium">Fechamento / Zeramento formal da competência:</span>
-                <span class="font-bold text-amber-400 tabular-nums">{{ $timeBankSummary->formattedClosingReset() }}</span>
-                <span class="text-slate-400 font-sans text-[11px]">Saldo transportado: <strong>00:00</strong></span>
+        {{-- Quatro Indicadores da Relação Laboral --}}
+        <div class="pt-3 border-t border-gray-100">
+            <span class="text-[11px] font-bold text-gray-700 uppercase tracking-wider block mb-2">
+                Conciliação das Etapas de Apuração
+            </span>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs font-mono">
+                {{-- 1. Diferença de jornada --}}
+                <div class="bg-gray-50/70 p-2.5 rounded-xl border border-gray-200">
+                    <span class="text-gray-500 text-[10px] uppercase font-sans font-semibold block">1. Apuração PTRP</span>
+                    <span class="font-bold text-gray-900 text-sm tabular-nums mt-0.5 block">
+                        {{ $differencesSummary->formattedNet() }}
+                    </span>
+                    <span class="text-[10px] text-gray-400 font-sans block mt-0.5">Tempo apurado bruto</span>
+                </div>
+
+                {{-- 2. Horas elegíveis --}}
+                <div class="bg-gray-50/70 p-2.5 rounded-xl border border-gray-200">
+                    <span class="text-gray-500 text-[10px] uppercase font-sans font-semibold block">2. Horas Elegíveis</span>
+                    <span class="font-bold text-gray-900 text-sm tabular-nums mt-0.5 block">
+                        {{ \App\Domain\PTRP\DTOs\CalculatedJourney::formatMinutes($differencesSummary->destinedToCompensationMinutes) }}
+                    </span>
+                    <span class="text-[10px] text-gray-400 font-sans block mt-0.5">Aptas à compensação</span>
+                </div>
+
+                {{-- 3. Banco contabilizado --}}
+                <div class="bg-gray-50/70 p-2.5 rounded-xl border border-gray-200">
+                    <span class="text-gray-500 text-[10px] uppercase font-sans font-semibold block">3. Banco Registrado</span>
+                    <span class="font-bold text-gray-900 text-sm tabular-nums mt-0.5 block">
+                        @if($timeBankSummary)
+                            {{ $timeBankSummary->formattedClosingBalance() }}
+                        @else
+                            00:00
+                        @endif
+                    </span>
+                    <span class="text-[10px] text-gray-400 font-sans block mt-0.5">Lançamentos no ledger</span>
+                </div>
+
+                {{-- 4. Destinação pendente --}}
+                <div class="bg-gray-50/70 p-2.5 rounded-xl border border-gray-200">
+                    <span class="text-gray-500 text-[10px] uppercase font-sans font-semibold block">4. Saldo Pendente</span>
+                    <span class="font-bold text-amber-700 text-sm tabular-nums mt-0.5 block">
+                        {{ \App\Domain\PTRP\DTOs\CalculatedJourney::formatMinutes($differencesSummary->pendingSettlementMinutes) }}
+                    </span>
+                    <span class="text-[10px] text-gray-400 font-sans block mt-0.5">Aguardando quitação</span>
+                </div>
+            </div>
+            <p class="text-[11px] text-gray-500 mt-2 font-sans">
+                Estes valores podem divergir entre si conforme a absorção de tolerâncias legais (Art. 58 da CLT), destinações automáticas para pagamento em folha ou quitações periódicas acordadas.
+            </p>
+        </div>
+
+        {{-- Situação de Destinação / Modalidade --}}
+        @if($differencesSummary->destinationDescription)
+            <div class="bg-indigo-50/40 border border-indigo-100/80 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div class="space-y-0.5">
+                    <span class="font-bold text-indigo-950 block">Situação da Destinação Legal:</span>
+                    <p class="text-indigo-900/80">{{ $differencesSummary->destinationDescription }}</p>
+                </div>
+                @if($differencesSummary->settlementModality === \App\Domain\Settlement\Enums\SettlementModality::MonthlyCompensation)
+                    <div class="flex items-center gap-3 font-mono text-[11px] shrink-0">
+                        @if($differencesSummary->destinedToCompensationMinutes > 0)
+                            <span class="text-indigo-900">Destinadas: <strong>{{ \App\Domain\PTRP\DTOs\CalculatedJourney::formatMinutes($differencesSummary->destinedToCompensationMinutes) }}</strong></span>
+                        @endif
+                        @if($differencesSummary->settledMinutes > 0)
+                            <span class="text-emerald-800">Quitadas: <strong>{{ \App\Domain\PTRP\DTOs\CalculatedJourney::formatMinutes($differencesSummary->settledMinutes) }}</strong></span>
+                        @endif
+                        @if($differencesSummary->pendingSettlementMinutes > 0)
+                            <span class="text-amber-800">Pendentes: <strong>{{ \App\Domain\PTRP\DTOs\CalculatedJourney::formatMinutes($differencesSummary->pendingSettlementMinutes) }}</strong></span>
+                        @endif
+                    </div>
+                @endif
+            </div>
+        @endif
+
+        {{-- Notas Normativas e Ressalvas do Resumo --}}
+        @if(!empty($differencesSummary->notes))
+            <div class="text-[11px] text-gray-500 space-y-1 pt-1 border-t border-gray-100">
+                @foreach($differencesSummary->notes as $note)
+                    <p class="flex items-start gap-1.5">
+                        <span class="text-gray-400 shrink-0 select-none">•</span>
+                        <span>{{ $note }}</span>
+                    </p>
+                @endforeach
             </div>
         @endif
     </section>
@@ -849,7 +1132,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
     {{-- 5. HISTÓRICO CRONOLÓGICO POR DATA & TIMELINE MOBILE-FIRST --}}
     <main class="space-y-3 sm:space-y-4" data-loading-class="opacity-50" wire:transition>
         @forelse($groupedEntries as $date => $dayEntries)
-            <article class="bg-white border border-gray-200/90 rounded-2xl overflow-hidden shadow-2xs" wire:key="day-{{ $date }}">
+            <article class="bg-white border border-gray-200/90 rounded-2xl overflow-hidden shadow-2xs" wire:key="day-{{ $date }}" x-data="{ showDetails: false }">
                 
                 {{-- Cabeçalho do Dia (Mobile First) --}}
                 <div class="bg-gray-50/80 px-3.5 sm:px-4 py-3 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
@@ -890,9 +1173,11 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                                 </span>
                             @endif
 
-                            @if(($dayCalc['overtime_minutes'] ?? 0) > 0)
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                                    +{{ sprintf('%02dh %02dm', intdiv($dayCalc['overtime_minutes'], 60), $dayCalc['overtime_minutes'] % 60) }}
+                            {{-- Saldo / Diferença Diária Assinada --}}
+                            @if(isset($dayCalc['formatted_difference']))
+                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold font-mono border {{ $dayCalc['difference_badge_class'] ?? 'bg-slate-100 text-slate-700 border-slate-300' }}"
+                                      title="Diferença da jornada: {{ $dayCalc['formatted_difference'] }}">
+                                    {{ $dayCalc['formatted_difference'] }}
                                 </span>
                             @endif
 
@@ -906,21 +1191,75 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                                     {{ $dayCalc['formatted'] }} ({{ $dayCalc['status_label'] }})
                                 @endif
                             </span>
+
+                            {{-- Botão de Detalhes Expansíveis --}}
+                            <button type="button" 
+                                    @click="showDetails = !showDetails" 
+                                    class="min-h-[32px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer"
+                                    aria-label="Ver detalhes de previsão e tolerância da jornada">
+                                <span x-text="showDetails ? 'Ocultar' : 'Detalhes'"></span>
+                                <svg class="w-3.5 h-3.5 transition-transform duration-200" :class="showDetails ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                                </svg>
+                            </button>
                         @endif
 
                         @if(! $isClosedPeriod)
                             <button type="button" 
                                     wire:click="openTreatmentModal('{{ $date }}')" 
-                                    class="min-h-[36px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer"
+                                    class="min-h-[32px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 transition cursor-pointer"
                                     title="Solicitar correção ou justificativa para este dia">
                                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
                                 </svg>
-                                <span>Solicitar correção</span>
+                                <span>Ajustar</span>
                             </button>
                         @endif
                     </div>
                 </div>
+
+                {{-- Painel Expansível de Detalhes da Jornada (Previsto, Apurado, Diferença, Tolerância, Tratamentos) --}}
+                @if(isset($daysCalculated[$date]))
+                <div x-show="showDetails" x-collapse x-cloak class="bg-gray-50/90 border-b border-gray-200 px-3.5 sm:px-4 py-3 text-xs">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 font-mono text-[11px]">
+                        <div class="bg-white p-2.5 rounded-xl border border-gray-200/80 shadow-2xs">
+                            <span class="text-gray-500 font-sans block text-[10px] uppercase font-semibold">Previsto</span>
+                            <span class="font-bold text-gray-900 text-sm">{{ $dayCalc['scheduled_formatted'] ?? '00:00' }}</span>
+                        </div>
+                        <div class="bg-white p-2.5 rounded-xl border border-gray-200/80 shadow-2xs">
+                            <span class="text-gray-500 font-sans block text-[10px] uppercase font-semibold">Apurado</span>
+                            <span class="font-bold text-gray-900 text-sm">{{ $dayCalc['worked_formatted'] ?? '00:00' }}</span>
+                        </div>
+                        <div class="bg-white p-2.5 rounded-xl border border-gray-200/80 shadow-2xs">
+                            <span class="text-gray-500 font-sans block text-[10px] uppercase font-semibold">Diferença</span>
+                            <span class="font-bold text-sm {{ ($dayCalc['difference_minutes'] ?? 0) > 0 ? 'text-emerald-700' : (($dayCalc['difference_minutes'] ?? 0) < 0 ? 'text-rose-700' : 'text-slate-700') }}">
+                                {{ $dayCalc['formatted_difference'] ?? '00:00' }}
+                            </span>
+                        </div>
+                        <div class="bg-white p-2.5 rounded-xl border border-gray-200/80 shadow-2xs">
+                            <span class="text-gray-500 font-sans block text-[10px] uppercase font-semibold">Tolerância Legal</span>
+                            <span class="font-bold text-gray-800 text-sm">
+                                @if(!empty($dayCalc['tolerated_minutes']) && $dayCalc['tolerated_minutes'] > 0)
+                                    {{ $dayCalc['tolerated_minutes'] }} min (aplicada)
+                                @else
+                                    CLT Art. 58
+                                @endif
+                            </span>
+                        </div>
+                    </div>
+                    @if(!empty($dayCalc['notes']) && count($dayCalc['notes']) > 0)
+                        <div class="mt-2.5 pt-2 border-t border-gray-200/70 text-gray-600 space-y-1">
+                            <span class="font-sans font-semibold text-[10px] uppercase text-gray-500 block">Tratamentos / Justificativas / Ocorrências:</span>
+                            @foreach($dayCalc['notes'] as $note)
+                                <p class="flex items-center gap-1.5 font-sans">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0"></span>
+                                    <span>{{ $note }}</span>
+                                </p>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+                @endif
 
                 {{-- Faixa de Solicitações de Tratamento do Dia --}}
                 @if(isset($daysCalculated[$date]['treatments']) && $daysCalculated[$date]['treatments']->isNotEmpty())

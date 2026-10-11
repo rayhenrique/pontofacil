@@ -62,6 +62,25 @@ class TimeBankAccount extends Model
             ->sum('minutes');
     }
 
+    public function balanceBefore(CarbonInterface|string $date): int
+    {
+        $dateStr = $date instanceof CarbonInterface ? $date->format('Y-m-d') : Carbon::parse($date)->format('Y-m-d');
+
+        return (int) $this->transactions()
+            ->where('reference_date', '<', $dateStr)
+            ->sum('minutes');
+    }
+
+    public function balanceBetween(CarbonInterface|string $startDate, CarbonInterface|string $endDate): int
+    {
+        $startStr = $startDate instanceof CarbonInterface ? $startDate->format('Y-m-d') : Carbon::parse($startDate)->format('Y-m-d');
+        $endStr = $endDate instanceof CarbonInterface ? $endDate->format('Y-m-d') : Carbon::parse($endDate)->format('Y-m-d');
+
+        return (int) $this->transactions()
+            ->whereBetween('reference_date', [$startStr, $endStr])
+            ->sum('minutes');
+    }
+
     public static function formatMinutes(int $minutes): string
     {
         $sign = $minutes < 0 ? '-' : '+';

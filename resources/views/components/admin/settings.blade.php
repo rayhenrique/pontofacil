@@ -617,6 +617,22 @@ new #[Layout('layouts.app')] #[Title('Configurações')] class extends Component
                 Banco de Horas & Fechamento de Competência (PTRP)
             </h3>
             <p class="text-xs text-gray-500 mt-1">Defina se a empresa utiliza regime de banco de horas e a regra aplicada no fechamento formal de cada mês.</p>
+            
+            <div class="mt-3 p-3.5 bg-indigo-50/70 border border-indigo-200/80 rounded-xl flex items-center justify-between gap-3 flex-wrap">
+                <div class="flex items-center gap-2.5">
+                    <div class="p-1.5 rounded-lg bg-indigo-600 text-white shrink-0">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" /></svg>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-indigo-900">Configuração Avançada: Políticas de Compensação & Destinação</p>
+                        <p class="text-[11px] text-indigo-700">Para regras individuais por colaborador, estabelecimento, regime CLT/Estatutário, pagamento em folha ou compensação por folgas.</p>
+                    </div>
+                </div>
+                <a href="{{ route('admin.settlement-policies') }}" class="inline-flex items-center px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition gap-1">
+                    Gerenciar Políticas
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg>
+                </a>
+            </div>
         </div>
 
         <form wire:submit="saveTimeBank" class="space-y-6">

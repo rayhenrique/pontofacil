@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Domain\Company\Services\CurrentCompany;
 use App\Domain\Compliance\ARP\Actions\RecordArpEventAction;
+use App\Domain\Settlement\Services\WorkTimeSettlementService;
 use App\Enums\LegalRegime;
 use App\Enums\WorkloadModality;
 use Carbon\Carbon;
@@ -88,6 +89,31 @@ class Employee extends Model
     public function timeBankAccount(): HasOne
     {
         return $this->hasOne(TimeBankAccount::class);
+    }
+
+    public function settlementPolicies(): HasMany
+    {
+        return $this->hasMany(WorkTimeSettlementPolicy::class)->orderBy('effective_from', 'desc');
+    }
+
+    public function settlementDischarges(): HasMany
+    {
+        return $this->hasMany(WorkTimeSettlementDischarge::class)->orderBy('execution_date', 'desc');
+    }
+
+    public function workTimeSettlements(): HasMany
+    {
+        return $this->hasMany(WorkTimeSettlement::class)->orderBy('operation_date', 'desc');
+    }
+
+    /**
+     * Resolve a política de compensação e destinação aplicável para a data especificada.
+     */
+    public function getSettlementPolicyForDate(?CarbonInterface $date = null): ?WorkTimeSettlementPolicy
+    {
+        $targetDate = $date ?? Carbon::today();
+
+        return app(WorkTimeSettlementService::class)->resolvePolicy($this, $targetDate);
     }
 
     /**

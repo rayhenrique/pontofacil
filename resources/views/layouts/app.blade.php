@@ -138,6 +138,10 @@
                                         <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
                                         Banco de Horas
                                     </a>
+                                    <a href="{{ route('admin.settlement-policies') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.settlement-policies*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
+                                        <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" /></svg>
+                                        Políticas de Compensação
+                                    </a>
                                 </div>
 
                                 <div class="pt-3 mt-3 border-t border-indigo-800/80 space-y-1">
@@ -305,6 +309,10 @@
                                     <a href="{{ route('admin.time-bank') }}" :title="sidebarCollapsed ? 'Banco de Horas' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.time-bank*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
                                         <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
                                         <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Banco de Horas</span>
+                                    </a>
+                                    <a href="{{ route('admin.settlement-policies') }}" :title="sidebarCollapsed ? 'Políticas de Compensação' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.settlement-policies*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
+                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" /></svg>
+                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Políticas de Compensação</span>
                                     </a>
                                 </div>
 

@@ -99,6 +99,7 @@ Route::middleware('auth')->group(function () {
         Route::livewire('/audit', 'admin.audit')->name('audit');
         Route::livewire('/reports', 'admin.reports')->name('reports');
         Route::livewire('/time-bank', 'admin.time-bank')->name('time-bank');
+        Route::livewire('/settlement-policies', 'admin.settlement-policies')->name('settlement-policies');
         Route::livewire('/settings', 'admin.settings')->name('settings');
         Route::livewire('/calendar', 'admin.calendar')->name('calendar');
         Route::get('/exportar-afd', [ReceiptController::class, 'exportAfd'])->name('export-afd');

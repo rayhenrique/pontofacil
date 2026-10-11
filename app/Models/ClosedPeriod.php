@@ -67,6 +67,11 @@ class ClosedPeriod extends Model
             ->where('version', $this->snapshot_version);
     }
 
+    public function workTimeSettlements(): HasMany
+    {
+        return $this->hasMany(WorkTimeSettlement::class, 'closed_period_id');
+    }
+
     public static function isClosed(int $year, int $month): bool
     {
         return self::where('year', $year)

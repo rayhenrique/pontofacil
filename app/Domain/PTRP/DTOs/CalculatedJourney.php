@@ -3,6 +3,8 @@
 namespace App\Domain\PTRP\DTOs;
 
 use App\Domain\LaborRules\DTOs\NightWorkCalculationResult;
+use App\Domain\Settlement\DTOs\WorkTimeSettlementSummary;
+use App\Domain\Settlement\Enums\SettlementModality;
 
 class CalculatedJourney
 {
@@ -44,6 +46,16 @@ class CalculatedJourney
         public ?string $workScheduleCode = null,
         public ?int $shiftAssignmentId = null,
         public ?string $shiftCode = null,
+        public ?SettlementModality $settlementModality = null,
+        public ?int $settlementPolicyId = null,
+        public ?string $settlementPolicyName = null,
+        public int $destinedToPayrollMinutes = 0,
+        public int $destinedToCompensationMinutes = 0,
+        public bool $isPendingSettlement = false,
+        public array $settlementNotes = [],
+        public ?WorkTimeSettlementSummary $settlementSummary = null,
+        public int $toleratedMinutes = 0,
+        public int $justifiedMinutes = 0,
     ) {}
 
     public static function formatMinutes(int $minutes, bool $withSign = false): string
@@ -83,6 +95,56 @@ class CalculatedJourney
         return self::formatMinutes($net, true);
     }
 
+    public function dailyDifferenceMinutes(): ?int
+    {
+        if (! $this->hasSchedule || $this->isPendingConfiguration || $this->isIncomplete) {
+            return null;
+        }
+
+        // Se o colaborador não trabalhou mas a ausência foi integralmente abonada/justificada
+        if ($this->workedMinutes === 0 && $this->scheduledMinutes > 0 && $this->absenceMinutes === 0) {
+            return 0;
+        }
+
+        return $this->workedMinutes - $this->scheduledMinutes;
+    }
+
+    public function differenceState(): string
+    {
+        if (! $this->hasSchedule || $this->isPendingConfiguration) {
+            return 'uncalculable';
+        }
+
+        if ($this->isIncomplete) {
+            return 'pending';
+        }
+
+        return 'calculated';
+    }
+
+    public function formattedDifference(): string
+    {
+        return match ($this->differenceState()) {
+            'uncalculable' => 'Saldo indisponível — escala não configurada',
+            'pending' => 'Apuração pendente',
+            'calculated' => self::formatDifferenceMinutes($this->dailyDifferenceMinutes() ?? 0),
+        };
+    }
+
+    public static function formatDifferenceMinutes(int $minutes): string
+    {
+        if ($minutes === 0) {
+            return '00:00';
+        }
+
+        $sign = $minutes < 0 ? '-' : '+';
+        $abs = abs($minutes);
+        $hours = intdiv($abs, 60);
+        $rem = $abs % 60;
+
+        return sprintf('%s%02d:%02d', $sign, $hours, $rem);
+    }
+
     public function toArray(): array
     {
         return [
@@ -97,6 +159,9 @@ class CalculatedJourney
             'missing_break_minutes' => $this->missingBreakMinutes,
             'absence_minutes' => $this->absenceMinutes,
             'is_incomplete' => $this->isIncomplete,
+            'daily_difference_minutes' => $this->dailyDifferenceMinutes(),
+            'difference_state' => $this->differenceState(),
+            'formatted_difference' => $this->formattedDifference(),
             'bank_credit_minutes' => $this->bankCreditMinutes,
             'bank_debit_minutes' => $this->bankDebitMinutes,
             'holiday_minutes' => $this->holidayMinutes,
@@ -118,6 +183,16 @@ class CalculatedJourney
             'work_schedule_code' => $this->workScheduleCode,
             'shift_assignment_id' => $this->shiftAssignmentId,
             'shift_code' => $this->shiftCode,
+            'settlement_modality' => $this->settlementModality?->value,
+            'settlement_policy_id' => $this->settlementPolicyId,
+            'settlement_policy_name' => $this->settlementPolicyName,
+            'destined_to_payroll_minutes' => $this->destinedToPayrollMinutes,
+            'destined_to_compensation_minutes' => $this->destinedToCompensationMinutes,
+            'is_pending_settlement' => $this->isPendingSettlement,
+            'settlement_notes' => $this->settlementNotes,
+            'settlement_summary' => $this->settlementSummary?->toArray(),
+            'tolerated_minutes' => $this->toleratedMinutes,
+            'justified_minutes' => $this->justifiedMinutes,
         ];
     }
 
