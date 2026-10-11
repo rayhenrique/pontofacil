@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Enums\LegalRegime;
 use App\Enums\UserRole;
+use App\Models\Employee;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Carbon\Carbon;
@@ -21,6 +23,13 @@ class TimesheetCalculationTest extends TestCase
             'email' => 'jornada@test.com',
             'password' => 'secret123',
             'role' => UserRole::Employee,
+        ]);
+
+        Employee::create([
+            'user_id' => $user->id,
+            'registration_number' => 'MAT-100',
+            'cpf' => '11122233344',
+            'legal_regime' => LegalRegime::CLT,
         ]);
 
         $date = Carbon::create(2026, 10, 1, 0, 0, 0, 'America/Maceio');
@@ -73,6 +82,13 @@ class TimesheetCalculationTest extends TestCase
             'email' => 'andamento@test.com',
             'password' => 'secret123',
             'role' => UserRole::Employee,
+        ]);
+
+        Employee::create([
+            'user_id' => $user->id,
+            'registration_number' => 'MAT-101',
+            'cpf' => '11122233355',
+            'legal_regime' => LegalRegime::CLT,
         ]);
 
         // Entrada: 08:00

@@ -138,6 +138,7 @@ class WorkTimeSettlementPolicyTest extends TestCase
             'effective_from' => '2026-01-01',
             'legal_framework' => 'Regulamento interno da empresa - quitação direta',
             'approval_status' => SettlementPolicyApprovalStatus::Approved,
+            'compensation_terms' => ['authorize_payroll_payment' => true],
         ]);
 
         $date = Carbon::parse('2026-03-02'); // Segunda-feira (escala 08:00 às 17:00, 480 min previstos)

@@ -25,10 +25,39 @@ class TimeBankStatementService
      */
     public function getMonthlySummary(Employee $employee, int $year, int $month): TimeBankMonthlySummary
     {
-        $account = TimeBankAccount::getOrCreateForEmployee($employee);
-
         $startDate = Carbon::createFromDate($year, $month, 1)->startOfDay();
         $endDate = Carbon::createFromDate($year, $month, 1)->endOfMonth();
+
+        $settlementPolicy = $this->settlementService->resolvePolicy($employee, $endDate);
+        $operatesTimeBank = $settlementPolicy->operatesTimeBank();
+
+        $account = TimeBankAccount::where('employee_id', $employee->id)->first();
+
+        if (! $account) {
+            return new TimeBankMonthlySummary(
+                previousBalanceMinutes: 0,
+                monthCreditsMinutes: 0,
+                monthDebitsMinutes: 0,
+                monthAdjustmentsMinutes: 0,
+                closingResetMinutes: 0,
+                currentBalanceMinutes: 0,
+                transactions: collect([]),
+                closingBalanceMinutes: 0,
+                todayBalanceMinutes: 0,
+                manualCreditsMinutes: 0,
+                manualDebitsMinutes: 0,
+                compensationsMinutes: 0,
+                isClosedPeriod: false,
+                isHistoricalLimitation: false,
+                historicalLimitationMessage: null,
+                policyMode: $settlementPolicy->modality->value,
+                policyName: $settlementPolicy->name,
+                operatesTimeBank: $operatesTimeBank,
+                destinationDescription: $operatesTimeBank
+                    ? 'Banco de horas ativo. Nenhuma movimentação registrada.'
+                    : 'Vínculo sem banco de horas ativo no período.',
+            );
+        }
 
         // 1. Saldo estritamente anterior ao início do mês
         $previousBalance = (int) $account->transactions()

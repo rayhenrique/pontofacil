@@ -48,16 +48,9 @@ class TimesheetJourneyService
             ->where('user_id', $targetUser->id)
             ->first();
 
-        // Se o usuário não possuir registro de Employee, cria ou vincula perfil mínimo
+        // Se o usuário não possuir registro de Employee, NÃO cria cadastro ou CPF fictício
         if (! $employee) {
-            $employee = Employee::firstOrCreate(
-                ['user_id' => $targetUser->id],
-                [
-                    'cpf' => '00000000000',
-                    'registration_number' => str_pad((string) $targetUser->id, 6, '0', STR_PAD_LEFT),
-                    'job_title' => $targetUser->role ? $targetUser->role->label() : 'Colaborador',
-                ]
-            );
+            return $this->resolveForMissingEmployee($targetUser, $year, $month);
         }
 
         $periodStart = Carbon::createFromDate($year, $month, 1)->startOfMonth();
@@ -85,6 +78,15 @@ class TimesheetJourneyService
                     month: $month
                 );
             }
+
+            // Competência fechada sem snapshot: NÃO executa cálculo ao vivo!
+            return $this->resolveFromMissingClosedSnapshot(
+                targetUser: $targetUser,
+                employee: $employee,
+                closedPeriod: $closedPeriod,
+                year: $year,
+                month: $month
+            );
         }
 
         // Cenário 2: Competência Aberta — Apuração Analítica em Tempo Real via PTRP
@@ -319,6 +321,7 @@ class TimesheetJourneyService
             'policy' => $policy,
             'employee' => $employee,
             'differencesSummary' => $differencesSummary,
+            'monthlyDifferencesSummary' => $differencesSummary,
             'operatesTimeBank' => $operatesTimeBank,
         ];
     }
@@ -543,7 +546,10 @@ class TimesheetJourneyService
         }
 
         $destinationDescription = match ($modality) {
-            SettlementModality::NoBank, SettlementModality::DirectPayroll => 'Empresa sem banco de horas ativo. Horas apuradas são destinadas diretamente à folha de pagamento.',
+            SettlementModality::NoBank => $settlementPolicy->authorizesPayrollPayment()
+                ? 'Empresa sem banco de horas ativo. Horas extras destinadas a pagamento em folha conforme autorização.'
+                : 'Empresa sem banco de horas ativo. Diferenças apuradas aguardam definição de destinação.',
+            SettlementModality::DirectPayroll => 'Empresa com destinação direta para folha de pagamento.',
             SettlementModality::CumulativeBank, SettlementModality::Hybrid => 'Empresa com banco de horas ativo. As diferenças da jornada são apuradas separadamente das movimentações do banco.',
             SettlementModality::MonthlyCompensation => 'Regime de compensação mensal. Valores destinados à compensação dentro do mês civil.',
             SettlementModality::TimeOff => 'Regime de compensação em folgas acordadas.',
@@ -551,8 +557,27 @@ class TimesheetJourneyService
         };
 
         $netMinutes = $positiveMinutes + $negativeMinutes;
-        $status = $hasIncompleteData ? 'partial' : 'definitive';
-        $statusLabel = $status === 'partial' ? 'Apuração Parcial (há jornadas pendentes)' : 'Apuração Definitiva';
+
+        // Distinção estrita dos estados de apuração:
+        // - Pendente de configuração: escala ausente em todos os dias ou política não configurada;
+        // - Parcial: pendências de tratamento, jornadas incompletas ou escala ausente em parte dos dias;
+        // - Apurada: todas as jornadas calculadas e políticas ativas.
+        $isPendingConfig = ($uncalculableDaysCount > 0 && $concludedDaysCount === 0) || (! $settlementPolicy->isConfigured());
+
+        if ($isPendingConfig && $totalWorkedMinutes === 0) {
+            $monthFormatted = 'N/D';
+        }
+
+        if ($isPendingConfig) {
+            $status = 'pending_configuration';
+            $statusLabel = 'Pendente de configuração';
+        } elseif ($hasIncompleteData || $uncalculableDaysCount > 0) {
+            $status = 'partial';
+            $statusLabel = 'Apuração Parcial (há jornadas pendentes)';
+        } else {
+            $status = 'definitive';
+            $statusLabel = 'Apuração Definitiva';
+        }
 
         $differencesSummary = new MonthlyDifferencesSummary(
             positiveMinutes: $positiveMinutes,
@@ -599,6 +624,7 @@ class TimesheetJourneyService
             'policy' => $policy,
             'employee' => $employee,
             'differencesSummary' => $differencesSummary,
+            'monthlyDifferencesSummary' => $differencesSummary,
             'operatesTimeBank' => $operatesTimeBank,
         ];
     }
@@ -763,5 +789,128 @@ class TimesheetJourneyService
                 'receipt' => null,
             ];
         });
+    }
+
+    /**
+     * Retorna estado de leitura seguro quando o usuário ainda não possui vínculo funcional completo.
+     * Não gera registros fictícios no banco de dados.
+     *
+     * @return array<string, mixed>
+     */
+    protected function resolveForMissingEmployee(User $targetUser, int $year, int $month): array
+    {
+        $differencesSummary = new MonthlyDifferencesSummary(
+            positiveMinutes: 0,
+            negativeMinutes: 0,
+            netMinutes: 0,
+            status: 'pending_configuration',
+            statusLabel: 'Pendente de configuração',
+            concludedDaysCount: 0,
+            pendingDaysCount: 0,
+            uncalculableDaysCount: 0,
+            settlementModality: null,
+            operatesTimeBank: false,
+            notes: [
+                'Seu cadastro funcional ainda não está completo. Procure o responsável pelo RH.',
+            ],
+            destinationDescription: 'Destinação pendente de definição.',
+        );
+
+        return [
+            'isRegistrationPending' => true,
+            'isMissingEmployee' => true,
+            'registrationMessage' => 'Seu cadastro funcional ainda não está completo. Procure o responsável pelo RH.',
+            'isClosedPeriod' => false,
+            'isHistoricalUnavailable' => false,
+            'closedPeriod' => null,
+            'snapshotVersion' => null,
+            'groupedEntries' => [],
+            'daysCalculated' => [],
+            'totalMonthFormatted' => 'N/D',
+            'totalWorkedMinutes' => 0,
+            'workedDaysCount' => 0,
+            'completedDaysCount' => 0,
+            'incompleteDaysCount' => 0,
+            'inProgressDaysCount' => 0,
+            'pendingTreatmentDaysCount' => 0,
+            'totalPunches' => 0,
+            'avgFormatted' => 'N/D',
+            'avgCriteria' => 'Cadastro funcional incompleto',
+            'isPartial' => false,
+            'timeBankSummary' => null,
+            'reconciliationResult' => null,
+            'policy' => null,
+            'employee' => null,
+            'differencesSummary' => $differencesSummary,
+            'monthlyDifferencesSummary' => $differencesSummary,
+            'operatesTimeBank' => false,
+        ];
+    }
+
+    /**
+     * Retorna estado de leitura para competência fechada quando inexiste snapshot congelado para o vínculo.
+     * Bloqueia execução de cálculo ao vivo e uso de escalas atuais para resguardar a integridade histórica.
+     *
+     * @return array<string, mixed>
+     */
+    protected function resolveFromMissingClosedSnapshot(
+        User $targetUser,
+        Employee $employee,
+        ClosedPeriod $closedPeriod,
+        int $year,
+        int $month
+    ): array {
+        $diagnostic = sprintf(
+            'A competência %02d/%04d encontra-se formalmente fechada (ID %s), porém inexiste snapshot imutável gerado para o colaborador ID %d. Conforme a Portaria 671/2021 MTP, o cálculo retroativo ao vivo foi bloqueado para resguardar a integridade histórica.',
+            $month,
+            $year,
+            (string) $closedPeriod->id,
+            $employee->id
+        );
+
+        $differencesSummary = new MonthlyDifferencesSummary(
+            positiveMinutes: 0,
+            negativeMinutes: 0,
+            netMinutes: 0,
+            status: 'historical_unavailable',
+            statusLabel: 'Histórico indisponível',
+            concludedDaysCount: 0,
+            pendingDaysCount: 0,
+            uncalculableDaysCount: 0,
+            settlementModality: null,
+            operatesTimeBank: false,
+            notes: [
+                'Competência fechada sem snapshot registrado. Cálculo ao vivo bloqueado para preservar a integridade histórica.',
+            ],
+            destinationDescription: 'Histórico indisponível para esta competência fechada.',
+        );
+
+        return [
+            'isClosedPeriod' => true,
+            'isHistoricalUnavailable' => true,
+            'closedPeriod' => $closedPeriod,
+            'snapshotVersion' => $closedPeriod->snapshot_version,
+            'groupedEntries' => [],
+            'daysCalculated' => [],
+            'totalMonthFormatted' => 'N/D',
+            'totalWorkedMinutes' => 0,
+            'workedDaysCount' => 0,
+            'completedDaysCount' => 0,
+            'incompleteDaysCount' => 0,
+            'inProgressDaysCount' => 0,
+            'pendingTreatmentDaysCount' => 0,
+            'totalPunches' => 0,
+            'avgFormatted' => 'N/D',
+            'avgCriteria' => 'Snapshot histórico não disponível para a competência fechada',
+            'isPartial' => false,
+            'timeBankSummary' => null,
+            'reconciliationResult' => null,
+            'policy' => null,
+            'employee' => $employee,
+            'differencesSummary' => $differencesSummary,
+            'monthlyDifferencesSummary' => $differencesSummary,
+            'operatesTimeBank' => false,
+            'administrativeDiagnostic' => $diagnostic,
+        ];
     }
 }

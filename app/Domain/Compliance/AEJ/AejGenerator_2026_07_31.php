@@ -438,12 +438,12 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
                 $journeysData[] = $calcAction->execute($emp, $dayDate, $schedule)->toArray();
             }
 
-            $account = TimeBankAccount::getOrCreateForEmployee($emp);
-            $transactions = TimeBankTransaction::where('time_bank_account_id', $account->id)
+            $account = TimeBankAccount::where('employee_id', $emp->id)->first();
+            $transactions = $account ? TimeBankTransaction::where('time_bank_account_id', $account->id)
                 ->whereBetween('reference_date', [$startDate->toDateString(), $endDate->toDateString()])
                 ->orderBy('reference_date', 'asc')
                 ->orderBy('created_at', 'asc')
-                ->get();
+                ->get() : collect([]);
 
             $frozenTransactions = [];
             foreach ($transactions as $tx) {
@@ -461,10 +461,10 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
 
             $timeBankSnapshot = [
                 'policy_mode' => $policy?->enabled ? $policy->closing_mode->value : 'DISABLED',
-                'balance_before' => $account->balanceUntil($startDate->copy()->subSecond()),
-                'balance_at_closing' => $account->balanceUntil($endDate),
+                'balance_before' => $account ? $account->balanceUntil($startDate->copy()->subSecond()) : 0,
+                'balance_at_closing' => $account ? $account->balanceUntil($endDate) : 0,
                 'reset_applied' => 0,
-                'final_balance' => $account->balanceUntil($endDate),
+                'final_balance' => $account ? $account->balanceUntil($endDate) : 0,
                 'transactions' => $frozenTransactions,
             ];
 

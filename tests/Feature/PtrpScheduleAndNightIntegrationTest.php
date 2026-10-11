@@ -9,6 +9,8 @@ use App\Domain\LaborRules\Enums\NightCalculationStatus;
 use App\Domain\PTRP\Actions\CalculateDailyJourneyAction;
 use App\Domain\PTRP\Actions\CloseMonthlyPeriodAction;
 use App\Domain\PTRP\Actions\ReopenMonthlyPeriodAction;
+use App\Domain\Settlement\Enums\SettlementModality;
+use App\Domain\Settlement\Enums\SettlementPolicyApprovalStatus;
 use App\Domain\TimeClock\Actions\RecordPunchEventAction;
 use App\Enums\CalendarEventScope;
 use App\Enums\CalendarEventType;
@@ -30,6 +32,7 @@ use App\Models\ShiftAssignment;
 use App\Models\User;
 use App\Models\WorkSchedule;
 use App\Models\WorkScheduleAssignment;
+use App\Models\WorkTimeSettlementPolicy;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -108,6 +111,16 @@ class PtrpScheduleAndNightIntegrationTest extends TestCase
             'cpf' => '12345678909',
             'job_title' => 'Operador',
             'legal_regime' => LegalRegime::CLT,
+        ]);
+
+        WorkTimeSettlementPolicy::create([
+            'name' => 'Banco de Horas Geral da Empresa',
+            'company_id' => $this->company->id,
+            'modality' => SettlementModality::CumulativeBank,
+            'legal_framework' => 'Acordo Coletivo de Trabalho - Banco de Horas',
+            'effective_from' => Carbon::parse('2020-01-01'),
+            'status' => 'active',
+            'approval_status' => SettlementPolicyApprovalStatus::Approved,
         ]);
 
         $this->calculateJourneyAction = app(CalculateDailyJourneyAction::class);

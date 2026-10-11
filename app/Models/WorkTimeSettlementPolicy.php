@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Domain\Settlement\Enums\SettlementModality;
 use App\Domain\Settlement\Enums\SettlementPolicyApprovalStatus;
 use App\Enums\LegalRegime;
+use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -117,6 +118,96 @@ class WorkTimeSettlementPolicy extends Model
     public function isApproved(): bool
     {
         return $this->approval_status === SettlementPolicyApprovalStatus::Approved;
+    }
+
+    public function authorizesPayrollPayment(): bool
+    {
+        if ($this->modality === SettlementModality::DirectPayroll) {
+            return true;
+        }
+
+        return (bool) ($this->compensation_terms['authorize_payroll_payment'] ?? false);
+    }
+
+    public function authorizesPayrollDeduction(): bool
+    {
+        if ($this->modality === SettlementModality::DirectPayroll) {
+            return true;
+        }
+
+        return (bool) ($this->compensation_terms['authorize_payroll_deduction'] ?? false);
+    }
+
+    public function authorizesMonthlyCompensation(): bool
+    {
+        if ($this->modality === SettlementModality::MonthlyCompensation) {
+            return true;
+        }
+
+        return (bool) ($this->compensation_terms['authorize_monthly_compensation'] ?? false);
+    }
+
+    public function isConfigured(): bool
+    {
+        return $this->exists && $this->status === 'active' && $this->isApproved();
+    }
+
+    /**
+     * Cria uma nova versão ou vigência da política, encerrando a anterior de forma auditável.
+     */
+    public function createNewVersion(array $attributes, ?User $actor = null): self
+    {
+        $effectiveFrom = Carbon::parse($attributes['effective_from']);
+
+        // Encerra a vigência da versão anterior no dia imediatamente anterior
+        $this->update([
+            'effective_until' => $effectiveFrom->copy()->subDay()->format('Y-m-d'),
+        ]);
+
+        $attributes['company_id'] ??= $this->company_id;
+        $attributes['establishment_id'] ??= $this->establishment_id;
+        $attributes['employee_id'] ??= $this->employee_id;
+        $attributes['legal_regime'] ??= $this->legal_regime;
+        $attributes['created_by'] = $actor?->id;
+        $attributes['approval_status'] ??= SettlementPolicyApprovalStatus::PendingApproval;
+        $attributes['status'] ??= 'active';
+
+        return static::create($attributes);
+    }
+
+    /**
+     * Verifica se existe sobreposição temporal incompatível para o mesmo escopo e regime.
+     */
+    public function validateNoIncompatibleOverlap(): void
+    {
+        if ($this->status !== 'active' || ! $this->isApproved()) {
+            return;
+        }
+
+        $startStr = $this->effective_from->format('Y-m-d');
+        $endStr = $this->effective_until?->format('Y-m-d');
+
+        $query = static::where('status', 'active')
+            ->where('approval_status', SettlementPolicyApprovalStatus::Approved->value)
+            ->where('id', '!=', (int) ($this->id ?? 0))
+            ->where('employee_id', $this->employee_id)
+            ->where('establishment_id', $this->establishment_id)
+            ->where('company_id', $this->company_id);
+
+        if ($this->legal_regime) {
+            $regimeVal = $this->legal_regime instanceof LegalRegime ? $this->legal_regime->value : $this->legal_regime;
+            $query->where('legal_regime', $regimeVal);
+        } else {
+            $query->whereNull('legal_regime');
+        }
+
+        // Verifica colisão: mesma data inicial exata com outra política em aberto
+        $hasExactCollision = (clone $query)->where('effective_from', $startStr)->exists();
+        if ($hasExactCollision) {
+            throw ValidationException::withMessages([
+                'effective_from' => 'Já existe uma política ativa aprovada com a mesma data de início para o mesmo escopo e regime.',
+            ]);
+        }
     }
 
     public function isActiveAt(CarbonInterface|string $date): bool

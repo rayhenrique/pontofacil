@@ -246,8 +246,12 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
     /**
      * Detecta o modelo recomendado de folha com base na escala e plantões vigentes do mês.
      */
-    protected function detectRecommendedModel(Employee $employee, Carbon $periodStart, Carbon $periodEnd): string
+    protected function detectRecommendedModel(?Employee $employee, Carbon $periodStart, Carbon $periodEnd): string
     {
+        if (! $employee) {
+            return 'administrative';
+        }
+
         // 1. Se houver ShiftAssignment ativo no mês -> modelo de plantões
         $hasShifts = ShiftAssignment::where('employee_id', $employee->id)
             ->whereBetween('start_at_local', [$periodStart, $periodEnd])
@@ -332,8 +336,8 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
         $activeModel = $this->reportModel === 'auto' ? $detectedModel : $this->reportModel;
 
         // Obter Escala Aplicada e Calendário Laboral
-        $workSchedule = $employee->getWorkScheduleForDate($periodStart);
-        $establishment = $employee->sector?->establishment ?? CurrentCompany::get()->defaultEstablishment();
+        $workSchedule = $employee ? $employee->getWorkScheduleForDate($periodStart) : null;
+        $establishment = $employee?->sector?->establishment ?? CurrentCompany::get()->defaultEstablishment();
         $calendarService = app(WorkCalendarService::class);
 
         // Indicadores Totais de Jornada
@@ -366,7 +370,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
         $totalOvertimeFormatted = sprintf('+%dh %02dm', intdiv($totalOvertimeMinutes, 60), $totalOvertimeMinutes % 60);
 
         // Construção das Linhas de Dados por Modelo
-        $administrativeRows = $this->buildAdministrativeRows(
+        $administrativeRows = $employee ? $this->buildAdministrativeRows(
             daysInMonth: $daysInMonth,
             employee: $employee,
             workSchedule: $workSchedule,
@@ -374,9 +378,9 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
             calendarService: $calendarService,
             daysCalculated: $daysCalculated,
             groupedEntries: $groupedEntries
-        );
+        ) : [];
 
-        $nocturnalRows = $this->buildNocturnalRows(
+        $nocturnalRows = $employee ? $this->buildNocturnalRows(
             daysInMonth: $daysInMonth,
             employee: $employee,
             workSchedule: $workSchedule,
@@ -384,18 +388,19 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
             calendarService: $calendarService,
             daysCalculated: $daysCalculated,
             groupedEntries: $groupedEntries
-        );
+        ) : [];
 
-        $shiftsRows = $this->buildShiftsRows(
+        $shiftsRows = $employee ? $this->buildShiftsRows(
             employee: $employee,
             periodStart: $periodStart,
             periodEnd: $periodEnd,
             daysCalculated: $daysCalculated,
             groupedEntries: $groupedEntries,
             workSchedule: $workSchedule
-        );
+        ) : [];
 
         return [
+            'isMissingEmployee' => (bool) ($monthJourneyData['isMissingEmployee'] ?? false),
             'selectedUser' => $selectedUser,
             'employee' => $employee,
             'canSelectUser' => $canSelectUser,

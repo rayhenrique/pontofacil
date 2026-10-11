@@ -1,6 +1,26 @@
 # Histórico de Versões (Changelog)
 
-## v2.5.4 (Atual)
+## v2.5.5 (Atual)
+- **Correção de Políticas de Jornada, Segurança e Preservação Histórica:**
+  - **Precedência Determinística e Isolamento entre Organizações:**
+    - Aplicação estrita da ordem de precedência: política específica do vínculo, política do estabelecimento, política da empresa e fallback seguro não-configurado.
+    - Isolamento de `company_id` impedindo que regras de uma empresa afetem inadvertidamente colaboradores de outra organização.
+  - **Distinção e Segurança no Regime Sem Banco de Horas (`NoBank`):**
+    - Sem banco de horas passa a significar unicamente a inexistência de contabilização em banco de horas, sem presunção arbitrária de destinação a pagamento ou desconto em folha.
+    - Créditos e débitos apurados são rigorosamente preservados. Na ausência de autorização expressa em política aprovada, a situação é rotulada como *"Destinação pendente de definição"*.
+  - **Tratamento Específico para Servidores Estatutários vs. Empregados CLT:**
+    - Veda a aplicação automática de tolerâncias (Art. 58 CLT) e acordos tácitos privados a servidores estatutários federais, estaduais e municipais, exigindo fundamentação normativa formal aprovada administrativamente.
+  - **Políticas Versionadas com Proteção de Competências Passadas:**
+    - Atualizações normativas exigem novas vigências ou versões com data de início e aprovação explícita, sem modificar retroativamente cálculos e fechamentos históricos.
+  - **Consultas ao Espelho e Extrato Estritamente Somente-Leitura:**
+    - Remoção definitiva de cadastros automáticos com CPFs ou matrículas fictícias durante a leitura do espelho de ponto. Colaboradores sem cadastro funcional concluído visualizam orientação segura: *"Seu cadastro funcional ainda não está completo. Procure o responsável pelo RH."*.
+    - Consultas ao extrato de banco de horas não geram contas automáticas na base de dados.
+  - **Proteção de Competências Fechadas sem Snapshot:**
+    - Competências fiscalmente fechadas sem snapshot histórico imutável bloqueiam recálculos ao vivo e aplicação de escalas presentes, informando com segurança *"Histórico indisponível"* e gerando diagnóstico administrativo autorizado.
+  - **Classificação Precisa dos Indicadores de Apuração:**
+    - Distinção transparente entre os estados *Parcial*, *Apurada*, *Fechada*, *Pendente de configuração* e *Histórico indisponível*, eliminando a exibição de `00:00` quando não houve cálculo real.
+
+## v2.5.4
 - **Segurança e Transparência na Gestão de Horas e Compensações:**
   - **Proteção Integral do Saldo do Colaborador:**
     - O fechamento da folha ou do mês não apaga nem zera mais automaticamente as horas trabalhadas.

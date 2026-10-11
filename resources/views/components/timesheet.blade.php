@@ -747,6 +747,39 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
         </div>
     </section>
 
+    {{-- AVISO: CADASTRO FUNCIONAL PENDENTE --}}
+    @if($isRegistrationPending ?? false)
+        <div class="bg-amber-50 border border-amber-200/90 rounded-2xl p-6 text-center space-y-3 shadow-2xs">
+            <div class="mx-auto w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-800">
+                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+            </div>
+            <h2 class="text-base font-bold text-gray-900">Cadastro Funcional Pendente</h2>
+            <p class="text-sm text-gray-700 max-w-md mx-auto">
+                {{ $registrationMessage ?? 'Seu cadastro funcional ainda não está completo. Procure o responsável pelo RH.' }}
+            </p>
+        </div>
+    @elseif($isHistoricalUnavailable ?? false)
+        <div class="bg-slate-50 border border-slate-200/90 rounded-2xl p-6 text-center space-y-3 shadow-2xs">
+            <div class="mx-auto w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-700">
+                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <h2 class="text-base font-bold text-slate-900">Histórico Indisponível</h2>
+            <p class="text-sm text-slate-600 max-w-lg mx-auto">
+                Esta competência encontra-se formalmente fechada sem snapshot congelado disponível para este vínculo. Para resguardar a integridade jurídica e histórica, cálculos ao vivo retroativos foram bloqueados.
+            </p>
+            @if(!empty($administrativeDiagnostic) && in_array(auth()->user()?->role?->value ?? '', ['admin', 'manager']))
+                <div class="mt-4 p-3 bg-white border border-slate-200 rounded-xl text-left text-xs font-mono text-slate-700 max-w-xl mx-auto">
+                    <span class="font-bold font-sans text-slate-900 block mb-1">Diagnóstico Administrativo:</span>
+                    {{ $administrativeDiagnostic }}
+                </div>
+            @endif
+        </div>
+    @else
+
     {{-- 3. BANCO DE HORAS (SE ATIVADO NA POLÍTICA VIGENTE E OPERADO PELO VÍNCULO) --}}
     @if(($operatesTimeBank ?? false) && $timeBankSummary && !($timeBankSummary->isHistoricalLimitation && empty($timeBankSummary->transactions)))
     <section x-data="{ showReconciliation: false }" class="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-2xs border border-slate-800 space-y-4">
@@ -937,7 +970,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                         </svg>
                         <span>Resumo das diferenças de jornada</span>
                     </h2>
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold {{ $differencesSummary->isDefinitive() ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200' }}">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold {{ $differencesSummary->statusBadgeClass() }}">
                         {{ $differencesSummary->statusLabel }}
                     </span>
                 </div>
@@ -1433,6 +1466,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
             </div>
         @endforelse
     </main>
+    @endif
 
     {{-- 7. MODAL DE SOLICITAÇÃO DE AJUSTE / JUSTIFICATIVA CONTEXTUAL --}}
     @if($showTreatmentModal)

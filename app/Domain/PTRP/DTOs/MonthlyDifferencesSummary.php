@@ -32,6 +32,10 @@ class MonthlyDifferencesSummary
 
     public function formattedPositive(bool $withColon = false): string
     {
+        if (($this->isPendingConfiguration() || $this->isHistorical()) && $this->concludedDaysCount === 0) {
+            return 'N/D';
+        }
+
         $hours = intdiv($this->positiveMinutes, 60);
         $rem = $this->positiveMinutes % 60;
 
@@ -42,6 +46,10 @@ class MonthlyDifferencesSummary
 
     public function formattedNegative(bool $withColon = false): string
     {
+        if (($this->isPendingConfiguration() || $this->isHistorical()) && $this->concludedDaysCount === 0) {
+            return 'N/D';
+        }
+
         $abs = abs($this->negativeMinutes);
         $hours = intdiv($abs, 60);
         $rem = $abs % 60;
@@ -53,6 +61,10 @@ class MonthlyDifferencesSummary
 
     public function formattedNet(bool $withColon = false): string
     {
+        if (($this->isPendingConfiguration() || $this->isHistorical()) && $this->concludedDaysCount === 0) {
+            return 'N/D';
+        }
+
         if ($this->netMinutes === 0) {
             return $withColon ? '00:00' : '00h 00m';
         }
@@ -69,7 +81,7 @@ class MonthlyDifferencesSummary
 
     public function isDefinitive(): bool
     {
-        return $this->status === 'definitive';
+        return $this->status === 'definitive' || $this->status === 'apurada';
     }
 
     public function isPartial(): bool
@@ -77,9 +89,31 @@ class MonthlyDifferencesSummary
         return $this->status === 'partial';
     }
 
+    public function isClosed(): bool
+    {
+        return $this->status === 'closed' || $this->status === 'fechada';
+    }
+
+    public function isPendingConfiguration(): bool
+    {
+        return $this->status === 'pending_configuration';
+    }
+
     public function isHistorical(): bool
     {
-        return $this->status === 'historical';
+        return $this->status === 'historical' || $this->status === 'historical_unavailable';
+    }
+
+    public function statusBadgeClass(): string
+    {
+        return match ($this->status) {
+            'definitive', 'apurada' => 'bg-emerald-50 text-emerald-800 border border-emerald-200',
+            'partial' => 'bg-amber-50 text-amber-800 border border-amber-200',
+            'closed', 'fechada' => 'bg-slate-100 text-slate-800 border border-slate-300',
+            'pending_configuration' => 'bg-amber-50 text-amber-900 border border-amber-300',
+            'historical', 'historical_unavailable' => 'bg-rose-50 text-rose-800 border border-rose-200',
+            default => 'bg-slate-100 text-slate-700 border border-slate-200',
+        };
     }
 
     /**

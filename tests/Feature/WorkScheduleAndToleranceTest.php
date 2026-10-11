@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Domain\Company\Services\CurrentCompany;
 use App\Domain\PTRP\Actions\CalculateDailyJourneyAction;
+use App\Domain\Settlement\Enums\SettlementModality;
+use App\Domain\Settlement\Enums\SettlementPolicyApprovalStatus;
 use App\Domain\TimeClock\Actions\RecordPunchEventAction;
 use App\Enums\UserRole;
 use App\Models\Company;
@@ -11,6 +13,7 @@ use App\Models\Employee;
 use App\Models\Establishment;
 use App\Models\User;
 use App\Models\WorkSchedule;
+use App\Models\WorkTimeSettlementPolicy;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -51,6 +54,17 @@ class WorkScheduleAndToleranceTest extends TestCase
             'work_schedule_id' => $this->schedule->id,
             'registration_number' => 'MAT-200',
             'cpf' => '98765432100',
+        ]);
+
+        WorkTimeSettlementPolicy::create([
+            'name' => 'Banco de Horas Geral',
+            'company_id' => $this->company->id,
+            'establishment_id' => null,
+            'modality' => SettlementModality::CumulativeBank,
+            'legal_framework' => 'Acordo Coletivo de Banco de Horas',
+            'effective_from' => Carbon::parse('2020-01-01'),
+            'status' => 'active',
+            'approval_status' => SettlementPolicyApprovalStatus::Approved,
         ]);
     }
 

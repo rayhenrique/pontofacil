@@ -2,6 +2,7 @@
 
 namespace App\Domain\Settlement\Services;
 
+use App\Domain\Company\Services\CurrentCompany;
 use App\Domain\PTRP\Actions\CalculateDailyJourneyAction;
 use App\Domain\PTRP\Enums\TimeBankClosingMode;
 use App\Domain\PTRP\Policies\LaborPolicy;
@@ -16,6 +17,7 @@ use App\Domain\Settlement\Enums\WorkTimeSettlementStatus;
 use App\Enums\LegalRegime;
 use App\Models\ClosedPeriod;
 use App\Models\ClosedPeriodEmployeeSnapshot;
+use App\Models\Company;
 use App\Models\Employee;
 use App\Models\LaborRuleProfile;
 use App\Models\TimeBankAccount;
@@ -24,6 +26,7 @@ use App\Models\WorkTimeSettlement;
 use App\Models\WorkTimeSettlementPolicy;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema;
 
 class WorkTimeSettlementService
@@ -31,10 +34,10 @@ class WorkTimeSettlementService
     /**
      * Resolve a política de compensação e destinação aplicável para o colaborador na data.
      * Segue a precedência determinística:
-     * 1. Política individual do Vínculo / Colaborador (employee_id)
+     * 1. Política específica do Vínculo / Colaborador (employee_id)
      * 2. Política do Estabelecimento (establishment_id)
-     * 3. Política Geral da Empresa / Instalação (company_id ou global)
-     * 4. Fallback retrocompatível com TimeBankPolicy legada
+     * 3. Política Geral da Empresa / Instalação (company_id)
+     * 4. Comportamento seguro quando não houver configuração
      */
     public function resolvePolicy(Employee $employee, CarbonInterface $date): WorkTimeSettlementPolicy
     {
@@ -42,32 +45,80 @@ class WorkTimeSettlementService
         $regime = $employee->legal_regime;
 
         if (! Schema::hasTable('work_time_settlement_policies')) {
-            return self::buildDefaultPolicy($regime);
+            return self::buildSafeUnconfiguredPolicy($regime);
         }
 
         $establishmentId = $employee->sector?->establishment_id;
         $companyId = $employee->sector?->establishment?->company_id;
 
+        if (! $companyId) {
+            $companyId = $employee->company_id ?? null;
+        }
+
+        // Em instalação single-tenant com única empresa cadastrada, resolve a empresa da instalação
+        if (! $companyId && Company::count() === 1) {
+            $companyId = CurrentCompany::get()?->id;
+        }
+
         // 1. Precedência Nível 1: Política específica do Vínculo / Colaborador
-        $individualPolicy = WorkTimeSettlementPolicy::where('employee_id', $employee->id)
+        $individualQuery = WorkTimeSettlementPolicy::where('employee_id', $employee->id)
             ->activeAt($targetDate)
-            ->approved()
+            ->approved();
+
+        if ($companyId) {
+            $individualQuery->where(function (Builder $q) use ($companyId) {
+                $q->where('company_id', $companyId)
+                    ->orWhere(function (Builder $sub) {
+                        $sub->whereNull('company_id')
+                            ->whereRaw('(SELECT COUNT(*) FROM companies) <= 1');
+                    });
+            });
+        }
+
+        if ($regime) {
+            $individualRegimePolicy = (clone $individualQuery)
+                ->where('legal_regime', $regime->value)
+                ->latest('id')
+                ->first();
+
+            if ($individualRegimePolicy) {
+                return $individualRegimePolicy;
+            }
+        }
+
+        $individualGeneralPolicy = (clone $individualQuery)
+            ->whereNull('legal_regime')
             ->latest('id')
             ->first();
 
-        if ($individualPolicy) {
-            return $individualPolicy;
+        if ($individualGeneralPolicy) {
+            return $individualGeneralPolicy;
         }
 
         // 2. Precedência Nível 2: Política do Estabelecimento
         if ($establishmentId) {
-            // Prioriza política do estabelecimento com regime coincidente
+            $establishment = $employee->sector?->establishment;
+            $estCompanyId = $establishment?->company_id ?? $companyId;
+
+            $establishmentQuery = WorkTimeSettlementPolicy::where('establishment_id', $establishmentId)
+                ->whereNull('employee_id')
+                ->activeAt($targetDate)
+                ->approved();
+
+            if ($estCompanyId) {
+                $establishmentQuery->where(function (Builder $q) use ($estCompanyId) {
+                    $q->where('company_id', $estCompanyId)
+                        ->orWhere(function (Builder $sub) {
+                            $sub->whereNull('company_id')
+                                ->whereRaw('(SELECT COUNT(*) FROM companies) <= 1');
+                        });
+                });
+            }
+
+            // 2a. Prioriza política do estabelecimento com regime coincidente
             if ($regime) {
-                $establishmentRegimePolicy = WorkTimeSettlementPolicy::where('establishment_id', $establishmentId)
-                    ->whereNull('employee_id')
+                $establishmentRegimePolicy = (clone $establishmentQuery)
                     ->where('legal_regime', $regime->value)
-                    ->activeAt($targetDate)
-                    ->approved()
                     ->latest('id')
                     ->first();
 
@@ -76,12 +127,9 @@ class WorkTimeSettlementService
                 }
             }
 
-            // Política geral do estabelecimento (sem restrição de regime)
-            $establishmentGeneralPolicy = WorkTimeSettlementPolicy::where('establishment_id', $establishmentId)
-                ->whereNull('employee_id')
+            // 2b. Política geral do estabelecimento (sem restrição de regime)
+            $establishmentGeneralPolicy = (clone $establishmentQuery)
                 ->whereNull('legal_regime')
-                ->activeAt($targetDate)
-                ->approved()
                 ->latest('id')
                 ->first();
 
@@ -90,42 +138,74 @@ class WorkTimeSettlementService
             }
         }
 
-        // 3. Precedência Nível 3: Política da Empresa / Geral da Instalação
-        if ($regime) {
-            $companyRegimePolicy = WorkTimeSettlementPolicy::whereNull('employee_id')
+        // 3. Precedência Nível 3: Política da Empresa
+        if ($companyId) {
+            $companyQuery = WorkTimeSettlementPolicy::whereNull('employee_id')
                 ->whereNull('establishment_id')
-                ->where('legal_regime', $regime->value)
+                ->where(function (Builder $q) use ($companyId) {
+                    $q->where('company_id', $companyId)
+                        ->orWhere(function (Builder $sub) {
+                            $sub->whereNull('company_id')
+                                ->whereRaw('(SELECT COUNT(*) FROM companies) <= 1');
+                        });
+                })
                 ->activeAt($targetDate)
-                ->approved()
+                ->approved();
+
+            if ($regime) {
+                $companyRegimePolicy = (clone $companyQuery)
+                    ->where('legal_regime', $regime->value)
+                    ->latest('id')
+                    ->first();
+
+                if ($companyRegimePolicy) {
+                    return $companyRegimePolicy;
+                }
+            }
+
+            $companyGeneralPolicy = (clone $companyQuery)
+                ->whereNull('legal_regime')
                 ->latest('id')
                 ->first();
 
-            if ($companyRegimePolicy) {
-                return $companyRegimePolicy;
+            if ($companyGeneralPolicy) {
+                return $companyGeneralPolicy;
+            }
+        } elseif (Company::count() <= 1) {
+            $globalQuery = WorkTimeSettlementPolicy::whereNull('employee_id')
+                ->whereNull('establishment_id')
+                ->activeAt($targetDate)
+                ->approved();
+
+            if ($regime) {
+                $globalRegimePolicy = (clone $globalQuery)
+                    ->where('legal_regime', $regime->value)
+                    ->latest('id')
+                    ->first();
+
+                if ($globalRegimePolicy) {
+                    return $globalRegimePolicy;
+                }
+            }
+
+            $globalGeneralPolicy = (clone $globalQuery)
+                ->whereNull('legal_regime')
+                ->latest('id')
+                ->first();
+
+            if ($globalGeneralPolicy) {
+                return $globalGeneralPolicy;
             }
         }
 
-        $companyGeneralPolicy = WorkTimeSettlementPolicy::whereNull('employee_id')
-            ->whereNull('establishment_id')
-            ->whereNull('legal_regime')
-            ->activeAt($targetDate)
-            ->approved()
-            ->latest('id')
-            ->first();
-
-        if ($companyGeneralPolicy) {
-            return $companyGeneralPolicy;
-        }
-
-        // 4. Precedência Nível 4: Fallback transparente para TimeBankPolicy legada
-        return $this->createFallbackFromLegacyTimeBankPolicy($date, $regime);
+        // 4. Precedência Nível 4: Fallback seguro quando não houver configuração
+        return $this->resolveFallbackPolicy($date, $regime);
     }
 
     /**
-     * Gera uma representação em memória transparente a partir da TimeBankPolicy legada
-     * para preservar 100% da compatibilidade e comportamento prévio do sistema.
+     * Resolve o comportamento seguro retrocompatível quando não há WorkTimeSettlementPolicy ativa.
      */
-    protected function createFallbackFromLegacyTimeBankPolicy(CarbonInterface $date, ?LegalRegime $regime): WorkTimeSettlementPolicy
+    protected function resolveFallbackPolicy(CarbonInterface $date, ?LegalRegime $regime): WorkTimeSettlementPolicy
     {
         $legacyPolicy = TimeBankPolicy::forDate($date);
 
@@ -153,7 +233,7 @@ class WorkTimeSettlementService
                 return $policy;
             }
 
-            // Política legada explicitamente desativada
+            // Política legada explicitamente desativada nas configurações
             return new WorkTimeSettlementPolicy([
                 'name' => 'Sem Banco de Horas (Desativado nas Configurações)',
                 'modality' => SettlementModality::NoBank,
@@ -166,16 +246,26 @@ class WorkTimeSettlementService
             ]);
         }
 
-        // Sem nenhuma política configurada no sistema: preserva o comportamento padrão de banco acumulativo do PTRP
+        // Sem nenhuma política configurada no sistema: não cria políticas automáticas no banco.
+        return self::buildSafeUnconfiguredPolicy($regime);
+    }
+
+    /**
+     * Retorna uma representação em memória de estado não configurado seguro.
+     */
+    public static function buildSafeUnconfiguredPolicy(?LegalRegime $regime = null): WorkTimeSettlementPolicy
+    {
         return new WorkTimeSettlementPolicy([
-            'name' => 'Banco de Horas Geral (Padrão do Sistema)',
-            'modality' => SettlementModality::CumulativeBank,
+            'name' => 'Sem Política de Compensação Configurada',
+            'modality' => SettlementModality::NoBank,
             'legal_regime' => $regime,
             'effective_from' => Carbon::parse('2020-01-01'),
-            'legal_framework' => 'Regra geral de compensação e banco de horas do PTRP',
-            'approval_status' => SettlementPolicyApprovalStatus::Approved,
-            'status' => 'active',
-            'compensation_terms' => ['max_months' => 6],
+            'legal_framework' => 'Nenhuma política de compensação de jornada configurada para o vínculo ou organização',
+            'approval_status' => SettlementPolicyApprovalStatus::Draft,
+            'status' => 'inactive',
+            'compensation_terms' => [],
+            'carry_over_terms' => [],
+            'hybrid_rules' => [],
         ]);
     }
 
@@ -224,17 +314,25 @@ class WorkTimeSettlementService
             );
         }
 
+        $grossDeficit = $apuracao->grossLateMinutes + $apuracao->grossEarlyLeaveMinutes + $apuracao->grossAbsenceMinutes;
+        $hasDifferences = ($apuracao->grossOvertimeMinutes > 0) || ($grossDeficit > 0) || ($apuracao->grossDifferenceMinutes !== 0);
+
         // Caso 2: Servidor Estatutário sem Parametrização Normativa Específica
         // O PontoFácil NÃO aplica regras privadas da CLT (como banco semestral de acordo tácito) a estatutários.
-        if ($regime && $regime->isStatutory()) {
+        $isPolicyApproved = $policy->isApproved() && $policy->status === 'active';
+        if ($hasDifferences && ! $isPolicyApproved) {
+            $isPendingLegalDefinition = true;
+            $notes[] = 'Nenhuma política de compensação de jornada aprovada para o vínculo. Destinação pendente de definição.';
+        }
+
+        if ($hasDifferences && $regime && $regime->isStatutory()) {
             $isStatutoryFramework = $this->hasStatutoryLegalBasis($policy);
 
-            if (! $isStatutoryFramework && $policy->modality->operatesTimeBankLedger()) {
+            if (! $isStatutoryFramework || ! $isPolicyApproved) {
                 // Faltando fundamentação estatutária expressa do ente federativo para banco de horas
                 $isPendingLegalDefinition = true;
-                $pendingAnalysisMinutes = max(0, $apuracao->grossDifferenceMinutes);
                 $notes[] = sprintf(
-                    'Servidor estatutário (%s): regime de compensação/banco de horas requer previsão em lei ou regulamento próprio do ente federativo (CF/88 Art. 39, § 3º). Apuração pendente de parametrização jurídica.',
+                    'Servidor estatutário (%s): regime de compensação/banco de horas requer previsão em lei ou regulamento próprio do ente federativo (CF/88 Art. 39, § 3º). Destinação pendente de definição.',
                     $regime->label()
                 );
             }
@@ -244,7 +342,7 @@ class WorkTimeSettlementService
         if ($apuracao->grossOvertimeMinutes > 0) {
             $overtime = $apuracao->grossOvertimeMinutes;
 
-            // Tolerância CLT (Art. 58, § 1º) quando aplicável
+            // Tolerância CLT (Art. 58, § 1º) quando aplicável exclusivamente a regime CLT
             if ($regime === LegalRegime::CLT && $laborPolicy) {
                 $tolerated = $laborPolicy->applyPunchTolerance($overtime);
                 if ($tolerated === 0) {
@@ -259,9 +357,22 @@ class WorkTimeSettlementService
                     $pendingAnalysisMinutes += $overtime;
                 } else {
                     match ($policy->modality) {
-                        SettlementModality::DirectPayroll, SettlementModality::NoBank => $remunerableOvertime += $overtime,
-                        SettlementModality::CumulativeBank, SettlementModality::MonthlyCompensation, SettlementModality::Hybrid, SettlementModality::TimeOff, SettlementModality::LegacyMonthlyReset => $compensableOvertime += $overtime,
+                        SettlementModality::DirectPayroll => $remunerableOvertime += $overtime,
+                        SettlementModality::NoBank => match (true) {
+                            $policy->authorizesPayrollPayment() => $remunerableOvertime += $overtime,
+                            $policy->authorizesMonthlyCompensation() => $compensableOvertime += $overtime,
+                            default => $pendingAnalysisMinutes += $overtime,
+                        },
+                        SettlementModality::CumulativeBank,
+                        SettlementModality::MonthlyCompensation,
+                        SettlementModality::Hybrid,
+                        SettlementModality::TimeOff,
+                        SettlementModality::LegacyMonthlyReset => $compensableOvertime += $overtime,
                     };
+
+                    if ($policy->modality === SettlementModality::NoBank && ! $policy->authorizesPayrollPayment() && ! $policy->authorizesMonthlyCompensation()) {
+                        $notes[] = 'Destinação pendente de definição.';
+                    }
                 }
             }
         }
@@ -269,7 +380,7 @@ class WorkTimeSettlementService
         // Caso 4: Tratamento de Diferenças Negativas (Atrasos, Saídas Antecipadas e Faltas)
         $grossDeficit = $apuracao->grossLateMinutes + $apuracao->grossEarlyLeaveMinutes + $apuracao->grossAbsenceMinutes;
         if ($grossDeficit > 0) {
-            // Tolerância CLT para atrasos
+            // Tolerância CLT para atrasos exclusivamente a regime CLT
             if ($regime === LegalRegime::CLT && $laborPolicy && $apuracao->grossLateMinutes > 0) {
                 $toleratedLate = $laborPolicy->applyPunchTolerance($apuracao->grossLateMinutes);
                 if ($toleratedLate === 0) {
@@ -280,8 +391,21 @@ class WorkTimeSettlementService
             }
 
             if ($grossDeficit > 0) {
-                if ($policy->modality->operatesTimeBankLedger() || $policy->modality === SettlementModality::MonthlyCompensation) {
+                if ($isPendingLegalDefinition) {
+                    $pendingAnalysisMinutes += $grossDeficit;
+                } elseif ($policy->modality->operatesTimeBankLedger() || $policy->modality === SettlementModality::MonthlyCompensation) {
                     $compensableDeficit += $grossDeficit;
+                } elseif ($policy->modality === SettlementModality::DirectPayroll) {
+                    $deductibleDeficit += $grossDeficit;
+                } elseif ($policy->modality === SettlementModality::NoBank) {
+                    if ($policy->authorizesPayrollDeduction()) {
+                        $deductibleDeficit += $grossDeficit;
+                    } elseif ($policy->authorizesMonthlyCompensation()) {
+                        $compensableDeficit += $grossDeficit;
+                    } else {
+                        $pendingAnalysisMinutes += $grossDeficit;
+                        $notes[] = 'Destinação pendente de definição.';
+                    }
                 } else {
                     $deductibleDeficit += $grossDeficit;
                 }
@@ -297,7 +421,7 @@ class WorkTimeSettlementService
             deductibleDeficitMinutes: $deductibleDeficit,
             pendingAnalysisMinutes: $pendingAnalysisMinutes,
             isPendingLegalDefinition: $isPendingLegalDefinition,
-            notes: $notes,
+            notes: array_values(array_unique($notes)),
             details: [
                 'policy_id' => $policy->id,
                 'policy_name' => $policy->name,
@@ -332,7 +456,7 @@ class WorkTimeSettlementService
                 destinedToDayOffMinutes: 0,
                 pendingMinutes: $classificacao->pendingAnalysisMinutes,
                 isPendingDefinition: true,
-                notes: array_merge($notes, $classificacao->notes),
+                notes: array_values(array_unique(array_merge($notes, $classificacao->notes))),
             );
         }
 
@@ -345,10 +469,24 @@ class WorkTimeSettlementService
 
         switch ($modality) {
             case SettlementModality::NoBank:
-                // Organização sem banco de horas: horas extras e atrasos vão para folha ou apuração analítica
-                $payrollCredit = $classificacao->compensableOvertimeMinutes + $classificacao->remunerableOvertimeMinutes;
-                $payrollDebit = $classificacao->deductibleDeficitMinutes + $classificacao->compensableDeficitMinutes;
-                $notes[] = 'Organização operando sem banco de horas: saldos apurados destinados para controle de folha.';
+                // Sem banco de horas: não existe contabilização em banco.
+                // Diferenças só vão para folha ou compensação se houver autorização prévia.
+                $payrollCredit = $classificacao->remunerableOvertimeMinutes;
+                $payrollDebit = $classificacao->deductibleDeficitMinutes;
+                $monthlyCompensation = $classificacao->compensableOvertimeMinutes;
+
+                if ($payrollCredit > 0) {
+                    $notes[] = 'Horas extras destinadas para pagamento em folha (autorizado em política).';
+                }
+                if ($payrollDebit > 0) {
+                    $notes[] = 'Déficit destinado para desconto em folha (autorizado em política).';
+                }
+                if ($monthlyCompensation > 0) {
+                    $notes[] = 'Compensação autorizada dentro do período.';
+                }
+                if ($classificacao->pendingAnalysisMinutes > 0) {
+                    $notes[] = 'Destinação pendente de definição.';
+                }
                 break;
 
             case SettlementModality::MonthlyCompensation:
@@ -410,6 +548,8 @@ class WorkTimeSettlementService
                 break;
         }
 
+        $isPendingDef = $classificacao->pendingAnalysisMinutes > 0 && ($payrollCredit === 0 && $payrollDebit === 0 && $bankCredit === 0 && $bankDebit === 0 && $monthlyCompensation === 0);
+
         return new WorkTimeDestinacaoResult(
             modality: $modality,
             destinedToBankCreditMinutes: $bankCredit,
@@ -419,8 +559,8 @@ class WorkTimeSettlementService
             destinedToPayrollDebitMinutes: $payrollDebit,
             destinedToDayOffMinutes: $dayOff,
             pendingMinutes: $classificacao->pendingAnalysisMinutes,
-            isPendingDefinition: false,
-            notes: array_merge($notes, $classificacao->notes),
+            isPendingDefinition: $isPendingDef,
+            notes: array_values(array_unique(array_merge($notes, $classificacao->notes))),
             details: [
                 'policy_id' => $policy->id,
                 'policy_name' => $policy->name,
@@ -455,10 +595,21 @@ class WorkTimeSettlementService
      */
     protected function hasStatutoryLegalBasis(WorkTimeSettlementPolicy $policy): bool
     {
-        $framework = strtolower((string) $policy->legal_framework);
+        if (! $policy->isApproved()) {
+            return false;
+        }
 
-        // Se mencionar lei, decreto, portaria, estatuto ou edital, considera fundamentada
-        return str_contains($framework, 'lei')
+        $framework = strtolower(trim((string) $policy->legal_framework));
+
+        if (empty($framework) || strlen($framework) < 4) {
+            return false;
+        }
+
+        if ($framework === 'clt' || $framework === 'lei' || $framework === 'decreto') {
+            return false;
+        }
+
+        return (str_contains($framework, 'lei') && ! str_contains($framework, 'apenas lei'))
             || str_contains($framework, 'decreto')
             || str_contains($framework, 'portaria')
             || str_contains($framework, 'estatuto')
@@ -586,9 +737,9 @@ class WorkTimeSettlementService
             }
             $sourceDesc = sprintf('Snapshot congelado de fechamento da competência %s', $referencePeriod);
         } else {
-            $timeBank = TimeBankAccount::getOrCreateForEmployee($employee);
+            $timeBank = TimeBankAccount::where('employee_id', $employee->id)->first();
             $endOfMonth = Carbon::createFromDate($year, $month, 1)->endOfMonth();
-            $closingBalance = $timeBank->balanceUntil($endOfMonth);
+            $closingBalance = $timeBank ? $timeBank->balanceUntil($endOfMonth) : 0;
 
             $grossCredit = $closingBalance > 0 ? $closingBalance : 0;
             $grossDebit = $closingBalance < 0 ? abs($closingBalance) : 0;
@@ -638,8 +789,8 @@ class WorkTimeSettlementService
         Employee $employee,
         ?string $ignoreSettlementId,
     ): array {
-        $timeBank = TimeBankAccount::getOrCreateForEmployee($employee);
-        $currentBalance = $timeBank->currentBalance();
+        $timeBank = TimeBankAccount::where('employee_id', $employee->id)->first();
+        $currentBalance = $timeBank ? $timeBank->currentBalance() : 0;
 
         $grossCredit = $currentBalance > 0 ? $currentBalance : 0;
         $grossDebit = $currentBalance < 0 ? abs($currentBalance) : 0;
