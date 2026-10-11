@@ -17,6 +17,7 @@ use App\Models\TimeBankPolicy;
 use App\Models\WorkTimeSettlementPolicy;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Facades\Schema;
 
 class WorkTimeSettlementService
 {
@@ -32,6 +33,11 @@ class WorkTimeSettlementService
     {
         $targetDate = $date->format('Y-m-d');
         $regime = $employee->legal_regime;
+
+        if (! Schema::hasTable('work_time_settlement_policies')) {
+            return self::buildDefaultPolicy($regime);
+        }
+
         $establishmentId = $employee->sector?->establishment_id;
         $companyId = $employee->sector?->establishment?->company_id;
 

@@ -6,7 +6,6 @@ use App\Domain\PTRP\Actions\CalculateDailyJourneyAction;
 use App\Domain\PTRP\DTOs\CalculatedJourney;
 use App\Domain\PTRP\DTOs\MonthlyDifferencesSummary;
 use App\Domain\PTRP\DTOs\TimeBankMonthlySummary;
-use App\Domain\PTRP\Enums\TimeBankClosingMode;
 use App\Domain\PTRP\Enums\TreatmentEventStatus;
 use App\Domain\PTRP\Enums\TreatmentEventType;
 use App\Domain\Settlement\Enums\SettlementModality;
@@ -22,6 +21,7 @@ use App\Models\User;
 use App\Models\WorkTimeSettlement;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 
 class TimesheetJourneyService
 {
@@ -507,7 +507,7 @@ class TimesheetJourneyService
         $settlementService = app(WorkTimeSettlementService::class);
         $settlementPolicy = $settlementService->resolvePolicy($employee, $periodEnd);
         $modality = $settlementPolicy->modality;
-        $operatesTimeBank = $modality->operatesTimeBankLedger() || ($policy && $policy->enabled && $policy->closing_mode !== TimeBankClosingMode::NoBank);
+        $operatesTimeBank = $modality->operatesTimeBankLedger() || ($policy && $policy->enabled);
 
         $timeBankSummary = null;
         $reconciliationResult = null;
@@ -518,7 +518,7 @@ class TimesheetJourneyService
 
         $settledMinutes = 0;
         $pendingSettlementMinutes = 0;
-        if (class_exists(WorkTimeSettlement::class)) {
+        if (class_exists(WorkTimeSettlement::class) && Schema::hasTable('work_time_settlements')) {
             $refPeriod = sprintf('%04d-%02d', $year, $month);
             $settlements = WorkTimeSettlement::where('employee_id', $employee->id)
                 ->where(function ($q) use ($refPeriod, $year, $month) {
