@@ -577,3 +577,35 @@ O módulo de Espelho de Ponto é a interface central de apuração e acompanhame
 * **Modal Responsivo Mobile-First:** Apresentação em largura total no mobile (`p-4 sm:p-6`) com cantos arredondados corporativos (`rounded-2xl`), scroll interno confortável para viewports baixos e fechamento seguro.
 * **Campos Contextuais PTRP:** Interface contextual por tipo de solicitação (Inclusão de Batida, Justificativa de Ausência, Desconsideração), mantendo o aviso normativo de que o registro original nunca é alterado fisicamente (Portaria 671/2021 MTP).
 
+---
+
+## 29. Padrões da Folha de Ponto e Documentos A4 (/folha-ponto)
+
+### 29.1. Documento A4
+* **Fonte única de dados:** prévia na tela, lista mobile e impressão usam a mesma apuração PTRP (`TimesheetJourneyService`). Proibido implementar um segundo cálculo na view.
+* **Impressão:** `@page { size: A4 portrait; }`, margens de ~8mm, sidebar, filtros e botões ocultos (`.no-print`). Tabelas com `<thead>` para repetir o cabeçalho em páginas adicionais; bloco de assinaturas com `break-inside: avoid`.
+* **Legibilidade:** nunca reduzir a fonte abaixo de ~8px para forçar uma única página. Uma folha com muitos plantões pode ocupar mais de uma página, sempre identificando colaborador e competência.
+* **Cabeçalho institucional:** apenas dados reais da organização. Campos ausentes aparecem como "não cadastrado" e geram alerta âmbar fora do documento.
+* **Rubricas:** proibido usar `✓` ou qualquer marca que simule assinatura. Use "Registro eletrônico" quando a marcação vier do sistema; linhas de assinatura física só quando o modelo exigir. Nunca alegar ICP-Brasil ou assinatura criptográfica inexistente.
+
+### 29.2. Modelos de Apresentação
+* **Administrativo:** grade diária ENTR/SAÍDA (dois pares) + coluna de ocorrências. Pares são montados pela **direção real** da marcação; campo sem marcação correspondente fica em branco com ocorrência "Incompleta". Marcações além do segundo par vão para Observações.
+* **Jornada noturna:** uma linha por jornada iniciada no dia; a saída do dia seguinte recebe o sufixo `(+1d)`.
+* **Plantões:** uma linha por plantão com data/hora de início e término completas (`10/10/2026 19:00 → 11/10/2026 07:00`). Nunca dividir um plantão em duas jornadas pela troca de data.
+* **Folha em branco:** título explícito "DOCUMENTO PARA PREENCHIMENTO MANUAL".
+* **Seleção:** o modelo recomendado é detectado pela escala/plantões vigentes; a troca manual é apenas visual e não altera a apuração.
+* **Calendário:** sábado e domingo não são descanso automático. Folga vem da escala ou do plantão, feriado do calendário laboral; folga da escala nunca é apresentada como falta.
+
+### 29.3. Valores Físicos x Equivalência Legal
+* Exibir lado a lado e rotulados: **Horas físicas**, **Horas noturnas (físicas)** e **Equivalência legal noturna**. Nunca somar ou substituir um pelo outro.
+* Sem perfil/escala configurado, exibir "Apuração pendente de configuração ou conferência." em vez de totais.
+
+### 29.4. Prévia Mobile
+* Abaixo de `sm`: filtros empilhados, resumo da competência em grid 2 colunas, lista legível de jornadas/plantões e botão "Visualizar Documento A4 Completo".
+* A prévia A4 no mobile fica em contêiner `overflow-x-auto` próprio, sem causar overflow na página.
+
+### 29.5. Competência Aberta x Fechada
+* **Fechada:** tarja "COMPETÊNCIA FECHADA" com versão do snapshot; dados cadastrais e jornadas vêm do snapshot congelado, sem recálculo.
+* **Aberta:** tarja "COMPETÊNCIA ABERTA — dados provisórios"; o documento não é apresentado como consolidação definitiva.
+* Ajustes de cargo/vínculo feitos na prévia são identificados como edição de prévia e nunca gravam no cadastro.
+
