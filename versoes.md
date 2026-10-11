@@ -1,6 +1,27 @@
 # Histórico de Versões (Changelog)
 
-## v2.5.5 (Atual)
+## v2.5.6 (Atual)
+- **Simplificação das Configurações de Jornada e Compensação:**
+  - **Experiência Simples e Mobile-First:**
+    - Configurar a compensação de horas ficou mais simples. Agora você escolhe como sua organização trata as diferenças de jornada e visualiza um resumo antes de salvar.
+    - O formulário responde diretamente a três perguntas essenciais: para quem vale a regra (empresa, estabelecimento ou colaborador), o que será feito com as diferenças e quando a regra começa a valer.
+  - **Dois Níveis de Configuração com Divulgação Progressiva:**
+    - Configuração básica objetiva com opções claras e acessíveis pelo celular e computador.
+    - Configurações avançadas (prazos, limites, transporte de horas e tolerâncias) organizadas em seção expansível, sem exigir campos técnicos desnecessários para modalidades simples.
+  - **Sugestões de Configuração Rápida:**
+    - Modelos sugeridos para agilizar o preenchimento: Empresa CLT sem banco, CLT com compensação no mês, CLT com banco de horas e Órgão público estatutário.
+    - As sugestões apenas pré-preenchem os campos como ponto de partida, sem tomar decisões jurídicas automáticas nem aplicar regras sem confirmação explícita do gestor.
+  - **Linguagem Amigável sem Jargões:**
+    - Substituição de termos excessivamente técnicos por explicações diretas e funcionais do destino das horas.
+  - **Revisão Objetiva e Fluxo de Aprovação Seguro:**
+    - Resumo claro antes de salvar, permitindo voltar e corrigir dados a qualquer momento.
+    - Distinção transparente entre "Salvar rascunho" e "Aprovar e ativar", com mensagens de confirmação operacionais ("Política salva." e "Política aprovada e ativada.").
+  - **Listagem Administrativa Adaptada:**
+    - Visualização compacta em tabela no computador e cartões adaptados no celular, projetada para telas a partir de 320px sem colunas esmagadas nem rolagem lateral indesejada.
+  - **Segurança contra Alterações Destrutivas:**
+    - Avisos claros sobre sobreposição de vigências e proteção contra alterações em períodos já formalmente fechados.
+
+## v2.5.5
 - **Correção de Políticas de Jornada, Segurança e Preservação Histórica:**
   - **Precedência Determinística e Isolamento entre Organizações:**
     - Aplicação estrita da ordem de precedência: política específica do vínculo, política do estabelecimento, política da empresa e fallback seguro não-configurado.

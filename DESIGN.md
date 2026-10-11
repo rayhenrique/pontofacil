@@ -609,3 +609,46 @@ O módulo de Espelho de Ponto é a interface central de apuração e acompanhame
 * **Aberta:** tarja "COMPETÊNCIA ABERTA — dados provisórios"; o documento não é apresentado como consolidação definitiva.
 * Ajustes de cargo/vínculo feitos na prévia são identificados como edição de prévia e nunca gravam no cadastro.
 
+---
+
+## 30. Padrões de Políticas de Jornada e Compensação (/admin/settlement-policies)
+
+O módulo de Políticas de Jornada e Compensação é a interface administrativa onde gestores de RH e órgãos públicos definem o destino das horas trabalhadas (sem banco, compensação no mês, banco de horas acumulativo, encaminhamento para folha ou folgas).
+
+### 30.1. Princípio Central das Três Respostas
+A interface não deve sobrecarregar o usuário com dezenas de campos obrigatórios técnicos. O fluxo é estruturado para responder três perguntas essenciais:
+1. **Para quem vale esta regra?** Aplicação a toda a empresa, a um estabelecimento ou a um colaborador individual, com indicação do regime (CLT ou Estatutário).
+2. **O que será feito com as diferenças de jornada?** Escolha orientada em linguagem simples entre as modalidades autorizadas.
+3. **Quando essa regra começa a valer?** Data de início da vigência e referência normativa contextual correspondente.
+
+### 30.2. Divulgação Progressiva (Configuração Básica e Avançada)
+* **Nível Básico:** Campos essenciais de escopo, modalidade, vigência e fundamentação. Não exige parâmetros avançados sem relevância para a modalidade escolhida (ex.: não exigir limites de banco de horas quando a modalidade for "Sem banco de horas" ou "Compensação mensal").
+* **Nível Avançado:** Seção expansível com disclosure progressivo (`aria-expanded`), agrupando prazos de compensação, limites diários de modelos mistos, limites de transporte (*carry-over*), tolerâncias legais por batida/diária e exceções de débitos.
+
+### 30.3. Sugestões de Preenchimento Rápido (Presets)
+* Fornecer botões de sugestão rápida (*Empresa CLT sem banco*, *Empresa CLT com compensação mensal*, *Empresa CLT com banco*, *Órgão público com regime estatutário*).
+* Presets atuam unicamente como pré-preenchimento facilitador de formulário, **nunca tomando decisões jurídicas automáticas** nem ativando regras sem confirmação explícita do gestor.
+* Para regimes estatutários estaduais e municipais, a interface nunca inventa número de lei, percentuais ou prazos não informados.
+
+### 30.4. Linguagem Simples e Humana
+* Evitar termos e jargões internos como *"liquidação fática"*, *"ledger contábil"*, *"modalidade de destinação remuneratória"* ou *"parametrização normativa incontroversa"*.
+* Textos explicativos diretos e operacionais:
+  * **Sem banco de horas:** *"O sistema acompanha as diferenças de jornada, sem acumular automaticamente créditos em banco. O tratamento será definido conforme as regras aplicáveis."*
+  * **Compensação mensal:** *"As diferenças podem ser compensadas dentro da competência, conforme a política autorizada."*
+  * **Banco acumulativo:** *"Créditos e débitos elegíveis são controlados entre competências, respeitando as regras de compensação."*
+  * **Encaminhar para folha:** *"Horas autorizadas são encaminhadas para processamento. O sistema não realiza pagamentos automaticamente."*
+  * **Compensar por folga:** *"Diferenças autorizadas geram créditos para usufruto de folga, conforme a programação alinhada com a gestão."*
+  * **Modelo misto:** *"Parte das horas é acumulada em banco até o limite definido e o restante é encaminhado para folha ou outro tratamento autorizado."*
+
+### 30.5. Etapa de Revisão e Distinção de Ações
+* Antes da persistência, apresentar tela/bloco de revisão com resumo objetivo em linguagem natural (*"Esta política será aplicada aos colaboradores do estabelecimento X, a partir de DD/MM/AAAA. Tratamento: Compensação mensal. Regime: CLT. Situação: Aguardando aprovação."*).
+* Botão claro "Voltar e editar" para correções sem perda de dados.
+* Distinção explícita entre **Salvar rascunho** e **Aprovar e ativar** (restrito a perfis com autorização administrativa).
+* Feedback sóbrio: utilizar *"Política salva."* ou *"Política aprovada e ativada."* (vedado o uso de *"Política Homologada!"*).
+
+### 30.6. Responsividade e Mobile-First (320px+)
+* **Desktop (`hidden md:table`):** Tabela compacta com 7 colunas prioritárias (Nome, Aplicação, Regime, Modalidade, Vigência, Situação, Ações).
+* **Mobile (`md:hidden`):** Lista adaptada em cartões individuais contendo metadados limpos e botões de ação confortáveis (`min-h-[44px]`), sem compressão de colunas e com zero scroll horizontal.
+* **Modal Responsivo:** Container contido na viewport (`max-h-[92vh] overflow-y-auto`), campos em coluna única no mobile, inputs com rótulos visíveis e foco acessível.
+
+
