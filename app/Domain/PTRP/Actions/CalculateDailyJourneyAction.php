@@ -24,6 +24,7 @@ use App\Models\WorkSchedule;
 use App\Models\WorkTimeSettlementPolicy;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Collection;
 
 class CalculateDailyJourneyAction
 {
@@ -40,11 +41,14 @@ class CalculateDailyJourneyAction
         ?WorkSchedule $schedule = null,
         ?LaborPolicy $policy = null,
         ?WorkTimeSettlementPolicy $settlementPolicy = null,
+        ?Collection $prefetchedRawPunches = null,
+        ?Collection $prefetchedApprovedTreatments = null,
+        ?ShiftAssignment $prefetchedShift = null,
     ): CalculatedJourney {
         $dateStr = $date->format('Y-m-d');
 
         // 1. Resolver Plantão (ShiftAssignment) e Escala de Trabalho (WorkSchedule)
-        $shift = ShiftAssignment::where('employee_id', $employee->id)
+        $shift = $prefetchedShift ?? ShiftAssignment::where('employee_id', $employee->id)
             ->active()
             ->whereDate('start_at_local', $dateStr)
             ->first();
@@ -134,7 +138,7 @@ class CalculateDailyJourneyAction
         }
 
         // 5. Obter marcações brutas do REP (somente leitura)
-        $rawPunches = PunchEvent::where(function ($q) use ($employee) {
+        $rawPunches = $prefetchedRawPunches ?? PunchEvent::where(function ($q) use ($employee) {
             $q->where('employee_id', $employee->id)
                 ->orWhere('user_id', $employee->user_id);
         })
@@ -143,7 +147,7 @@ class CalculateDailyJourneyAction
             ->get();
 
         // 6. Obter eventos de tratamento aprovados (PTRP)
-        $approvedTreatments = TreatmentEvent::where(function ($q) use ($employee) {
+        $approvedTreatments = $prefetchedApprovedTreatments ?? TreatmentEvent::where(function ($q) use ($employee) {
             $q->where('employee_id', $employee->id)
                 ->orWhere('employment_id', $employee->id);
         })

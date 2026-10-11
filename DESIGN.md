@@ -651,4 +651,28 @@ A interface não deve sobrecarregar o usuário com dezenas de campos obrigatóri
 * **Mobile (`md:hidden`):** Lista adaptada em cartões individuais contendo metadados limpos e botões de ação confortáveis (`min-h-[44px]`), sem compressão de colunas e com zero scroll horizontal.
 * **Modal Responsivo:** Container contido na viewport (`max-h-[92vh] overflow-y-auto`), campos em coluna única no mobile, inputs com rótulos visíveis e foco acessível.
 
+---
+
+## 31. Padrões de Auditoria de Jornada, Espelho Humano e Gestão do RH (/timesheet e /admin/time-bank)
+
+### 31.1. Linguagem Humana no Espelho de Ponto (/timesheet)
+* O colaborador deve compreender sua jornada em primeira leitura através de frases diretas e naturais:
+  * *"Você trabalhou 7h27 de uma jornada prevista de 8h."*
+  * *"Diferença: -33 minutos."*
+  * *"Tratamento pendente de análise."*
+* Quando a escala ainda não estiver cadastrada: *"Não foi possível calcular o saldo porque sua escala ainda precisa ser configurada."*.
+* **Ocultação de cartões fictícios:** Não exibir blocos de banco de horas para colaboradores ou vínculos que não operam banco de horas (`operatesTimeBank === false`).
+* **Presunção de quitação vedada:** Diferenças apuradas pendentes nunca são apresentadas como quitadas sem comprovação documental fática expressa.
+
+### 31.2. Painel Operacional Estruturado para o RH (/admin/time-bank)
+* Em vez de dashboards excessivamente complexos ou painéis dispersos, o RH visualiza exatamente as 6 frentes essenciais para tomada de ação:
+  1. **Pendências de jornada:** dias com divergências ou batidas incompletas que requerem atenção.
+  2. **Solicitações RH a analisar:** solicitações de tratamento de ponto aguardando decisão.
+  3. **Diferenças a tratar:** saldo de horas apuradas que requerem destinação.
+  4. **Banco de horas:** saldo acumulado no ledger de horas, quando aplicável.
+  5. **Destinações aguardando baixa:** horas aprovadas aguardando quitação documentada fática.
+  6. **Prontidão para fechamento:** indicador do status da competência (aberta, pronta para fechar, bloqueada ou já fechada).
+* **Modal de Quitação Documentada:** Permite o registro ágil da comprovação documental (holerite, recibo, portaria), com opção de baixa contábil no banco de horas e atualização auditável imediata.
+
+
 

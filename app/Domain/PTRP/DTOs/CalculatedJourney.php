@@ -125,7 +125,7 @@ class CalculatedJourney
     public function formattedDifference(): string
     {
         return match ($this->differenceState()) {
-            'uncalculable' => 'Saldo indisponível — escala não configurada',
+            'uncalculable' => 'Não foi possível calcular o saldo porque sua escala ainda precisa ser configurada.',
             'pending' => 'Apuração pendente',
             'calculated' => self::formatDifferenceMinutes($this->dailyDifferenceMinutes() ?? 0),
         };
@@ -143,6 +143,98 @@ class CalculatedJourney
         $rem = $abs % 60;
 
         return sprintf('%s%02d:%02d', $sign, $hours, $rem);
+    }
+
+    public static function formatHumanHoursMinutes(int $minutes): string
+    {
+        $hours = intdiv($minutes, 60);
+        $rem = $minutes % 60;
+
+        if ($rem === 0) {
+            return "{$hours}h";
+        }
+
+        return sprintf('%dh%02d', $hours, $rem);
+    }
+
+    public function humanWorkStatement(): string
+    {
+        if (! $this->hasSchedule || $this->isPendingConfiguration) {
+            return 'Não foi possível calcular o saldo porque sua escala ainda precisa ser configurada.';
+        }
+
+        if ($this->isIncomplete) {
+            return 'Jornada incompleta: registre as marcações pendentes.';
+        }
+
+        if ($this->scheduledMinutes > 0 && $this->workedMinutes > 0) {
+            return sprintf(
+                'Você trabalhou %s de uma jornada prevista de %s.',
+                self::formatHumanHoursMinutes($this->workedMinutes),
+                self::formatHumanHoursMinutes($this->scheduledMinutes)
+            );
+        }
+
+        if ($this->scheduledMinutes === 0 && $this->workedMinutes > 0) {
+            return sprintf('Você trabalhou %s em dia sem expediente previsto.', self::formatHumanHoursMinutes($this->workedMinutes));
+        }
+
+        if ($this->scheduledMinutes > 0 && $this->workedMinutes === 0) {
+            if ($this->absenceMinutes === 0) {
+                return 'Ausência integral abonada/justificada.';
+            }
+
+            return sprintf('Ausência de %s de jornada prevista.', self::formatHumanHoursMinutes($this->scheduledMinutes));
+        }
+
+        return 'Dia de folga ou sem expediente previsto.';
+    }
+
+    public function humanDifference(): string
+    {
+        if (! $this->hasSchedule || $this->isPendingConfiguration) {
+            return 'Não foi possível calcular o saldo porque sua escala ainda precisa ser configurada.';
+        }
+
+        if ($this->isIncomplete) {
+            return 'Apuração pendente de marcações.';
+        }
+
+        $diff = $this->dailyDifferenceMinutes();
+        if ($diff === null || $diff === 0) {
+            return 'Diferença: 0 minutos (jornada cumprida exatamente conforme o previsto).';
+        }
+
+        if ($diff > 0) {
+            return sprintf('Diferença: +%d minutos.', $diff);
+        }
+
+        return sprintf('Diferença: %d minutos.', $diff);
+    }
+
+    public function attentionReason(): ?string
+    {
+        if (! $this->hasSchedule || $this->isPendingConfiguration) {
+            return 'Não foi possível calcular o saldo porque sua escala ainda precisa ser configurada.';
+        }
+
+        if ($this->isIncomplete) {
+            return 'Jornada incompleta (marcação em aberto).';
+        }
+
+        if ($this->absenceMinutes > 0) {
+            return 'Falta não justificada registrada.';
+        }
+
+        if ($this->lateMinutes > 0) {
+            return 'Atraso na entrada registrado.';
+        }
+
+        if ($this->dailyDifferenceMinutes() !== null && $this->dailyDifferenceMinutes() < 0) {
+            return sprintf('Diferença negativa de %d minutos apurada.', abs($this->dailyDifferenceMinutes()));
+        }
+
+        return null;
     }
 
     public function toArray(): array
@@ -193,6 +285,9 @@ class CalculatedJourney
             'settlement_summary' => $this->settlementSummary?->toArray(),
             'tolerated_minutes' => $this->toleratedMinutes,
             'justified_minutes' => $this->justifiedMinutes,
+            'human_work_statement' => $this->humanWorkStatement(),
+            'human_difference' => $this->humanDifference(),
+            'attention_reason' => $this->attentionReason(),
         ];
     }
 

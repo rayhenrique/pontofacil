@@ -170,7 +170,7 @@ class TimesheetJourneyService
                 } elseif (! $hasSchedule || $isPendingConfig) {
                     $diffState = 'uncalculable';
                     $diffMinutes = null;
-                    $formattedDiff = 'Saldo indisponível — escala não configurada';
+                    $formattedDiff = 'Não foi possível calcular o saldo porque sua escala ainda precisa ser configurada.';
                     $diffBadgeClass = 'bg-gray-100 text-gray-700 border-gray-300';
                     $uncalculableDaysCount++;
                 } elseif ($isIncomplete) {
@@ -212,6 +212,33 @@ class TimesheetJourneyService
                     }
                 }
 
+                $humanWorked = CalculatedJourney::formatHumanHoursMinutes($workedMinutes);
+                $humanScheduled = $scheduledMinutes !== null ? CalculatedJourney::formatHumanHoursMinutes($scheduledMinutes) : 'N/D';
+
+                if ($diffState === 'uncalculable' || ! $hasSchedule || $isPendingConfig) {
+                    $humanStatement = 'Não foi possível calcular o saldo porque sua escala ainda precisa ser configurada.';
+                    $humanDiff = 'Não foi possível calcular o saldo porque sua escala ainda precisa ser configurada.';
+                    $attReason = 'Escala precisa ser configurada';
+                } elseif ($isIncomplete) {
+                    $humanStatement = 'Jornada incompleta: registre as marcações pendentes.';
+                    $humanDiff = 'Apuração pendente de marcações.';
+                    $attReason = 'Jornada incompleta (marcação em aberto).';
+                } elseif ($scheduledMinutes > 0 && $workedMinutes > 0) {
+                    $humanStatement = sprintf('Você trabalhou %s de uma jornada prevista de %s.', $humanWorked, $humanScheduled);
+                    $humanDiff = $diffMinutes === 0
+                        ? 'Diferença: 0 minutos (jornada cumprida exatamente conforme o previsto).'
+                        : sprintf('Diferença: %s%d minutos.', $diffMinutes > 0 ? '+' : '', $diffMinutes);
+                    $attReason = $diffMinutes < 0 ? sprintf('Diferença negativa de %d minutos apurada.', abs($diffMinutes)) : null;
+                } elseif ($scheduledMinutes === 0 && $workedMinutes > 0) {
+                    $humanStatement = sprintf('Você trabalhou %s em dia sem expediente previsto.', $humanWorked);
+                    $humanDiff = sprintf('Diferença: +%d minutos.', $workedMinutes);
+                    $attReason = null;
+                } else {
+                    $humanStatement = 'Dia de folga ou sem expediente previsto.';
+                    $humanDiff = 'Diferença: 0 minutos.';
+                    $attReason = null;
+                }
+
                 $daysCalculated[$date] = [
                     'minutes' => $workedMinutes,
                     'hours' => $hours,
@@ -243,6 +270,11 @@ class TimesheetJourneyService
                     'settlement_modality' => $j['settlement_modality'] ?? null,
                     'destined_to_payroll_minutes' => (int) ($j['destined_to_payroll_minutes'] ?? 0),
                     'destined_to_compensation_minutes' => (int) ($j['destined_to_compensation_minutes'] ?? 0),
+                    'human_work_statement' => $humanStatement,
+                    'human_difference' => $humanDiff,
+                    'human_worked' => $humanWorked,
+                    'human_scheduled' => $humanScheduled,
+                    'attention_reason' => $attReason,
                 ];
 
                 $groupedEntries[$date] = $rawPunchesByDate[$date] ?? $this->formatEffectivePunchesAsEntries($effectivePunches, $date);
@@ -484,6 +516,11 @@ class TimesheetJourneyService
                 'settlement_modality' => $calculated->settlementModality?->value,
                 'destined_to_payroll_minutes' => $calculated->destinedToPayrollMinutes,
                 'destined_to_compensation_minutes' => $calculated->destinedToCompensationMinutes,
+                'human_work_statement' => $calculated->humanWorkStatement(),
+                'human_difference' => $calculated->humanDifference(),
+                'human_worked' => CalculatedJourney::formatHumanHoursMinutes($workedMinutes),
+                'human_scheduled' => CalculatedJourney::formatHumanHoursMinutes($calculated->scheduledMinutes),
+                'attention_reason' => $calculated->attentionReason() ?? ($hasPendingTreatment ? 'Tratamento pendente de análise' : null),
             ];
 
             $entries = $rawPunchesByDate[$dateStr] ?? collect([]);

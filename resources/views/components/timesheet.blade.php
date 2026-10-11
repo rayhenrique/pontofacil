@@ -1033,7 +1033,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
             <span class="text-[11px] font-bold text-gray-700 uppercase tracking-wider block mb-2">
                 Conciliação das Etapas de Apuração
             </span>
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs font-mono">
+            <div class="grid grid-cols-1 sm:grid-cols-2 {{ ($operatesTimeBank ?? false) ? 'lg:grid-cols-4' : 'lg:grid-cols-3' }} gap-2.5 text-xs font-mono">
                 {{-- 1. Diferença de jornada --}}
                 <div class="bg-gray-50/70 p-2.5 rounded-xl border border-gray-200">
                     <span class="text-gray-500 text-[10px] uppercase font-sans font-semibold block">1. Apuração PTRP</span>
@@ -1043,39 +1043,41 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                     <span class="text-[10px] text-gray-400 font-sans block mt-0.5">Tempo apurado bruto</span>
                 </div>
 
-                {{-- 2. Horas elegíveis --}}
+                {{-- 2. Horas elegíveis / destinadas --}}
                 <div class="bg-gray-50/70 p-2.5 rounded-xl border border-gray-200">
                     <span class="text-gray-500 text-[10px] uppercase font-sans font-semibold block">2. Horas Elegíveis</span>
                     <span class="font-bold text-gray-900 text-sm tabular-nums mt-0.5 block">
                         {{ \App\Domain\PTRP\DTOs\CalculatedJourney::formatMinutes($differencesSummary->destinedToCompensationMinutes) }}
                     </span>
-                    <span class="text-[10px] text-gray-400 font-sans block mt-0.5">Aptas à compensação</span>
+                    <span class="text-[10px] text-gray-400 font-sans block mt-0.5">Aptas à destinação</span>
                 </div>
 
-                {{-- 3. Banco contabilizado --}}
-                <div class="bg-gray-50/70 p-2.5 rounded-xl border border-gray-200">
-                    <span class="text-gray-500 text-[10px] uppercase font-sans font-semibold block">3. Banco Registrado</span>
-                    <span class="font-bold text-gray-900 text-sm tabular-nums mt-0.5 block">
-                        @if($timeBankSummary)
-                            {{ $timeBankSummary->formattedClosingBalance() }}
-                        @else
-                            00:00
-                        @endif
-                    </span>
-                    <span class="text-[10px] text-gray-400 font-sans block mt-0.5">Lançamentos no ledger</span>
-                </div>
+                @if($operatesTimeBank ?? false)
+                    {{-- 3. Banco contabilizado (Apenas se utilizar banco de horas) --}}
+                    <div class="bg-gray-50/70 p-2.5 rounded-xl border border-gray-200">
+                        <span class="text-gray-500 text-[10px] uppercase font-sans font-semibold block">3. Banco de Horas</span>
+                        <span class="font-bold text-gray-900 text-sm tabular-nums mt-0.5 block">
+                            @if($timeBankSummary)
+                                {{ $timeBankSummary->formattedClosingBalance() }}
+                            @else
+                                00:00
+                            @endif
+                        </span>
+                        <span class="text-[10px] text-gray-400 font-sans block mt-0.5">Saldo no banco de horas</span>
+                    </div>
+                @endif
 
                 {{-- 4. Destinação pendente --}}
                 <div class="bg-gray-50/70 p-2.5 rounded-xl border border-gray-200">
-                    <span class="text-gray-500 text-[10px] uppercase font-sans font-semibold block">4. Saldo Pendente</span>
+                    <span class="text-gray-500 text-[10px] uppercase font-sans font-semibold block">{{ ($operatesTimeBank ?? false) ? '4. Saldo Pendente' : '3. Saldo Pendente' }}</span>
                     <span class="font-bold text-amber-700 text-sm tabular-nums mt-0.5 block">
                         {{ \App\Domain\PTRP\DTOs\CalculatedJourney::formatMinutes($differencesSummary->pendingSettlementMinutes) }}
                     </span>
-                    <span class="text-[10px] text-gray-400 font-sans block mt-0.5">Aguardando quitação</span>
+                    <span class="text-[10px] text-amber-600/80 font-sans block mt-0.5">Pendente (não quitado)</span>
                 </div>
             </div>
             <p class="text-[11px] text-gray-500 mt-2 font-sans">
-                Estes valores podem divergir entre si conforme a absorção de tolerâncias legais (Art. 58 da CLT), destinações automáticas para pagamento em folha ou quitações periódicas acordadas.
+                Estes valores podem divergir entre si conforme a absorção de tolerâncias legais (Art. 58 da CLT), destinações automáticas para pagamento em folha ou quitações periódicas acordadas. O sistema não presume pagamento realizado sem comprovante de quitação anexado.
             </p>
         </div>
 
@@ -1250,6 +1252,26 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                         @endif
                     </div>
                 </div>
+
+                {{-- Faixa de Linguagem Humana e Atenção Operacional --}}
+                @if(isset($daysCalculated[$date]))
+                    <div class="px-3.5 sm:px-4 py-2 bg-indigo-50/40 border-b border-indigo-100/60 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-gray-900 font-medium">{{ $daysCalculated[$date]['human_work_statement'] ?? '' }}</span>
+                            @if(!empty($daysCalculated[$date]['human_difference']))
+                                <span class="font-bold font-mono text-[11px] {{ ($daysCalculated[$date]['difference_minutes'] ?? 0) > 0 ? 'text-emerald-700' : (($daysCalculated[$date]['difference_minutes'] ?? 0) < 0 ? 'text-rose-700' : 'text-slate-600') }}">
+                                    {{ $daysCalculated[$date]['human_difference'] }}
+                                </span>
+                            @endif
+                        </div>
+                        @if(!empty($daysCalculated[$date]['attention_reason']))
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-900 border border-amber-200 shrink-0">
+                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
+                                <span>{{ $daysCalculated[$date]['attention_reason'] }}</span>
+                            </span>
+                        @endif
+                    </div>
+                @endif
 
                 {{-- Painel Expansível de Detalhes da Jornada (Previsto, Apurado, Diferença, Tolerância, Tratamentos) --}}
                 @if(isset($daysCalculated[$date]))

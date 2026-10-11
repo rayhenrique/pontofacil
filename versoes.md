@@ -1,6 +1,19 @@
 # Histórico de Versões (Changelog)
 
 ## v2.5.6 (Atual)
+- **Auditoria Integrada de Jornada e Compensação:**
+  - Melhoramos a conferência das jornadas e das compensações. Agora os saldos, pendências e períodos fechados são apresentados de forma mais clara e consistente.
+  - **Espelho Simples e Humano para o Colaborador:**
+    - O trabalhador entende com facilidade quanto trabalhou, qual jornada estava prevista e a diferença apurada (exemplo: *"Você trabalhou 7h27 de uma jornada prevista de 8h. Diferença: -33 minutos."*).
+    - Dias com divergências exibem orientações claras e tratamentos pendentes de análise de forma amigável.
+    - Quando a escala ainda não estiver cadastrada, o sistema orienta com transparência: *"Não foi possível calcular o saldo porque sua escala ainda precisa ser configurada."*.
+    - Não exibe cartões de banco de horas para colaboradores ou organizações que não utilizam banco de horas, e saldos pendentes nunca são apresentados como quitados sem comprovação.
+  - **Resumo Operacional Estruturado para o RH:**
+    - O gestor e o RH contam com seis frentes diretas para tomada de decisão: pendências de jornada, solicitações aguardando aprovação, diferenças a tratar, saldos de banco quando aplicáveis, destinações aguardando quitação e competências prontas para fechamento.
+    - Quitação documentada rápida com modal acessível e responsivo, exigindo comprovação documental fática (holerite, recibo, portaria).
+  - **Concorrência e Integridade Histórica:**
+    - Bloqueios pessimistas impedem quitações simultâneas duplicadas, fechamentos concorrentes e estornos repetidos.
+    - Competências já fechadas permanecem rigorosamente congeladas em snapshots imutáveis e protegidas contra recálculos ou alterações posteriores em escalas e políticas.
 - **Simplificação das Configurações de Jornada e Compensação:**
   - **Experiência Simples e Mobile-First:**
     - Configurar a compensação de horas ficou mais simples. Agora você escolhe como sua organização trata as diferenças de jornada e visualiza um resumo antes de salvar.

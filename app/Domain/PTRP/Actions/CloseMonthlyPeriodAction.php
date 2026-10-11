@@ -66,12 +66,21 @@ class CloseMonthlyPeriodAction
         // Localizar política de banco de horas vigente na competência
         $policy = TimeBankPolicy::forDate($periodEnd);
 
-        return DB::transaction(function () use ($year, $month, $closedBy, $notes, $existingPeriod, $periodStart, $periodEnd, $policy) {
-            $snapshotVersion = $existingPeriod ? ($existingPeriod->snapshot_version + 1) : 1;
+        return DB::transaction(function () use ($year, $month, $closedBy, $notes, $periodStart, $periodEnd, $policy) {
+            $lockedPeriod = ClosedPeriod::where('year', $year)
+                ->where('month', $month)
+                ->lockForUpdate()
+                ->first();
+
+            if ($lockedPeriod && $lockedPeriod->status === 'closed') {
+                throw new \DomainException(sprintf('A competência %02d/%04d já se encontra fechada e congelada.', $month, $year));
+            }
+
+            $snapshotVersion = $lockedPeriod ? ($lockedPeriod->snapshot_version + 1) : 1;
 
             // 1. Criar ou atualizar registro de ClosedPeriod
-            if ($existingPeriod) {
-                $existingPeriod->update([
+            if ($lockedPeriod) {
+                $lockedPeriod->update([
                     'status' => 'closed',
                     'snapshot_version' => $snapshotVersion,
                     'policy_id' => $policy?->id,
@@ -89,7 +98,7 @@ class CloseMonthlyPeriodAction
                     'reopen_reason' => null,
                     'notes' => $notes,
                 ]);
-                $closedPeriod = $existingPeriod;
+                $closedPeriod = $lockedPeriod;
             } else {
                 $closedPeriod = ClosedPeriod::create([
                     'year' => $year,
@@ -236,13 +245,15 @@ class CloseMonthlyPeriodAction
                 $settlementPolicy = $settlementService->resolvePolicy($employee, $periodEnd);
                 $referencePeriod = sprintf('%04d-%02d', $year, $month);
 
-                // 1. Localizar ou associar destinações já existentes da competência
+                // 1. Localizar ou associar destinações já existentes da competência (com bloqueio pessimista)
+                TimeBankAccount::where('id', $account->id)->lockForUpdate()->first();
                 $existingSettlements = WorkTimeSettlement::where('employee_id', $employee->id)
                     ->where('reference_period', $referencePeriod)
                     ->whereNotIn('status', [
                         WorkTimeSettlementStatus::Cancelled,
                         WorkTimeSettlementStatus::Reversed,
                     ])
+                    ->lockForUpdate()
                     ->get();
 
                 foreach ($existingSettlements as $s) {

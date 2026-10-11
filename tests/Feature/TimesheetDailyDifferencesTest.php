@@ -357,7 +357,7 @@ class TimesheetDailyDifferencesTest extends TestCase
         $this->assertFalse($journey->hasSchedule);
         $this->assertNull($journey->dailyDifferenceMinutes());
         $this->assertEquals('uncalculable', $journey->differenceState());
-        $this->assertEquals('Saldo indisponível — escala não configurada', $journey->formattedDifference());
+        $this->assertEquals('Não foi possível calcular o saldo porque sua escala ainda precisa ser configurada.', $journey->formattedDifference());
 
         $service = app(TimesheetJourneyService::class);
         $data = $service->resolveMonthData($noScheduleUser, 2026, 10);
