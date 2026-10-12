@@ -12,6 +12,8 @@ use App\Models\ShiftAssignment;
 use App\Models\WorkSchedule;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
+use App\Domain\WorkSchedule\Actions\ConfigureWorkScheduleAction;
+use App\Domain\WorkSchedule\Actions\AssignWorkScheduleAction;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -26,6 +28,47 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
     public $year;
 
     public $month;
+
+    // Modal de Nova Escala / Configuração por Modelos
+    public $showScheduleModal = false;
+    public $template = 'administrative'; // 'administrative', 'continuous', 'shift_12h', 'shift_24h'
+
+    public $sched_name = 'Jornada Administrativa 40h';
+    public $sched_tolerance = 5;
+    public $sched_daily_tolerance = 10;
+
+    // Administrativo
+    public $admin_days = [1, 2, 3, 4, 5];
+    public $admin_morning_start = '08:00';
+    public $admin_morning_end = '12:00';
+    public $admin_afternoon_start = '13:00';
+    public $admin_afternoon_end = '17:00';
+
+    // Corrido
+    public $cont_days = [1, 2, 3, 4, 5];
+    public $cont_start_time = '07:00';
+    public $cont_end_time = '13:00';
+    public $cont_break_minutes = 15;
+    public $cont_deduct_break = false;
+
+    // Plantão 12h
+    public $p12_start_time = '07:00';
+    public $p12_end_time = '19:00';
+    public $p12_break_minutes = 60;
+    public $p12_anchor_date = '';
+    public $p12_is_night = false;
+
+    // Plantão 24h
+    public $p24_start_time = '07:00';
+    public $p24_end_time = '07:00';
+    public $p24_break_minutes = 120;
+    public $p24_anchor_date = '';
+
+    // Aplicação a Colaboradores
+    public array $apply_employee_ids = [];
+    public $apply_effective_from = '';
+    public $apply_effective_until = '';
+    public $apply_reason = 'Atribuição cadastral de modelo de escala';
 
     // Modal de Geração
     public $showGenerateModal = false;
@@ -231,8 +274,181 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             'status' => ShiftStatus::Cancelled,
             'reason' => 'Cancelado pela gestão',
         ]);
+        session()->flash('message', 'Plantão cancelado.');
+    }
 
-        session()->flash('message', 'Plantão cancelado com sucesso.');
+    public function openCreateScheduleModal($initialTemplate = 'administrative')
+    {
+        $this->template = $initialTemplate;
+        $this->updateTemplateDefaults();
+        $this->apply_effective_from = Carbon::today()->format('Y-m-d');
+        $this->apply_effective_until = '';
+        $this->apply_employee_ids = $this->selected_employee_id ? [(int) $this->selected_employee_id] : [];
+        $this->showScheduleModal = true;
+    }
+
+    public function updatedTemplate($value)
+    {
+        $this->updateTemplateDefaults();
+    }
+
+    protected function updateTemplateDefaults()
+    {
+        $today = Carbon::today()->format('Y-m-d');
+        match ($this->template) {
+            'administrative' => (function () {
+                $this->sched_name = 'Jornada Administrativa 40h';
+                $this->admin_days = [1, 2, 3, 4, 5];
+                $this->admin_morning_start = '08:00';
+                $this->admin_morning_end = '12:00';
+                $this->admin_afternoon_start = '13:00';
+                $this->admin_afternoon_end = '17:00';
+            })(),
+            'continuous' => (function () {
+                $this->sched_name = 'Horário Corrido 30h';
+                $this->cont_days = [1, 2, 3, 4, 5];
+                $this->cont_start_time = '07:00';
+                $this->cont_end_time = '13:00';
+                $this->cont_break_minutes = 15;
+                $this->cont_deduct_break = false;
+            })(),
+            'shift_12h' => (function () use ($today) {
+                $this->sched_name = 'Plantão 12x36 Diurno';
+                $this->p12_start_time = '07:00';
+                $this->p12_end_time = '19:00';
+                $this->p12_break_minutes = 60;
+                $this->p12_anchor_date = $today;
+                $this->p12_is_night = false;
+            })(),
+            'shift_24h' => (function () use ($today) {
+                $this->sched_name = 'Plantão 24x72';
+                $this->p24_start_time = '07:00';
+                $this->p24_end_time = '07:00';
+                $this->p24_break_minutes = 120;
+                $this->p24_anchor_date = $today;
+            })(),
+            default => null,
+        };
+    }
+
+    public function getPreviewDataProperty()
+    {
+        $action = app(\App\Domain\WorkSchedule\Actions\ConfigureWorkScheduleAction::class);
+        $data = match ($this->template) {
+            'administrative' => [
+                'days' => array_map('intval', (array) $this->admin_days),
+                'morning_start' => $this->admin_morning_start,
+                'morning_end' => $this->admin_morning_end,
+                'afternoon_start' => $this->admin_afternoon_start,
+                'afternoon_end' => $this->admin_afternoon_end,
+            ],
+            'continuous' => [
+                'days' => array_map('intval', (array) $this->cont_days),
+                'start_time' => $this->cont_start_time,
+                'end_time' => $this->cont_end_time,
+                'break_minutes' => (int) $this->cont_break_minutes,
+                'deduct_break' => (bool) $this->cont_deduct_break,
+            ],
+            'shift_12h' => [
+                'start_time' => $this->p12_start_time,
+                'end_time' => $this->p12_end_time,
+                'break_minutes' => (int) $this->p12_break_minutes,
+                'is_night_shift' => (bool) $this->p12_is_night,
+                'anchor_date' => $this->p12_anchor_date ?: Carbon::today()->format('Y-m-d'),
+            ],
+            'shift_24h' => [
+                'start_time' => $this->p24_start_time,
+                'end_time' => $this->p24_end_time,
+                'break_minutes' => (int) $this->p24_break_minutes,
+                'anchor_date' => $this->p24_anchor_date ?: Carbon::today()->format('Y-m-d'),
+            ],
+            default => [],
+        };
+
+        return $action->preview($this->template, $data, (int) $this->year, (int) $this->month);
+    }
+
+    public function saveSchedule()
+    {
+        $this->validate([
+            'sched_name' => 'required|string|min:3|max:150',
+            'apply_effective_from' => 'nullable|date',
+            'apply_effective_until' => 'nullable|date|after_or_equal:apply_effective_from',
+        ]);
+
+        $action = app(\App\Domain\WorkSchedule\Actions\ConfigureWorkScheduleAction::class);
+
+        try {
+            $schedule = match ($this->template) {
+                'administrative' => $action->createAdministrative([
+                    'name' => $this->sched_name,
+                    'days' => array_map('intval', (array) $this->admin_days),
+                    'morning_start' => $this->admin_morning_start,
+                    'morning_end' => $this->admin_morning_end,
+                    'afternoon_start' => $this->admin_afternoon_start,
+                    'afternoon_end' => $this->admin_afternoon_end,
+                    'tolerance_minutes' => (int) $this->sched_tolerance,
+                    'daily_tolerance_minutes' => (int) $this->sched_daily_tolerance,
+                ], Auth::user()),
+
+                'continuous' => $action->createContinuous([
+                    'name' => $this->sched_name,
+                    'days' => array_map('intval', (array) $this->cont_days),
+                    'start_time' => $this->cont_start_time,
+                    'end_time' => $this->cont_end_time,
+                    'break_minutes' => (int) $this->cont_break_minutes,
+                    'deduct_break' => (bool) $this->cont_deduct_break,
+                    'tolerance_minutes' => (int) $this->sched_tolerance,
+                    'daily_tolerance_minutes' => (int) $this->sched_daily_tolerance,
+                ], Auth::user()),
+
+                'shift_12h' => $action->createShift12h([
+                    'name' => $this->sched_name,
+                    'start_time' => $this->p12_start_time,
+                    'end_time' => $this->p12_end_time,
+                    'break_minutes' => (int) $this->p12_break_minutes,
+                    'anchor_date' => $this->p12_anchor_date ?: Carbon::today()->format('Y-m-d'),
+                    'is_night_shift' => (bool) $this->p12_is_night,
+                    'tolerance_minutes' => (int) $this->sched_tolerance,
+                    'daily_tolerance_minutes' => (int) $this->sched_daily_tolerance,
+                ], Auth::user()),
+
+                'shift_24h' => $action->createShift24h([
+                    'name' => $this->sched_name,
+                    'start_time' => $this->p24_start_time,
+                    'end_time' => $this->p24_end_time,
+                    'break_minutes' => (int) $this->p24_break_minutes,
+                    'anchor_date' => $this->p24_anchor_date ?: Carbon::today()->format('Y-m-d'),
+                    'tolerance_minutes' => (int) $this->sched_tolerance,
+                    'daily_tolerance_minutes' => (int) $this->sched_daily_tolerance,
+                ], Auth::user()),
+
+                default => throw new \Exception('Modelo não reconhecido'),
+            };
+
+            // Aplicação opcional a colaboradores
+            $appliedInfo = '';
+            if (! empty($this->apply_employee_ids) && ! empty($this->apply_effective_from)) {
+                $res = $action->applyToEmployees(
+                    schedule: $schedule,
+                    employeeIds: array_map('intval', (array) $this->apply_employee_ids),
+                    effectiveFrom: $this->apply_effective_from,
+                    effectiveUntil: $this->apply_effective_until ?: null,
+                    reason: $this->apply_reason ?: 'Atribuição cadastral de escala',
+                    actor: Auth::user(),
+                );
+
+                $appliedInfo = sprintf(' Escala atribuída com sucesso a %d colaborador(es).', $res['applied_count']);
+                if (! empty($res['errors'])) {
+                    $appliedInfo .= ' Avisos: ' . implode('; ', $res['errors']);
+                }
+            }
+
+            $this->showScheduleModal = false;
+            session()->flash('message', "Escala '{$schedule->name}' configurada com sucesso!{$appliedInfo}");
+        } catch (\Throwable $e) {
+            $this->addError('sched_name', $e->getMessage());
+        }
     }
 
     public function with()
@@ -305,9 +521,13 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                 <p class="text-xs sm:text-sm text-slate-500 mt-0.5">Programação operacional de jornadas cíclicas, plantões noturnos e folgas.</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
+                <button wire:click="openCreateScheduleModal" class="inline-flex items-center px-4 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 text-sm font-semibold shadow-sm transition">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+                    Nova Escala / Jornada
+                </button>
                 <button wire:click="openGenerateModal" class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-semibold shadow-sm transition">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-                    Gerar Escala / Ciclo
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    Gerar Plantões / Ciclo
                 </button>
             </div>
         </div>
@@ -580,6 +800,338 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                     <div class="pt-4 border-t flex justify-end gap-2">
                         <button type="button" wire:click="$set('showSwapModal', false)" class="px-4 py-2 border rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancelar</button>
                         <button type="submit" class="px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700">Autorizar Troca</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    @endif
+
+    <!-- MODAL DE CRIAÇÃO / CONFIGURAÇÃO DE ESCALAS POR MODELO -->
+    @if($showScheduleModal)
+    <div class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" wire:click="$set('showScheduleModal', false)"></div>
+        <div class="flex min-h-screen items-center justify-center p-3 sm:p-4">
+            <div class="relative z-10 w-full max-w-3xl bg-white rounded-3xl p-5 sm:p-7 shadow-2xl text-left space-y-6 max-h-[90vh] overflow-y-auto">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+                    <div>
+                        <h3 class="text-xl font-bold text-slate-900">Configurar Jornada ou Escala</h3>
+                        <p class="text-xs text-slate-500 mt-0.5">Selecione o modelo desejado para criar a regra de frequência sem complicação.</p>
+                    </div>
+                    <button type="button" wire:click="$set('showScheduleModal', false)" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+
+                <!-- SELETOR DE MODELOS INTUITIVOS -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Selecione o Modelo de Jornada</label>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        <button type="button" wire:click="$set('template', 'administrative')"
+                            class="p-3 text-left rounded-2xl border-2 transition flex flex-col justify-between {{ $template === 'administrative' ? 'border-indigo-600 bg-indigo-50/60 ring-2 ring-indigo-600/20' : 'border-slate-200 hover:border-slate-300 bg-white' }}">
+                            <div class="flex items-center justify-between">
+                                <span class="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">ADM</span>
+                                @if($template === 'administrative')<span class="w-2 h-2 rounded-full bg-indigo-600"></span>@endif
+                            </div>
+                            <div class="mt-3">
+                                <div class="text-xs font-bold text-slate-900">Administrativo</div>
+                                <div class="text-[10px] text-slate-500 mt-0.5 leading-tight">2 turnos c/ intervalo (ex: 8h-12h/13h-17h)</div>
+                            </div>
+                        </button>
+
+                        <button type="button" wire:click="$set('template', 'continuous')"
+                            class="p-3 text-left rounded-2xl border-2 transition flex flex-col justify-between {{ $template === 'continuous' ? 'border-emerald-600 bg-emerald-50/60 ring-2 ring-emerald-600/20' : 'border-slate-200 hover:border-slate-300 bg-white' }}">
+                            <div class="flex items-center justify-between">
+                                <span class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">6H</span>
+                                @if($template === 'continuous')<span class="w-2 h-2 rounded-full bg-emerald-600"></span>@endif
+                            </div>
+                            <div class="mt-3">
+                                <div class="text-xs font-bold text-slate-900">Horário Corrido</div>
+                                <div class="text-[10px] text-slate-500 mt-0.5 leading-tight">1 turno sem interrupção (ex: 7h-13h)</div>
+                            </div>
+                        </button>
+
+                        <button type="button" wire:click="$set('template', 'shift_12h')"
+                            class="p-3 text-left rounded-2xl border-2 transition flex flex-col justify-between {{ $template === 'shift_12h' ? 'border-blue-600 bg-blue-50/60 ring-2 ring-blue-600/20' : 'border-slate-200 hover:border-slate-300 bg-white' }}">
+                            <div class="flex items-center justify-between">
+                                <span class="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs">12h</span>
+                                @if($template === 'shift_12h')<span class="w-2 h-2 rounded-full bg-blue-600"></span>@endif
+                            </div>
+                            <div class="mt-3">
+                                <div class="text-xs font-bold text-slate-900">Plantão 12x36</div>
+                                <div class="text-[10px] text-slate-500 mt-0.5 leading-tight">12h de serviço x 36h descanso (diurno/noturno)</div>
+                            </div>
+                        </button>
+
+                        <button type="button" wire:click="$set('template', 'shift_24h')"
+                            class="p-3 text-left rounded-2xl border-2 transition flex flex-col justify-between {{ $template === 'shift_24h' ? 'border-purple-600 bg-purple-50/60 ring-2 ring-purple-600/20' : 'border-slate-200 hover:border-slate-300 bg-white' }}">
+                            <div class="flex items-center justify-between">
+                                <span class="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">24h</span>
+                                @if($template === 'shift_24h')<span class="w-2 h-2 rounded-full bg-purple-600"></span>@endif
+                            </div>
+                            <div class="mt-3">
+                                <div class="text-xs font-bold text-slate-900">Plantão 24x72</div>
+                                <div class="text-[10px] text-slate-500 mt-0.5 leading-tight">24h de serviço x 72h descanso (regime legal)</div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <form wire:submit="saveSchedule" class="space-y-5">
+                    <!-- NOME DA ESCALA -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Nome Identificador da Escala</label>
+                        <input type="text" wire:model="sched_name" class="block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500" required>
+                        @error('sched_name') <span class="text-rose-500 text-xs">{{ $message }}</span> @enderror
+                    </div>
+
+                    <!-- FORMULÁRIO CONDICIONAL CONFORME MODELO -->
+                    @if($template === 'administrative')
+                    <!-- MODELO A: ADMINISTRATIVO -->
+                    <div class="p-4 bg-slate-50/80 rounded-2xl border border-slate-200 space-y-4">
+                        <div class="text-xs font-bold text-slate-800 uppercase flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-indigo-600"></span>
+                            Parâmetros da Jornada Administrativa
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1.5">Dias de Trabalho na Semana</label>
+                            <div class="flex flex-wrap gap-2">
+                                @php
+                                    $weekdays = [1 => 'Seg', 2 => 'Ter', 3 => 'Qua', 4 => 'Qui', 5 => 'Sex', 6 => 'Sáb', 7 => 'Dom'];
+                                @endphp
+                                @foreach($weekdays as $dNum => $dLabel)
+                                <label class="inline-flex items-center px-3 py-1.5 rounded-xl border text-xs font-semibold cursor-pointer transition {{ in_array($dNum, (array)$admin_days) ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100' }}">
+                                    <input type="checkbox" wire:model.live="admin_days" value="{{ $dNum }}" class="sr-only">
+                                    {{ $dLabel }}
+                                </label>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Entrada Manhã</label>
+                                <input type="time" wire:model.live="admin_morning_start" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Início Intervalo</label>
+                                <input type="time" wire:model.live="admin_morning_end" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Fim Intervalo</label>
+                                <input type="time" wire:model.live="admin_afternoon_start" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Saída Tarde</label>
+                                <input type="time" wire:model.live="admin_afternoon_end" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                            </div>
+                        </div>
+                    </div>
+                    @endif
+
+                    @if($template === 'continuous')
+                    <!-- MODELO B: HORÁRIO CORRIDO -->
+                    <div class="p-4 bg-slate-50/80 rounded-2xl border border-slate-200 space-y-4">
+                        <div class="text-xs font-bold text-slate-800 uppercase flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-emerald-600"></span>
+                            Parâmetros do Horário Corrido
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1.5">Dias de Trabalho na Semana</label>
+                            <div class="flex flex-wrap gap-2">
+                                @php
+                                    $weekdays = [1 => 'Seg', 2 => 'Ter', 3 => 'Qua', 4 => 'Qui', 5 => 'Sex', 6 => 'Sáb', 7 => 'Dom'];
+                                @endphp
+                                @foreach($weekdays as $dNum => $dLabel)
+                                <label class="inline-flex items-center px-3 py-1.5 rounded-xl border text-xs font-semibold cursor-pointer transition {{ in_array($dNum, (array)$cont_days) ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100' }}">
+                                    <input type="checkbox" wire:model.live="cont_days" value="{{ $dNum }}" class="sr-only">
+                                    {{ $dLabel }}
+                                </label>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Entrada Única</label>
+                                <input type="time" wire:model.live="cont_start_time" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Saída Única</label>
+                                <input type="time" wire:model.live="cont_end_time" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Pausa/Intervalo (minutos)</label>
+                                <input type="number" wire:model.live="cont_break_minutes" min="0" max="120" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl">
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 pt-1">
+                            <input type="checkbox" id="cont_deduct" wire:model.live="cont_deduct_break" class="rounded text-emerald-600 focus:ring-emerald-500">
+                            <label for="cont_deduct" class="text-xs text-slate-700">Deduzir pausa da carga horária efetiva (se desmarcado, a pausa é remunerada/integrada)</label>
+                        </div>
+                    </div>
+                    @endif
+
+                    @if($template === 'shift_12h')
+                    <!-- MODELO C: PLANTÃO 12H -->
+                    <div class="p-4 bg-slate-50/80 rounded-2xl border border-slate-200 space-y-4">
+                        <div class="text-xs font-bold text-slate-800 uppercase flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-blue-600"></span>
+                            Parâmetros do Plantão 12x36
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Horário de Início</label>
+                                <input type="time" wire:model.live="p12_start_time" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Horário de Término</label>
+                                <input type="time" wire:model.live="p12_end_time" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Intervalo Intrajornada (min)</label>
+                                <input type="number" wire:model.live="p12_break_minutes" min="0" max="120" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Data-Âncora do Primeiro Plantão</label>
+                                <input type="date" wire:model.live="p12_anchor_date" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                                <span class="text-[10px] text-slate-500">Define o primeiro dia de trabalho para projeção do ciclo alternado 12x36.</span>
+                            </div>
+                            <div class="pt-3">
+                                <label class="inline-flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" wire:model.live="p12_is_night" class="rounded text-blue-600 focus:ring-blue-500">
+                                    <span class="text-xs text-slate-700 font-medium">Plantão Noturno (atravessa meia-noite, ex: 19:00 às 07:00)</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    @endif
+
+                    @if($template === 'shift_24h')
+                    <!-- MODELO D: PLANTÃO 24H -->
+                    <div class="p-4 bg-slate-50/80 rounded-2xl border border-slate-200 space-y-4">
+                        <div class="text-xs font-bold text-slate-800 uppercase flex items-center justify-between">
+                            <span class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-purple-600"></span>
+                                Parâmetros do Plantão 24x72
+                            </span>
+                            <span class="text-[10px] px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md font-semibold">Exige Autorização Normativa</span>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Horário de Início</label>
+                                <input type="time" wire:model.live="p24_start_time" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Horário de Término (dia seguinte)</label>
+                                <input type="time" wire:model.live="p24_end_time" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Intervalo Regulamentar (min)</label>
+                                <input type="number" wire:model.live="p24_break_minutes" min="0" max="240" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Data-Âncora do Primeiro Plantão</label>
+                            <input type="date" wire:model.live="p24_anchor_date" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                            <span class="text-[10px] text-slate-500">Define o primeiro dia de plantão (24h de serviço seguidas de 72h de descanso legal).</span>
+                        </div>
+                    </div>
+                    @endif
+
+                    <!-- PAINEL DE PRÉVIA EM TEMPO REAL -->
+                    @php
+                        $preview = $this->previewData;
+                    @endphp
+                    <div class="p-4 bg-indigo-50/60 rounded-2xl border border-indigo-100 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-indigo-950 uppercase tracking-wide">Prévia de Carga e Jornada</span>
+                            <span class="text-[10px] text-indigo-700 font-medium">Competência atual: {{ $month }}/{{ $year }}</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                            <div class="bg-white p-2.5 rounded-xl border border-indigo-100 shadow-2xs">
+                                <div class="text-[10px] text-slate-500 uppercase font-semibold">Carga Diária</div>
+                                <div class="text-sm font-bold text-slate-900 mt-0.5">
+                                    {{ sprintf('%02dh%02d', intdiv($preview['daily_minutes'] ?? 0, 60), ($preview['daily_minutes'] ?? 0) % 60) }}
+                                </div>
+                                <div class="text-[10px] text-slate-400 font-mono">{{ $preview['daily_minutes'] ?? 0 }} min</div>
+                            </div>
+
+                            <div class="bg-white p-2.5 rounded-xl border border-indigo-100 shadow-2xs">
+                                <div class="text-[10px] text-slate-500 uppercase font-semibold">Carga Semanal</div>
+                                <div class="text-sm font-bold text-slate-900 mt-0.5">
+                                    {{ sprintf('%02dh%02d', intdiv($preview['weekly_minutes'] ?? 0, 60), ($preview['weekly_minutes'] ?? 0) % 60) }}
+                                </div>
+                                <div class="text-[10px] text-slate-400 font-mono">{{ $preview['weekly_minutes'] ?? 0 }} min</div>
+                            </div>
+
+                            <div class="bg-white p-2.5 rounded-xl border border-indigo-100 shadow-2xs col-span-2 sm:col-span-1">
+                                <div class="text-[10px] text-indigo-900 uppercase font-semibold">Previsto no Mês Real</div>
+                                <div class="text-sm font-bold text-indigo-700 mt-0.5">
+                                    {{ sprintf('%02dh%02d', intdiv($preview['monthly_expected_minutes'] ?? 0, 60), ($preview['monthly_expected_minutes'] ?? 0) % 60) }}
+                                </div>
+                                <div class="text-[10px] text-indigo-500">Sem presunção fictícia de 200h</div>
+                            </div>
+                        </div>
+
+                        @if(!empty($preview['notes']))
+                        <div class="text-[11px] text-indigo-800 font-medium pt-1">
+                            ℹ️ {{ $preview['notes'] }}
+                        </div>
+                        @endif
+                    </div>
+
+                    <!-- ATRIBUIÇÃO A COLABORADORES COM VIGÊNCIA -->
+                    <div class="p-4 bg-slate-50/80 rounded-2xl border border-slate-200 space-y-3">
+                        <div class="text-xs font-bold text-slate-800 uppercase flex items-center justify-between">
+                            <span>Atribuir a Colaboradores (Opcional)</span>
+                            <span class="text-[10px] text-slate-500 font-normal">Preserva histórico sem sobrescrita</span>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Início da Vigência (Obrigatório se atribuir)</label>
+                                <input type="date" wire:model="apply_effective_from" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Fim da Vigência (Em aberto se vazio)</label>
+                                <input type="date" wire:model="apply_effective_until" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Selecionar Colaboradores</label>
+                            <div class="max-h-36 overflow-y-auto border border-slate-200 rounded-xl bg-white p-2 divide-y divide-slate-100">
+                                @forelse($employees as $emp)
+                                <label class="flex items-center gap-2 py-1 px-1.5 hover:bg-slate-50 rounded-lg text-xs cursor-pointer">
+                                    <input type="checkbox" wire:model="apply_employee_ids" value="{{ $emp->id }}" class="rounded text-indigo-600 focus:ring-indigo-500">
+                                    <span class="font-medium text-slate-800">{{ $emp->user->name ?? 'Colaborador #'.$emp->id }}</span>
+                                    <span class="text-[10px] text-slate-400">Matrícula: {{ $emp->registration_number ?? 'S/N' }}</span>
+                                </label>
+                                @empty
+                                <div class="text-xs text-slate-400 p-2">Nenhum colaborador encontrado para o filtro.</div>
+                                @endforelse
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+                        <button type="button" wire:click="$set('showScheduleModal', false)" class="px-4 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">
+                            Cancelar
+                        </button>
+                        <button type="submit" class="px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 shadow-sm transition">
+                            Salvar e Criar Escala
+                        </button>
                     </div>
                 </form>
             </div>

@@ -21,7 +21,6 @@ use App\Models\TimeBankPolicy;
 use App\Models\TimeBankTransaction;
 use App\Models\TreatmentEvent;
 use App\Models\User;
-use App\Models\WorkSchedule;
 use App\Models\WorkTimeSettlement;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -149,7 +148,7 @@ class CloseMonthlyPeriodAction
                 ];
 
                 // b) Snapshot de escala e sua vigência
-                $schedule = $employee->getWorkScheduleForDate($periodEnd) ?? $employee->workSchedule ?? WorkSchedule::first();
+                $schedule = $employee->getWorkScheduleForDate($periodEnd) ?? $employee->workSchedule;
                 $activeAssignment = $employee->workScheduleAssignments()->activeAt($periodEnd)->first();
                 $scheduleSnapshot = [
                     'id' => $schedule?->id,
@@ -157,7 +156,7 @@ class CloseMonthlyPeriodAction
                     'code' => $schedule?->code,
                     'modality' => $schedule?->modality?->value,
                     'type' => $schedule?->modality?->value ?? 'standard',
-                    'weekly_hours' => $schedule?->expected_weekly_minutes ? round($schedule->expected_weekly_minutes / 60, 1) : 40.0,
+                    'weekly_hours' => $schedule?->expected_weekly_minutes ? round($schedule->expected_weekly_minutes / 60, 1) : null,
                     'tolerance_minutes' => $schedule?->tolerance_minutes ?? 5,
                     'daily_tolerance_minutes' => $schedule?->daily_tolerance_minutes ?? 10,
                     'expected_daily_minutes' => $schedule?->expected_daily_minutes,

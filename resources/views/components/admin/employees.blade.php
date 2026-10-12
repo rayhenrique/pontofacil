@@ -47,7 +47,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
 
     public $weekly_workload_hours = '40';
 
-    public $monthly_workload_hours = '200';
+    public $monthly_workload_hours = '';
 
     public $workload_modality = 'fixed';
 
@@ -95,7 +95,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
         $this->legal_regime = 'clt';
         $this->daily_workload_hours = '8';
         $this->weekly_workload_hours = '40';
-        $this->monthly_workload_hours = '200';
+        $this->monthly_workload_hours = '';
         $this->workload_modality = 'fixed';
         $this->is_variable_workload = false;
         $this->normative_jurisdiction = 'municipal';
@@ -103,8 +103,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
         $this->schedule_effective_from = Carbon::today()->format('Y-m-d');
         $this->schedule_reason = 'Atribuição cadastral inicial de escala';
 
-        $firstSchedule = WorkSchedule::where('active', true)->first();
-        $this->work_schedule_id = $firstSchedule ? (string) $firstSchedule->id : '';
+        $this->work_schedule_id = '';
         $this->initial_work_schedule_id = '';
 
         $user = Auth::user();
@@ -116,6 +115,22 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
         }
 
         $this->showModal = true;
+    }
+
+    public function updatedWorkScheduleId($value)
+    {
+        if (! empty($value)) {
+            $schedule = WorkSchedule::find($value);
+            if ($schedule) {
+                if ($schedule->daily_minutes > 0) {
+                    $this->daily_workload_hours = (string) round($schedule->daily_minutes / 60, 2);
+                }
+                $weeklyMin = $schedule->calculateWeeklyMinutes();
+                if ($weeklyMin > 0) {
+                    $this->weekly_workload_hours = (string) round($weeklyMin / 60, 2);
+                }
+            }
+        }
     }
 
     public function openEditModal($id)
@@ -739,7 +754,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                                         </div>
                                         <div>
                                             <label class="block text-[11px] font-semibold text-gray-600 uppercase mb-0.5">Meta Mensal (h)</label>
-                                            <input type="number" step="0.5" wire:model="monthly_workload_hours" placeholder="200" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg font-mono" {{ $is_variable_workload ? 'disabled' : '' }}>
+                                            <input type="number" step="0.5" wire:model="monthly_workload_hours" placeholder="Opcional (ex: 200)" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg font-mono" {{ $is_variable_workload ? 'disabled' : '' }}>
                                         </div>
                                         <div>
                                             <label class="block text-[11px] font-semibold text-gray-600 uppercase mb-0.5">Texto Legado</label>
@@ -757,7 +772,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div>
                                             <label class="block text-[11px] font-semibold text-gray-600 uppercase mb-0.5">Modelo de Escala</label>
-                                            <select wire:model="work_schedule_id" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg font-medium">
+                                            <select wire:model.live="work_schedule_id" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg font-medium">
                                                 <option value="">Selecione uma escala</option>
                                                 @foreach($workSchedules as $schedule)
                                                     <option value="{{ $schedule->id }}">{{ $schedule->name }} ({{ $schedule->modality?->label() ?? 'Semanal' }})</option>

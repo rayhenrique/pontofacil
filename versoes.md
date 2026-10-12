@@ -1,6 +1,24 @@
 # Histórico de Versões (Changelog)
 
-## v2.5.7 (Atual)
+## v2.5.8 (Atual)
+- **Configuração Simplificada de Horários e Plantões por Modelos:**
+  - O RH agora configura a jornada ou escala de trabalho sem necessidade de conhecimentos técnicos, selecionando entre modelos intuitivos:
+    - **Administrativo:** Dias selecionáveis com padrão visual de segunda a sexta, dois turnos com intervalo intrajornada (ex.: 08:00–12:00 e 13:00–17:00).
+    - **Horário Corrido:** Dias selecionáveis com entrada e saída únicas (ex.: 07:00–13:00), com tratamento de pausa remunerada ou deduzida da jornada líquida.
+    - **Plantão 12 Horas:** Suporte a regimes 12×36 diurnos e noturnos com virada de meia-noite contínua como jornada lógica única, data-âncora, intervalo e vigência.
+    - **Plantão 24 Horas:** Suporte a regimes 24×72 com intervalo regulamentar, data-âncora e validação normativa restrita.
+    - **Personalizado / Avançado:** Mantém total flexibilidade para escalas atípicas e ciclos customizados.
+  - **Cálculo Exato pelo Calendário Real:**
+    - Cargas diárias e semanais derivadas da própria escala.
+    - Carga prevista mensal calculada pelo número real de dias úteis e ocorrências na competência, eliminando a presunção arbitrária de 200 horas mensais.
+    - Eliminação de seleção silenciosa ou criação fictícia de `WorkSchedule::first()`.
+  - **Prévia em Tempo Real e Aplicação com Vigência:**
+    - O RH visualiza a prévia de carga diária, carga semanal e horas previstas no mês antes de salvar.
+    - Aplicação em lote para múltiplos servidores com preservação rigorosa do histórico retroativo e respeito às competências passadas.
+  - **Não Bloqueio do Registro de Ponto:**
+    - Batidas de ponto (REP-P) e apurações diárias nunca são bloqueadas por ausência ou pendência de escala.
+
+## v2.5.7
 - **Foco Exclusivo no Controle de Frequência:**
   - O PontoFácil é exclusivamente um sistema de registro, apuração, conferência e relatório de frequência para empresas e órgãos públicos. Não processa salários, pagamentos, cálculos monetários ou folha de pagamento. O setor de pagamento externo recebe apenas o relatório consolidado de frequência.
   - **Fechamento Mensal Desacoplado do Banco de Horas:**

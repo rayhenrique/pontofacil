@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\LegalRegime;
 use App\Enums\WorkScheduleModality;
+use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -56,6 +57,11 @@ class WorkSchedule extends Model
     public function employees(): HasMany
     {
         return $this->hasMany(Employee::class);
+    }
+
+    public function getDailyMinutesAttribute(): int
+    {
+        return (int) ($this->expected_daily_minutes ?? 0);
     }
 
     public function assignments(): HasMany
@@ -125,6 +131,73 @@ class WorkSchedule extends Model
         $day = $this->getScheduleForDay($date->dayOfWeek);
 
         return (int) ($day['expected_minutes'] ?? 0);
+    }
+
+    public function calculateWeeklyMinutes(): int
+    {
+        if ($this->modality === WorkScheduleModality::TwelveByThirtySix) {
+            // Média de 3,5 plantões por semana (42h ou 36h de trabalho efetivo por semana)
+            $daily = $this->expected_daily_minutes ?: 720;
+
+            return (int) round($daily * 3.5);
+        }
+
+        if ($this->modality === WorkScheduleModality::TwentyFourBySeventyTwo) {
+            // 1 plantão a cada 4 dias: média de 1,75 plantões por semana
+            $daily = $this->expected_daily_minutes ?: 1440;
+
+            return (int) round($daily * 1.75);
+        }
+
+        $sum = 0;
+        for ($i = 0; $i <= 6; $i++) {
+            $day = $this->getScheduleForDay($i);
+            $sum += (int) ($day['expected_minutes'] ?? 0);
+        }
+
+        return $sum ?: ($this->expected_weekly_minutes ?: 0);
+    }
+
+    /**
+     * Calcula a carga horária prevista real no mês a partir do calendário real da competência.
+     * Nunca presume 200h nem valores arbitrários.
+     */
+    public function calculateMonthlyExpectedMinutes(int $year, int $month, ?CarbonInterface $anchorDate = null): int
+    {
+        $startDate = Carbon::createFromDate($year, $month, 1)->startOfDay();
+        $daysInMonth = $startDate->daysInMonth;
+        $totalMinutes = 0;
+
+        if ($this->modality === WorkScheduleModality::TwelveByThirtySix || $this->modality === WorkScheduleModality::TwentyFourBySeventyTwo) {
+            $anchorStr = $this->cycle_data['anchor_date'] ?? null;
+            $anchor = $anchorDate ? $anchorDate->copy()->startOfDay() : ($anchorStr ? Carbon::parse($anchorStr)->startOfDay() : $startDate->copy());
+            $cycleLength = $this->modality === WorkScheduleModality::TwelveByThirtySix ? 2 : 4;
+            $workMinutes = (int) ($this->expected_daily_minutes ?: ($this->modality === WorkScheduleModality::TwelveByThirtySix ? 720 : 1440));
+
+            for ($day = 1; $day <= $daysInMonth; $day++) {
+                $curDate = Carbon::createFromDate($year, $month, $day)->startOfDay();
+                $diffDays = (int) $anchor->diffInDays($curDate, false);
+                $cycleIndex = ($diffDays % $cycleLength + $cycleLength) % $cycleLength;
+
+                if ($cycleIndex === 0) {
+                    $totalMinutes += $workMinutes;
+                }
+            }
+
+            return $totalMinutes;
+        }
+
+        for ($day = 1; $day <= $daysInMonth; $day++) {
+            $curDate = Carbon::createFromDate($year, $month, $day);
+            $dayOfWeek = $curDate->dayOfWeek;
+            $dayConfig = $this->getScheduleForDay($dayOfWeek);
+
+            if (! empty($dayConfig['is_work_day'])) {
+                $totalMinutes += (int) ($dayConfig['expected_minutes'] ?? 0);
+            }
+        }
+
+        return $totalMinutes;
     }
 
     /**

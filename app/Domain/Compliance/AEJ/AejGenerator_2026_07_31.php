@@ -10,7 +10,6 @@ use App\Models\Establishment;
 use App\Models\TimeBankAccount;
 use App\Models\TimeBankPolicy;
 use App\Models\TimeBankTransaction;
-use App\Models\WorkSchedule;
 use Carbon\Carbon;
 
 class AejGenerator_2026_07_31 implements AejGeneratorInterface
@@ -421,15 +420,15 @@ class AejGenerator_2026_07_31 implements AejGeneratorInterface
                 'establishment_identifier' => $empEstablishment?->identifier_number,
             ];
 
-            $schedule = $emp->workSchedule ?? WorkSchedule::first() ?? WorkSchedule::createDefault40h();
+            $schedule = $emp->getWorkScheduleForDate(Carbon::createFromDate($year, $month, 1)->endOfMonth()) ?? $emp->workSchedule;
             $scheduleSnapshot = [
-                'id' => $schedule->id,
-                'name' => $schedule->name,
-                'type' => $schedule->type,
-                'weekly_hours' => $schedule->weekly_hours,
-                'tolerance_minutes' => $schedule->tolerance_minutes,
-                'daily_tolerance_minutes' => $schedule->daily_tolerance_minutes,
-                'days_config' => $schedule->days_config,
+                'id' => $schedule?->id,
+                'name' => $schedule?->name ?? 'Sem escala atribuída',
+                'type' => $schedule?->modality?->value ?? 'standard',
+                'weekly_hours' => $schedule?->expected_weekly_minutes ? round($schedule->expected_weekly_minutes / 60, 1) : null,
+                'tolerance_minutes' => $schedule?->tolerance_minutes ?? 5,
+                'daily_tolerance_minutes' => $schedule?->daily_tolerance_minutes ?? 10,
+                'days_config' => $schedule?->schedule_data ?? [],
             ];
 
             $journeysData = [];
