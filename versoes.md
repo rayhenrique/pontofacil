@@ -1,6 +1,29 @@
 # Histórico de Versões (Changelog)
 
-## v2.5.8 (Atual)
+## v2.5.9 (Atual)
+- **Conferência Mensal de Frequência pelo RH e Gestores:**
+  - **Módulo Operacional Dedicado (`/admin/monthly-review`):**
+    - Módulo totalmente independente do Banco de Horas, reutilizando apuração existente e fechamento auditado.
+    - Seleção rápida de competência mensal com filtros por setor autorizado e busca por colaborador, CPF ou matrícula.
+    - Classificação analítica com status operacionais: *Aguardando conferência*, *Com ocorrência*, *Conferido* e *Conferido com ressalva*.
+    - Exibição transparente por servidor de: escala de trabalho, horas previstas, trabalhadas, diferenças de jornada e ocorrências impeditivas.
+  - **Fluxo de Homologação e Gestão de Ressalvas:**
+    - Acesso direto ao Espelho de Ponto (`/timesheet`) para consulta detalhada de batidas, abonos e tratamentos.
+    - Registro de auditoria completo de quem conferiu, data/hora da homologação, competência e ressalva fundamentada.
+    - Exigência estrita de ressalva/justificativa fundamentada (mínimo de 5 caracteres) para servidores com ocorrências pendentes (batidas incompletas, solicitações não tratadas ou falta de escala).
+  - **Conferência em Lote com Regra de Segurança:**
+    - Homologação em lote com confirmação explícita restrita a servidores elegíveis (sem ocorrências pendentes). Servidores com pendências são automaticamente preservados para conferência individual criteriosa.
+  - **Segregação de Funções e Fechamento com Snapshot Congelado:**
+    - Gestores conferem apenas suas equipes autorizadas; Fechamento formal da competência restrito ao Administrador/RH.
+    - Bloqueio rígido do fechamento ordinário se houver servidores sem conferência ou ocorrências não ressalvadas.
+    - Fechamento congela a apuração e as conferências em snapshots imutáveis (`ClosedPeriodEmployeeSnapshot`) com hash determinístico SHA-256.
+    - Consulta de competência fechada consome **exclusivamente snapshots congelados**, sem qualquer recálculo com escalas atuais.
+    - Reabertura formal com auditoria de justificativa (mínimo 10 caracteres) desvincula as conferências anteriores preservando a integridade histórica.
+  - **Interface Responsiva e Acessível:**
+    - Visualização Mobile-First com cards operacionais compactos e ação contextual "Conferir".
+    - Tabela de alta densidade para desktop com seleção em lote e ação de destaque "Concluir conferência e fechar mês".
+
+## v2.5.8
 - **Configuração Simplificada de Horários e Plantões por Modelos:**
   - O RH agora configura a jornada ou escala de trabalho sem necessidade de conhecimentos técnicos, selecionando entre modelos intuitivos:
     - **Administrativo:** Dias selecionáveis com padrão visual de segunda a sexta, dois turnos com intervalo intrajornada (ex.: 08:00–12:00 e 13:00–17:00).

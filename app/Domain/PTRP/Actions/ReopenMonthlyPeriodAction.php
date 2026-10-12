@@ -3,6 +3,7 @@
 namespace App\Domain\PTRP\Actions;
 
 use App\Models\ClosedPeriod;
+use App\Models\MonthlyAttendanceReview;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 
@@ -44,6 +45,10 @@ class ReopenMonthlyPeriodAction
             'reopened_at' => now(),
             'reopen_reason' => $trimmedReason,
         ]);
+
+        MonthlyAttendanceReview::where('year', $year)
+            ->where('month', $month)
+            ->update(['closed_period_id' => null]);
 
         Log::warning('period.reopened', [
             'period_id' => $closedPeriod->id,

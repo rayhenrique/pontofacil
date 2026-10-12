@@ -106,6 +106,11 @@ class Employee extends Model
         return $this->hasMany(WorkTimeSettlement::class)->orderBy('operation_date', 'desc');
     }
 
+    public function monthlyAttendanceReviews(): HasMany
+    {
+        return $this->hasMany(MonthlyAttendanceReview::class);
+    }
+
     /**
      * Resolve a política de compensação e destinação aplicável para a data especificada.
      */

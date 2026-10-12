@@ -4,6 +4,7 @@ namespace App\Domain\PTRP\Actions;
 
 use App\Domain\PTRP\Enums\TimeBankClosingMode;
 use App\Domain\PTRP\Enums\TreatmentEventStatus;
+use App\Domain\PTRP\Services\MonthlyAttendanceReviewService;
 use App\Domain\Settlement\Enums\SettlementModality;
 use App\Domain\Settlement\Enums\SettlementOriginType;
 use App\Domain\Settlement\Enums\WorkTimeSettlementStatus;
@@ -15,6 +16,7 @@ use App\Models\ClosedPeriod;
 use App\Models\ClosedPeriodEmployeeSnapshot;
 use App\Models\Employee;
 use App\Models\Establishment;
+use App\Models\MonthlyAttendanceReview;
 use App\Models\ShiftAssignment;
 use App\Models\TimeBankAccount;
 use App\Models\TimeBankPolicy;
@@ -38,6 +40,7 @@ class CloseMonthlyPeriodAction
         User $closedBy,
         ?string $notes = null,
         bool $allowLegacyUnprovenReset = false,
+        bool $enforceAttendanceReview = false,
     ): ClosedPeriod {
         $existingPeriod = ClosedPeriod::findForPeriod($year, $month);
 
@@ -60,6 +63,21 @@ class CloseMonthlyPeriodAction
                 $year,
                 $pendingTreatmentsCount
             ));
+        }
+
+        // Bloqueio do fechamento ordinário por conferências pendentes ou ocorrências não ressalvadas
+        if ($enforceAttendanceReview) {
+            $overview = app(MonthlyAttendanceReviewService::class)
+                ->getCompetenceOverview($year, $month, $closedBy);
+
+            if (! empty($overview['blocking_reasons'])) {
+                throw new \DomainException(sprintf(
+                    'Não é possível fechar a competência %02d/%04d: %s',
+                    $month,
+                    $year,
+                    implode(' ', $overview['blocking_reasons'])
+                ));
+            }
         }
 
         // Localizar política de banco de horas vigente na competência
@@ -449,6 +467,10 @@ class CloseMonthlyPeriodAction
                 'treatments_count' => $totalTreatmentsCount,
                 'generated_at' => now(),
             ]);
+
+            MonthlyAttendanceReview::where('year', $year)
+                ->where('month', $month)
+                ->update(['closed_period_id' => $closedPeriod->id]);
 
             Log::info('period.closed', [
                 'year' => $year,
