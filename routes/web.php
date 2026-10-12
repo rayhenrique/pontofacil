@@ -2,6 +2,7 @@
 
 use App\Domain\Company\Services\CurrentCompany;
 use App\Http\Controllers\FiscalizacaoController;
+use App\Http\Controllers\MonthlyAttendanceReportController;
 use App\Http\Controllers\ReceiptController;
 use App\Models\Sector;
 use App\Models\TreatmentEvent;
@@ -52,6 +53,10 @@ Route::middleware('auth')->group(function () {
         Route::livewire('/employees', 'admin.employees')->name('employees');
         Route::livewire('/shifts', 'admin.shifts-management')->name('shifts');
         Route::livewire('/monthly-review', 'admin.monthly-review')->name('monthly-review');
+        Route::livewire('/reports', 'admin.reports')->name('reports');
+        Route::get('/reports/consolidated-csv', [MonthlyAttendanceReportController::class, 'downloadCsv'])->name('reports.csv');
+        Route::get('/reports/consolidated-pdf', [MonthlyAttendanceReportController::class, 'printPdf'])->name('reports.pdf');
+        Route::post('/reports/dispatch/{logId}', [MonthlyAttendanceReportController::class, 'recordDispatch'])->name('reports.dispatch');
     });
 
     // PTRP Treatment Requests (Admin & Gestor - Segregação Operacional / RH)
@@ -98,7 +103,6 @@ Route::middleware('auth')->group(function () {
         Route::livewire('/sectors', 'admin.sectors')->name('sectors');
         Route::livewire('/users', 'admin.users')->name('users');
         Route::livewire('/audit', 'admin.audit')->name('audit');
-        Route::livewire('/reports', 'admin.reports')->name('reports');
         Route::livewire('/time-bank', 'admin.time-bank')->name('time-bank');
         Route::livewire('/settlement-policies', 'admin.settlement-policies')->name('settlement-policies');
         Route::livewire('/settings', 'admin.settings')->name('settings');

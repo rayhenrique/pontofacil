@@ -1,6 +1,33 @@
 # Histórico de Versões (Changelog)
 
-## v2.5.9 (Atual)
+## v2.6.0 (Atual)
+- **Relatório Mensal Consolidado de Frequência para o Setor de Pagamento:**
+  - **Módulo Reformulado (`/admin/reports`):**
+    - Substituição integral do relatório legado que listava apenas `TimeEntry` cru sem apuração PTRP.
+    - Geração de relatório consolidado oficial para o setor responsável pelo pagamento, com foco estrito em horas físicas e frequência, sem calcular salários, holerites, descontos monetários ou lançamentos financeiros.
+    - Filtros por competência (mês/ano), estabelecimento, setor de lotação e servidor individual.
+  - **Dados Consolidados por Servidor:**
+    - Identificação completa: Nome, Matrícula, CPF, Regime/Vínculo Jurídico, Cargo/Função e Lotação/Setor.
+    - Carga prevista da competência (horas reais de expediente conforme escala e calendário).
+    - Horas físicas apuradas e diferenças discriminadas (saldo líquido, horas positivas/extras e horas negativas/débitos).
+    - Faltas apuradas, atrasos na entrada, horas noturnas físicas e plantões/escalas cíclicas realizados.
+    - Quantidade de ocorrências e tratamentos aprovados no período.
+    - Situação da conferência mensal e ressalvas fundamentadas registradas pelo RH e chefias.
+  - **Fidelidade e Imutabilidade Normativa:**
+    - **Competência Fechada:** Leitura exclusiva e estrita de snapshots congelados (`ClosedPeriodEmployeeSnapshot`), sem recalcular jornadas ou depender de alterações em cadastros e escalas atuais.
+    - **Competência Aberta:** Apresentação clara como **"PRÉVIA PROVISÓRIA"**, com tarja de alerta destacando ausência de valor homologatório até o fechamento formal.
+  - **Exportação Institucional (PDF / Impressão e CSV UTF-8):**
+    - **Documento para Impressão / PDF:** Layout formal A4 Paisagem com identificação institucional, CNPJ, competência, data/hora de emissão, versão de fechamento, cartões de metadados, tabela consolidada com totais gerais e campos formais para assinatura do RH e ciência do setor de pagamento.
+    - **Arquivo CSV UTF-8:** Exportação com cabeçalhos administrativos padronizados, delimitador ponto-e-vírgula (`;`) e BOM UTF-8 (`\xEF\xBB\xBF`) para compatibilidade direta com Excel e sistemas administrativos.
+    - Folha de Ponto individual (`/folha-ponto`) permanece plenamente disponível e intacta.
+  - **Histórico de Emissões e Despacho à Folha:**
+    - Auditoria em banco (`monthly_attendance_report_logs`) registrando usuário emissor, filtros aplicados, data e formato.
+    - Registro explícito de despacho/encaminhamento formal ao setor de folha de pagamento, com data, responsável e memorando/despacho, sem simulação automática de entrega.
+  - **Controle de Acesso Rigoroso:**
+    - RH e administradores acessam todos os servidores e estabelecimentos.
+    - Gestores autorizados visualizam e exportam exclusivamente dados das equipes dos setores que gerenciam.
+
+## v2.5.9
 - **Conferência Mensal de Frequência pelo RH e Gestores:**
   - **Módulo Operacional Dedicado (`/admin/monthly-review`):**
     - Módulo totalmente independente do Banco de Horas, reutilizando apuração existente e fechamento auditado.
