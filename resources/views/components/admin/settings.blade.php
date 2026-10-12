@@ -625,7 +625,7 @@ new #[Layout('layouts.app')] #[Title('Configurações')] class extends Component
                     </div>
                     <div>
                         <p class="text-xs font-bold text-indigo-900">Configuração Avançada: Políticas de Compensação & Destinação</p>
-                        <p class="text-[11px] text-indigo-700">Para regras individuais por colaborador, estabelecimento, regime CLT/Estatutário, pagamento em folha ou compensação por folgas.</p>
+                        <p class="text-[11px] text-indigo-700">Para regras individuais por colaborador, estabelecimento, regime CLT/Estatutário, encaminhamento para folha ou compensação por folgas.</p>
                     </div>
                 </div>
                 <a href="{{ route('admin.settlement-policies') }}" class="inline-flex items-center px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition gap-1">

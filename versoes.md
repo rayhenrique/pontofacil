@@ -1,6 +1,17 @@
 # Histórico de Versões (Changelog)
 
-## v2.5.6 (Atual)
+## v2.5.7 (Atual)
+- **Foco Exclusivo no Controle de Frequência:**
+  - O PontoFácil é exclusivamente um sistema de registro, apuração, conferência e relatório de frequência para empresas e órgãos públicos. Não processa salários, pagamentos, cálculos monetários ou folha de pagamento. O setor de pagamento externo recebe apenas o relatório consolidado de frequência.
+  - **Fechamento Mensal Desacoplado do Banco de Horas:**
+    - O fechamento da competência congela a frequência apurada (horas previstas, trabalhadas, diferenças positivas e negativas, faltas, atrasos, intervalos, plantões e ocorrências) sem executar nenhuma operação financeira fictícia (`PayrollPayment`) nem quitações automáticas.
+    - Empresas que não utilizam banco de horas registram pontos, apuram jornadas, conferem espelhos e fecham competências normalmente, sem exigência de banco de horas nem criação de contas fantasmas.
+    - A ausência de regime de banco de horas não implica pagamento automático nem zeramento de saldos: as diferenças positivas e negativas permanecem identificáveis nos relatórios e nos snapshots congelados.
+  - **Preservação Histórica e Integridade:**
+    - Todas as tabelas e movimentações históricas permanecem íntegras para fins de conformidade e auditoria, sem exclusões nem migrações destrutivas.
+    - Ajuste nos textos e fluxos para esclarecer a separação entre apuração de ponto e processamento da folha salarial (que ocorre externamente).
+
+## v2.5.6
 - **Auditoria Integrada de Jornada e Compensação:**
   - Melhoramos a conferência das jornadas e das compensações. Agora os saldos, pendências e períodos fechados são apresentados de forma mais clara e consistente.
   - **Espelho Simples e Humano para o Colaborador:**

@@ -208,7 +208,7 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
             $this->dispatch('app-modal-alert', [
                 'type' => 'success',
                 'title' => 'Destinação Aprovada!',
-                'message' => 'A destinação foi aprovada. Ela agora aguarda execução física e comprovante de quitação.',
+                'message' => 'A destinação foi aprovada. Ela agora aguarda execução física e comprovante documental.',
                 'buttonText' => 'OK',
             ]);
         } catch (\Throwable $e) {
@@ -249,9 +249,9 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
             'dischargeExecutionDate' => 'required|date',
             'dischargeNotes' => 'nullable|string|max:500',
         ], [
-            'dischargeDocRef.required' => 'Informe a referência documental comprobatória (holerite, recibo, portaria ou termo).',
+            'dischargeDocRef.required' => 'Informe a referência documental comprobatória (termo de folga, acordo, portaria ou declaração).',
             'dischargeDocRef.min' => 'A referência documental deve ter pelo menos 2 caracteres.',
-            'dischargeExecutionDate.required' => 'Informe a data em que a quitação ou compensação foi faticamente realizada.',
+            'dischargeExecutionDate.required' => 'Informe a data em que a compensação foi faticamente realizada.',
         ]);
 
         try {
@@ -268,14 +268,14 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
             $this->showDischargeModal = false;
             $this->dispatch('app-modal-alert', [
                 'type' => 'success',
-                'title' => 'Quitação Documentada com Sucesso!',
+                'title' => 'Compensação Documentada com Sucesso!',
                 'message' => 'A execução da destinação foi registrada com comprovante e seu status agora é Efetivado.',
                 'buttonText' => 'OK',
             ]);
         } catch (\Throwable $e) {
             $this->dispatch('app-modal-alert', [
                 'type' => 'error',
-                'title' => 'Erro ao Registrar Quitação',
+                'title' => 'Erro ao Registrar Compensação',
                 'message' => $e->getMessage(),
                 'buttonText' => 'Fechar',
             ]);
@@ -538,12 +538,12 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
 
             {{-- 5. Destinações Aguardando Execução --}}
             <div class="p-3 bg-gray-50/80 border border-gray-200 rounded-xl space-y-1">
-                <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">5. Aguardando Baixa</span>
+                <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">5. Destinações Pendentes</span>
                 <p class="text-xl font-bold font-mono text-amber-700">
                     {{ $awaitingDischargesCount }}
                 </p>
                 <button type="button" wire:click="setActiveTab('settlements')" class="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 underline block cursor-pointer">
-                    Registrar quitação →
+                    Registrar compensação →
                 </button>
             </div>
 
@@ -890,7 +890,7 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
                                         </button>
                                     @elseif($st->status === WorkTimeSettlementStatus::Approved || $st->status === WorkTimeSettlementStatus::AwaitingExecution)
                                         <button type="button" wire:click="openDischargeModal('{{ $st->id }}')" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer">
-                                            Registrar Quitação
+                                            Registrar Compensação
                                         </button>
                                     @else
                                         <span class="text-xs text-gray-400">Concluído</span>
@@ -910,14 +910,14 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
         </div>
     @endif
 
-    <!-- MODAL DE QUITAÇÃO DOCUMENTADA / EXECUÇÃO DE DESTINAÇÃO -->
+    <!-- MODAL DE COMPENSAÇÃO DOCUMENTADA / EXECUÇÃO DE DESTINAÇÃO -->
     @if($showDischargeModal && $selectedSettlementData)
         <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
             <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
                 <div class="flex items-center justify-between border-b pb-3">
                     <div>
-                        <h3 class="text-base font-bold text-gray-900">Registrar Quitação Documentada</h3>
-                        <p class="text-xs text-gray-500">Confirmação de pagamento em folha ou folga gozada.</p>
+                        <h3 class="text-base font-bold text-gray-900">Registrar Compensação Documentada</h3>
+                        <p class="text-xs text-gray-500">Comprovação de gozo de folga compensatória ou acordo de frequência.</p>
                     </div>
                     <button type="button" wire:click="$set('showDischargeModal', false)" class="text-gray-400 hover:text-gray-600 cursor-pointer">✕</button>
                 </div>
@@ -931,12 +931,12 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
                 <form wire:submit="saveDischarge" class="space-y-4 text-xs">
                     <div>
                         <label class="block font-bold text-gray-700 uppercase mb-1">Referência Documental Obrigatória *</label>
-                        <input type="text" wire:model="dischargeDocRef" class="w-full min-h-[44px] px-3 py-2 border rounded-xl" placeholder="Ex: Holerite 10/2026, Recibo Nº 481, Portaria Nº 12" required />
+                        <input type="text" wire:model="dischargeDocRef" class="w-full min-h-[44px] px-3 py-2 border rounded-xl" placeholder="Ex: Termo de Folga Nº 12, Acordo Individual de Compensação, Portaria 48" required />
                         @error('dischargeDocRef') <span class="text-red-500">{{ $message }}</span> @enderror
                     </div>
 
                     <div>
-                        <label class="block font-bold text-gray-700 uppercase mb-1">Data Efetiva da Execução/Pagamento *</label>
+                        <label class="block font-bold text-gray-700 uppercase mb-1">Data Efetiva da Compensação/Execução *</label>
                         <input type="date" wire:model="dischargeExecutionDate" class="w-full min-h-[44px] px-3 py-2 border rounded-xl font-mono" required />
                         @error('dischargeExecutionDate') <span class="text-red-500">{{ $message }}</span> @enderror
                     </div>
@@ -950,7 +950,7 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
 
                     <div>
                         <label class="block font-bold text-gray-700 uppercase mb-1">Observações do RH (Opcional)</label>
-                        <textarea wire:model="dischargeNotes" rows="2" class="w-full px-3 py-2 border rounded-xl" placeholder="Observações sobre a quitação ou processamento..."></textarea>
+                        <textarea wire:model="dischargeNotes" rows="2" class="w-full px-3 py-2 border rounded-xl" placeholder="Observações sobre a compensação ou termo acordado..."></textarea>
                     </div>
 
                     <div class="flex justify-end gap-2 pt-3 border-t">
@@ -958,7 +958,7 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
                             Cancelar
                         </button>
                         <button type="submit" class="min-h-[44px] px-5 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-sm cursor-pointer">
-                            Confirmar Quitação
+                            Confirmar Registro
                         </button>
                     </div>
                 </form>

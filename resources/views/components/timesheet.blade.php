@@ -1077,7 +1077,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                 </div>
             </div>
             <p class="text-[11px] text-gray-500 mt-2 font-sans">
-                Estes valores podem divergir entre si conforme a absorção de tolerâncias legais (Art. 58 da CLT), destinações automáticas para pagamento em folha ou quitações periódicas acordadas. O sistema não presume pagamento realizado sem comprovante de quitação anexado.
+                Estes valores refletem estritamente a apuração de frequência conforme tolerâncias legais (Art. 58 da CLT) e eventuais compensações acordadas. O PontoFácil apura exclusivamente jornadas e saldos de frequência; o cálculo e processamento de salários/descontos em folha é de responsabilidade externa do setor competente.
             </p>
         </div>
 

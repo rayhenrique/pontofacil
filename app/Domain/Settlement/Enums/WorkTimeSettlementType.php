@@ -18,8 +18,8 @@ enum WorkTimeSettlementType: string
         return match ($this) {
             self::TimeOffCompensation => 'Compensação por Descanso (Folga)',
             self::DeficitCompensation => 'Compensação de Déficit Autorizada',
-            self::PayrollPayment => 'Pagamento em Folha (Horas Extras)',
-            self::PayrollDeduction => 'Desconto em Folha (Déficit/Falta)',
+            self::PayrollPayment => 'Encaminhamento para Folha (Horas Excedentes)',
+            self::PayrollDeduction => 'Encaminhamento para Folha (Déficit/Falta)',
             self::CarryOver => 'Transporte para Banco de Horas',
             self::AdministrativeAdjustment => 'Ajuste Administrativo Fundamentado',
             self::LegacyMonthlyReset => 'Zeramento Mensal Legado',
