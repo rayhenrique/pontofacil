@@ -13,6 +13,14 @@
     - Eliminação de jargões técnicos (termos como ledger e quitação financeira substituídos por extrato de movimentações e compensação).
   - **Navegação com Preservação de Filtros:**
     - Transição contextual preservando competência e setor entre Espelho de Ponto, Conferência Mensal e Relatórios Consolidados.
+  - **Central de Ajuda Completa, Pesquisável & Manual do Usuário:**
+    - Reformulação total de `/ajuda` com interface moderna e alinhada ao design system.
+    - Motor de busca instantâneo com ranking contextual por título, resumo, palavras-chave e corpo.
+    - Filtros por perfil (Servidor, Gestor, Administrador RH, Auditor Fiscal) e categorias operacionais.
+    - 11 Manuais completos em Markdown estruturado cobrindo da introdução à fiscalização trabalhista e atalho de celular.
+    - FAQ interativo com 50 perguntas e respostas divididas por assunto com atalhos para os manuais.
+    - Glossário normativo com conceitos fundamentais da Portaria 671/2021 MTP (REP-P, PTRP, ARP, NSR, SHA-256).
+    - Suporte a impressão formal A4 e atalhos de deep linking via URL (`?tab=...` e `?artigo=...`).
   - **Responsividade e Acessibilidade:**
     - Validado em 320px, 360px, 390px, 430px, 768px, 1024px, 1280px e 1440px sem rolagem horizontal da página.
 
