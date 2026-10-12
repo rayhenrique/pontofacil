@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Company\Services\SectorScopeService;
 use App\Domain\PTRP\Actions\CloseMonthlyPeriodAction;
 use App\Domain\PTRP\Actions\ReopenMonthlyPeriodAction;
 use App\Domain\PTRP\Actions\ReviewMonthlyAttendanceAction;
@@ -10,6 +11,7 @@ use App\Models\ClosedPeriod;
 use App\Models\Employee;
 use App\Models\Sector;
 use Carbon\Carbon;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -89,8 +91,10 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
 
     public function openReviewModal(int $employeeId): void
     {
-        $this->reviewingEmployeeId = $employeeId;
         $employee = Employee::with(['user', 'sector', 'workSchedule'])->findOrFail($employeeId);
+        app(SectorScopeService::class)->authorizeEmployee(Auth::user(), $employee);
+
+        $this->reviewingEmployeeId = $employeeId;
         $service = app(MonthlyAttendanceReviewService::class);
         $this->reviewingData = $service->resolveEmployeeReviewData($employee, $this->year, $this->month);
         $this->reservationNotes = $this->reviewingData['reservation_notes'] ?? '';
@@ -125,6 +129,18 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                 'message' => 'A frequência do servidor foi confirmada com sucesso para a competência selecionada.',
                 'buttonText' => 'OK',
             ]);
+        } catch (AuthorizationException $e) {
+            $this->showReviewModal = false;
+            $this->reviewingEmployeeId = null;
+            $this->reviewingData = null;
+            $this->reservationNotes = '';
+
+            $this->dispatch('app-modal-alert', [
+                'type' => 'error',
+                'title' => 'Acesso Negado',
+                'message' => 'Acesso não autorizado.',
+                'buttonText' => 'Fechar',
+            ]);
         } catch (\DomainException|\InvalidArgumentException $e) {
             $this->dispatch('app-modal-alert', [
                 'type' => 'error',
@@ -136,7 +152,7 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
             $this->dispatch('app-modal-alert', [
                 'type' => 'error',
                 'title' => 'Erro Inesperado',
-                'message' => 'Ocorreu uma falha ao registrar a conferência: ' . $e->getMessage(),
+                'message' => 'Não foi possível registrar a conferência. Tente novamente.',
                 'buttonText' => 'Fechar',
             ]);
         }
@@ -189,11 +205,18 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                 'message' => $message,
                 'buttonText' => 'OK',
             ]);
+        } catch (AuthorizationException $e) {
+            $this->dispatch('app-modal-alert', [
+                'type' => 'error',
+                'title' => 'Acesso Negado',
+                'message' => 'Acesso não autorizado.',
+                'buttonText' => 'Fechar',
+            ]);
         } catch (\Throwable $e) {
             $this->dispatch('app-modal-alert', [
                 'type' => 'error',
                 'title' => 'Erro na Conferência em Lote',
-                'message' => $e->getMessage(),
+                'message' => 'Não foi possível concluir a conferência em lote. Tente novamente.',
                 'buttonText' => 'Fechar',
             ]);
         }
@@ -245,11 +268,18 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                 'message' => sprintf('A competência %02d/%04d foi congelada com sucesso. Os snapshots imutáveis foram consolidados.', $this->month, $this->year),
                 'buttonText' => 'OK',
             ]);
-        } catch (\Throwable $e) {
+        } catch (\DomainException|\InvalidArgumentException $e) {
             $this->dispatch('app-modal-alert', [
                 'type' => 'error',
                 'title' => 'Falha no Fechamento',
                 'message' => $e->getMessage(),
+                'buttonText' => 'Voltar',
+            ]);
+        } catch (\Throwable $e) {
+            $this->dispatch('app-modal-alert', [
+                'type' => 'error',
+                'title' => 'Falha no Fechamento',
+                'message' => 'Não foi possível fechar a competência. Tente novamente.',
                 'buttonText' => 'Voltar',
             ]);
         }
@@ -288,11 +318,18 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                 'message' => sprintf('A competência %02d/%04d foi reaberta formalmente para conferências e ajustes.', $this->month, $this->year),
                 'buttonText' => 'OK',
             ]);
-        } catch (\Throwable $e) {
+        } catch (\DomainException|\InvalidArgumentException $e) {
             $this->dispatch('app-modal-alert', [
                 'type' => 'error',
                 'title' => 'Falha na Reabertura',
                 'message' => $e->getMessage(),
+                'buttonText' => 'Corrigir',
+            ]);
+        } catch (\Throwable $e) {
+            $this->dispatch('app-modal-alert', [
+                'type' => 'error',
+                'title' => 'Falha na Reabertura',
+                'message' => 'Não foi possível reabrir a competência. Tente novamente.',
                 'buttonText' => 'Corrigir',
             ]);
         }

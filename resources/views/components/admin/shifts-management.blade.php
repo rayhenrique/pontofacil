@@ -1,16 +1,19 @@
 <?php
 
+use App\Domain\Company\Services\SectorScopeService;
 use App\Domain\WorkSchedule\Actions\GenerateCyclicShiftsAction;
 use App\Domain\WorkSchedule\Actions\SwapShiftsAction;
 use App\Domain\WorkSchedule\Actions\ValidateShiftConflictsAction;
 use App\Enums\ShiftStatus;
 use App\Enums\ShiftType;
 use App\Enums\UserRole;
+use App\Models\ClosedPeriod;
 use App\Models\Employee;
 use App\Models\Sector;
 use App\Models\ShiftAssignment;
 use App\Models\WorkSchedule;
 use Carbon\Carbon;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Auth;
 use App\Domain\WorkSchedule\Actions\ConfigureWorkScheduleAction;
 use App\Domain\WorkSchedule\Actions\AssignWorkScheduleAction;
@@ -129,6 +132,25 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
         $this->month = (int) $date->format('n');
     }
 
+    protected function scopeService(): SectorScopeService
+    {
+        return app(SectorScopeService::class);
+    }
+
+    protected function selectedSectorIdOrNull(): ?int
+    {
+        return $this->selected_sector_id !== '' && $this->selected_sector_id !== null
+            ? (int) $this->selected_sector_id
+            : null;
+    }
+
+    protected function selectedEmployeeIdOrNull(): ?int
+    {
+        return $this->selected_employee_id !== '' && $this->selected_employee_id !== null
+            ? (int) $this->selected_employee_id
+            : null;
+    }
+
     public function nextMonth()
     {
         $date = Carbon::createFromDate($this->year, $this->month, 1)->addMonth();
@@ -170,6 +192,8 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
         $schedule = WorkSchedule::findOrFail($this->gen_schedule_id);
 
         try {
+            $this->scopeService()->authorizeEmployee(Auth::user(), $employee);
+
             $generated = app(GenerateCyclicShiftsAction::class)->execute(
                 employee: $employee,
                 schedule: $schedule,
@@ -185,6 +209,8 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
 
             $count = $generated->count();
             session()->flash('message', "Escala gerada com sucesso! {$count} jornadas/folgas programadas para o período.");
+        } catch (AuthorizationException $e) {
+            $this->addError('gen_employee_id', 'Acesso não autorizado.');
         } catch (ValidationException $e) {
             foreach ($e->errors() as $key => $messages) {
                 $this->addError('gen_' . $key, $messages[0] ?? 'Erro ao gerar plantões.');
@@ -194,7 +220,8 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
 
     public function openEditModal($shiftId)
     {
-        $shift = ShiftAssignment::findOrFail($shiftId);
+        $shift = ShiftAssignment::with('employee')->findOrFail($shiftId);
+        $this->scopeService()->authorizeShift(Auth::user(), $shift);
         $this->edit_shift_id = $shift->id;
         $this->edit_start_datetime = $shift->start_at_local->format('Y-m-d\TH:i');
         $this->edit_end_datetime = $shift->end_at_local->format('Y-m-d\TH:i');
@@ -211,7 +238,17 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             'edit_reason' => 'required|string|min:4',
         ]);
 
-        $shift = ShiftAssignment::findOrFail($this->edit_shift_id);
+        $shift = ShiftAssignment::with('employee')->findOrFail($this->edit_shift_id);
+        $this->scopeService()->authorizeShift(Auth::user(), $shift);
+
+        $closedYear = (int) $shift->start_at_local->format('Y');
+        $closedMonth = (int) $shift->start_at_local->format('n');
+        if (ClosedPeriod::isClosed($closedYear, $closedMonth)) {
+            $this->addError('edit_reason', sprintf('Não é permitido alterar plantão em competência já fechada (%02d/%04d).', $closedMonth, $closedYear));
+
+            return;
+        }
+
         $startLocal = Carbon::parse($this->edit_start_datetime, $shift->timezone);
         $endLocal = Carbon::parse($this->edit_end_datetime, $shift->timezone);
 
@@ -233,7 +270,8 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
 
     public function openSwapModal($shiftId)
     {
-        $shift = ShiftAssignment::findOrFail($shiftId);
+        $shift = ShiftAssignment::with('employee')->findOrFail($shiftId);
+        $this->scopeService()->authorizeShift(Auth::user(), $shift);
         $this->swap_shift_id = $shift->id;
         $this->swap_replacement_employee_id = '';
         $this->swap_reason = '';
@@ -247,10 +285,13 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             'swap_reason' => 'required|string|min:4',
         ]);
 
-        $shift = ShiftAssignment::findOrFail($this->swap_shift_id);
+        $shift = ShiftAssignment::with('employee')->findOrFail($this->swap_shift_id);
         $replacement = Employee::findOrFail($this->swap_replacement_employee_id);
 
         try {
+            $this->scopeService()->authorizeShift(Auth::user(), $shift);
+            $this->scopeService()->authorizeEmployee(Auth::user(), $replacement);
+
             app(SwapShiftsAction::class)->execute(
                 originalShift: $shift,
                 replacementEmployee: $replacement,
@@ -260,6 +301,8 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
 
             $this->showSwapModal = false;
             session()->flash('message', 'Troca de plantão registrada e autorizada com sucesso.');
+        } catch (AuthorizationException $e) {
+            $this->addError('swap_replacement_employee_id', 'Acesso não autorizado.');
         } catch (ValidationException $e) {
             foreach ($e->errors() as $key => $messages) {
                 $this->addError('swap_' . $key, $messages[0]);
@@ -269,7 +312,17 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
 
     public function cancelShift($shiftId)
     {
-        $shift = ShiftAssignment::findOrFail($shiftId);
+        $shift = ShiftAssignment::with('employee')->findOrFail($shiftId);
+        $this->scopeService()->authorizeShift(Auth::user(), $shift);
+
+        $closedYear = (int) $shift->start_at_local->format('Y');
+        $closedMonth = (int) $shift->start_at_local->format('n');
+        if (ClosedPeriod::isClosed($closedYear, $closedMonth)) {
+            session()->flash('message', sprintf('Não é permitido cancelar plantão em competência já fechada (%02d/%04d).', $closedMonth, $closedYear));
+
+            return;
+        }
+
         $shift->update([
             'status' => ShiftStatus::Cancelled,
             'reason' => 'Cancelado pela gestão',
@@ -376,6 +429,14 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             'apply_effective_until' => 'nullable|date|after_or_equal:apply_effective_from',
         ]);
 
+        $this->scopeService()->authorizeSchedules(Auth::user());
+
+        if (! empty($this->apply_employee_ids)) {
+            foreach (array_map('intval', (array) $this->apply_employee_ids) as $applyEmployeeId) {
+                $this->scopeService()->authorizeEmployee(Auth::user(), Employee::find($applyEmployeeId));
+            }
+        }
+
         $action = app(ConfigureWorkScheduleAction::class);
 
         try {
@@ -446,8 +507,10 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
 
             $this->showScheduleModal = false;
             session()->flash('message', "Escala '{$schedule->name}' configurada com sucesso!{$appliedInfo}");
+        } catch (AuthorizationException $e) {
+            $this->addError('sched_name', 'Acesso não autorizado.');
         } catch (\Throwable $e) {
-            $this->addError('sched_name', $e->getMessage());
+            $this->addError('sched_name', 'Não foi possível salvar a escala. Tente novamente.');
         }
     }
 
@@ -455,6 +518,9 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
     {
         $user = Auth::user();
         $isManager = $user->role === UserRole::Manager;
+
+        $this->scopeService()->authorizeSchedules($user);
+        $this->scopeService()->validateShiftFilters($user, $this->selectedSectorIdOrNull(), $this->selectedEmployeeIdOrNull());
 
         $sectorsQuery = Sector::orderBy('name');
         if ($isManager) {
@@ -468,7 +534,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
         } elseif ($isManager) {
             $employeesQuery->whereIn('sector_id', $sectors->pluck('id'));
         }
-        $employees = $employeesQuery->get();
+        $employees = $isManager && $sectors->isEmpty() ? collect() : $employeesQuery->get();
 
         $startOfMonth = Carbon::createFromDate($this->year, $this->month, 1)->startOfMonth();
         $endOfMonth = $startOfMonth->copy()->endOfMonth();
@@ -487,13 +553,14 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             $shiftsQuery->whereIn('employee_id', $employees->pluck('id'));
         }
 
-        $shifts = $shiftsQuery->get();
+        $shifts = $isManager && $employees->isEmpty() ? collect() : $shiftsQuery->get();
 
         // Validação de conflitos quando um colaborador específico está selecionado
         $conflictReport = null;
         if ($this->selected_employee_id) {
             $selectedEmp = Employee::find($this->selected_employee_id);
             if ($selectedEmp) {
+                $this->scopeService()->authorizeEmployee($user, $selectedEmp);
                 $conflictReport = app(ValidateShiftConflictsAction::class)->execute($selectedEmp, $shifts);
             }
         }

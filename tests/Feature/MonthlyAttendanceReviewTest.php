@@ -24,6 +24,7 @@ use App\Models\ShiftAssignment;
 use App\Models\User;
 use App\Models\WorkSchedule;
 use Carbon\Carbon;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
@@ -184,7 +185,7 @@ class MonthlyAttendanceReviewTest extends TestCase
         $this->assertEquals($this->managerA->id, $reviewA->reviewed_by);
 
         // Gestor A tenta conferir servidor do Setor B -> Proibido
-        $this->expectException(\DomainException::class);
+        $this->expectException(AuthorizationException::class);
         $action->reviewEmployee(
             employee: $empB,
             year: 2026,

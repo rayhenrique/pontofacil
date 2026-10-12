@@ -2,6 +2,7 @@
 
 namespace App\Domain\WorkSchedule\Actions;
 
+use App\Domain\Company\Services\SectorScopeService;
 use App\Models\ClosedPeriod;
 use App\Models\Employee;
 use App\Models\User;
@@ -29,6 +30,10 @@ class AssignWorkScheduleAction
         ?User $assignedBy = null,
         ?string $notes = null,
     ): WorkScheduleAssignment {
+        if ($assignedBy !== null) {
+            app(SectorScopeService::class)->authorizeEmployee($assignedBy, $employee);
+        }
+
         $from = $effectiveFrom instanceof CarbonInterface ? $effectiveFrom->copy()->startOfDay() : Carbon::parse($effectiveFrom)->startOfDay();
         $until = $effectiveUntil ? ($effectiveUntil instanceof CarbonInterface ? $effectiveUntil->copy()->startOfDay() : Carbon::parse($effectiveUntil)->startOfDay()) : null;
 

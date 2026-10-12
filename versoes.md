@@ -1,6 +1,13 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.2 (Atual)
+## v2.6.3 (Atual)
+- **Proteção das Escalas, Conferência Mensal e Relatórios:**
+  - Cada gestor agora só enxerga e altera os servidores dos seus próprios setores. Tentar usar o código de outro setor ou colaborador é bloqueado com mensagem simples de acesso negado.
+  - A abertura da conferência individual só carrega dados de quem o usuário pode conferir. Servidor comum e auditor não conseguem confirmar, fechar ou despachar.
+  - Os filtros de setor, estabelecimento e servidor são conferidos no servidor, sem confiar apenas na tela. Relatórios e encaminhamentos de outros setores ficam inacessíveis.
+  - Alterações e cancelamentos de plantão em mês já fechado continuam bloqueados, preservando marcações, escalas, auditorias e snapshots.
+
+## v2.6.2
 - **Central de Ajuda Completa, Pesquisável & Manuais do Usuário:**
   - **Interface Moderna e Acessível (`/ajuda`):**
     - Redesenho completo com abas dedicadas: *Manuais*, *Perguntas Frequentes (FAQ)*, *Glossário Normativo* e *Histórico de Atualizações*.

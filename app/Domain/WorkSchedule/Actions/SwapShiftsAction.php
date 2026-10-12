@@ -2,6 +2,7 @@
 
 namespace App\Domain\WorkSchedule\Actions;
 
+use App\Domain\Company\Services\SectorScopeService;
 use App\Enums\ShiftOrigin;
 use App\Enums\ShiftStatus;
 use App\Enums\ShiftType;
@@ -27,6 +28,12 @@ class SwapShiftsAction
         string $reason,
         User $assignedBy,
     ): ShiftAssignment {
+        $scopeService = app(SectorScopeService::class);
+        $scopeService->authorizeSchedules($assignedBy);
+        $originalShift->loadMissing('employee');
+        $scopeService->authorizeShift($assignedBy, $originalShift);
+        $scopeService->authorizeEmployee($assignedBy, $replacementEmployee);
+
         $year = (int) $originalShift->start_at_local->format('Y');
         $month = (int) $originalShift->start_at_local->format('n');
 

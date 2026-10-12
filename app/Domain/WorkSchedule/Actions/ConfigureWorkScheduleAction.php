@@ -2,6 +2,7 @@
 
 namespace App\Domain\WorkSchedule\Actions;
 
+use App\Domain\Company\Services\SectorScopeService;
 use App\Enums\LegalRegime;
 use App\Enums\WorkScheduleModality;
 use App\Models\Employee;
@@ -430,6 +431,12 @@ class ConfigureWorkScheduleAction
         foreach ($employeeIds as $empId) {
             $employee = Employee::find($empId);
             if (! $employee) {
+                continue;
+            }
+
+            if ($actor !== null && ! app(SectorScopeService::class)->canManageEmployee($actor, $employee)) {
+                $errors[$employee->id] = 'Sem autorização para atribuir escala a este colaborador.';
+
                 continue;
             }
 

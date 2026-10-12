@@ -2,12 +2,12 @@
 
 namespace App\Domain\PTRP\Actions;
 
+use App\Domain\Company\Services\SectorScopeService;
 use App\Domain\PTRP\Services\MonthlyAttendanceReviewService;
 use App\Enums\AttendanceReviewStatus;
 use App\Models\ClosedPeriod;
 use App\Models\Employee;
 use App\Models\MonthlyAttendanceReview;
-use App\Models\Sector;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -147,20 +147,6 @@ class ReviewMonthlyAttendanceAction
      */
     protected function validatePermissions(Employee $employee, User $reviewer): void
     {
-        if ($reviewer->isAdmin()) {
-            return;
-        }
-
-        if ($reviewer->isManager()) {
-            $managedSectorIds = Sector::where('manager_id', $reviewer->id)->pluck('id');
-            if ($employee->sector_id && $managedSectorIds->contains($employee->sector_id)) {
-                return;
-            }
-        }
-
-        throw new \DomainException(sprintf(
-            'Você não possui permissão para conferir a frequência do colaborador %s.',
-            $employee->user?->name ?? '#'.$employee->id
-        ));
+        app(SectorScopeService::class)->authorizeEmployee($reviewer, $employee);
     }
 }

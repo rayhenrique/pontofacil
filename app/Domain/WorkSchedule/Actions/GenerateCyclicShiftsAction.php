@@ -3,6 +3,7 @@
 namespace App\Domain\WorkSchedule\Actions;
 
 use App\Domain\Calendar\Services\WorkCalendarService;
+use App\Domain\Company\Services\SectorScopeService;
 use App\Enums\ShiftOrigin;
 use App\Enums\ShiftStatus;
 use App\Enums\ShiftType;
@@ -38,6 +39,10 @@ class GenerateCyclicShiftsAction
         ?User $assignedBy = null,
         bool $includeOffDays = false,
     ): Collection {
+        if ($assignedBy !== null) {
+            app(SectorScopeService::class)->authorizeEmployee($assignedBy, $employee);
+        }
+
         $tz = $timezone ?? $schedule->timezone ?? 'America/Sao_Paulo';
 
         $anchor = $anchorDate instanceof CarbonInterface

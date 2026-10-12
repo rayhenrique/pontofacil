@@ -2,6 +2,7 @@
 
 namespace App\Domain\PTRP\Services;
 
+use App\Domain\Company\Services\SectorScopeService;
 use App\Domain\PTRP\Actions\CalculateDailyJourneyAction;
 use App\Domain\PTRP\Enums\TreatmentEventStatus;
 use App\Enums\AttendanceReviewStatus;
@@ -30,6 +31,13 @@ class MonthlyAttendanceReviewService
      */
     public function getScopedEmployeesQuery(User $actor, ?int $sectorId = null): Builder
     {
+        $scopeService = app(SectorScopeService::class);
+        $scopeService->authorizeSchedules($actor);
+
+        if ($sectorId !== null) {
+            $scopeService->authorizeSector($actor, $sectorId);
+        }
+
         $query = Employee::with(['user', 'sector.establishment', 'workSchedule']);
 
         if ($actor->role === UserRole::Manager) {

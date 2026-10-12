@@ -3,6 +3,7 @@
 namespace App\Domain\Attendance\Services;
 
 use App\Domain\Company\Services\CurrentCompany;
+use App\Domain\Company\Services\SectorScopeService;
 use App\Domain\PTRP\Actions\CalculateDailyJourneyAction;
 use App\Domain\PTRP\Enums\TreatmentEventStatus;
 use App\Enums\AttendanceReviewStatus;
@@ -44,10 +45,9 @@ class MonthlyAttendanceReportService
         $managedSectorIds = null;
         if ($actor->role === UserRole::Manager) {
             $managedSectorIds = Sector::where('manager_id', $actor->id)->pluck('id')->all();
-            if ($sectorId && ! in_array($sectorId, $managedSectorIds, true)) {
-                $sectorId = null; // Ignora filtro de setor não autorizado
-            }
         }
+
+        app(SectorScopeService::class)->validateReportFilters($actor, $establishmentId, $sectorId, $employeeId);
 
         if ($isClosed) {
             return $this->resolveFromClosedSnapshots(
@@ -480,6 +480,8 @@ class MonthlyAttendanceReportService
         User $actor,
         ?string $notes = null,
     ): MonthlyAttendanceReportLog {
+        app(SectorScopeService::class)->authorizeReportLog($actor, $log);
+
         $log->update([
             'dispatched_to_payroll_at' => now(),
             'dispatched_by' => $actor->id,

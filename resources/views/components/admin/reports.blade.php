@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Attendance\Services\MonthlyAttendanceReportService;
+use App\Domain\Company\Services\SectorScopeService;
 use App\Enums\AttendanceReviewStatus;
 use App\Enums\UserRole;
 use App\Models\ClosedPeriod;
@@ -9,6 +10,7 @@ use App\Models\Establishment;
 use App\Models\MonthlyAttendanceReportLog;
 use App\Models\Sector;
 use Carbon\Carbon;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -52,6 +54,11 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
 
     public function openDispatchModal(?int $logId = null): void
     {
+        if ($logId !== null) {
+            $log = MonthlyAttendanceReportLog::findOrFail($logId);
+            app(SectorScopeService::class)->authorizeReportLog(Auth::user(), $log);
+        }
+
         $this->selectedLogId = $logId;
         $this->dispatchNotes = '';
         $this->showDispatchModal = true;
@@ -61,19 +68,34 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
     {
         $user = Auth::user();
 
-        // Se logId não foi informado, registra emissão atual e despacha
-        $reportData = $this->getReportData();
-        $service = app(MonthlyAttendanceReportService::class);
+        try {
+            // Se logId não foi informado, registra emissão atual e despacha
+            $reportData = $this->getReportData();
+            $service = app(MonthlyAttendanceReportService::class);
 
-        $log = $this->selectedLogId
-            ? MonthlyAttendanceReportLog::findOrFail($this->selectedLogId)
-            : $service->logReport($this->year, $this->month, $user, 'view', $reportData, [
-                'establishment_id' => $this->establishmentId ?: null,
-                'sector_id' => $this->sectorId ?: null,
-                'employee_id' => $this->employeeId ?: null,
+            $log = $this->selectedLogId
+                ? MonthlyAttendanceReportLog::findOrFail($this->selectedLogId)
+                : $service->logReport($this->year, $this->month, $user, 'view', $reportData, [
+                    'establishment_id' => $this->establishmentId ?: null,
+                    'sector_id' => $this->sectorId ?: null,
+                    'employee_id' => $this->employeeId ?: null,
+                ]);
+
+            $service->recordDispatchToPayroll($log, $user, $this->dispatchNotes);
+        } catch (AuthorizationException $e) {
+            $this->showDispatchModal = false;
+            $this->selectedLogId = null;
+            $this->dispatchNotes = '';
+
+            $this->dispatch('app-modal-alert', [
+                'type' => 'error',
+                'title' => 'Acesso Negado',
+                'message' => 'Acesso não autorizado.',
+                'buttonText' => 'Fechar',
             ]);
 
-        $service->recordDispatchToPayroll($log, $user, $this->dispatchNotes);
+            return;
+        }
 
         $this->showDispatchModal = false;
         $this->selectedLogId = null;
@@ -133,13 +155,30 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
         }
         $employees = $employeesQuery->get()->sortBy('user.name');
 
-        // Logs de emissão da competência
-        $recentLogs = \App\Models\MonthlyAttendanceReportLog::with(['generator', 'dispatcher'])
+        // Logs de emissão da competência (restritos ao escopo do usuário)
+        $recentLogsQuery = \App\Models\MonthlyAttendanceReportLog::with(['generator', 'dispatcher'])
             ->where('year', $year)
-            ->where('month', $month)
-            ->orderBy('id', 'desc')
-            ->take(5)
-            ->get();
+            ->where('month', $month);
+
+        if ($user->role === UserRole::Manager) {
+            $managedLogSectorIds = $sectors->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $recentLogsQuery->where(function ($query) use ($managedLogSectorIds, $user) {
+                $query->whereIn('sector_id', $managedLogSectorIds)
+                    ->orWhere(function ($sub) use ($user) {
+                        $sub->whereNull('sector_id')->where('generated_by', $user->id);
+                    });
+            });
+        }
+
+        $recentLogs = $recentLogsQuery->orderBy('id', 'desc')->take(5)->get();
+
+        $recentLogs = $recentLogs->filter(function ($log) use ($user) {
+            if ($user->role !== UserRole::Manager) {
+                return true;
+            }
+
+            return app(\App\Domain\Company\Services\SectorScopeService::class)->canAccessReportLog($user, $log);
+        })->values();
 
         $downloadParams = [
             'year' => $year,
