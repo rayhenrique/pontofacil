@@ -343,7 +343,7 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
         });
 
         // Setores acessíveis pelo usuário
-        $sectorsQuery = \App\Models\Sector::query();
+        $sectorsQuery = Sector::query();
         if ($user->role === UserRole::Manager) {
             $sectorsQuery->where('manager_id', $user->id);
         }
@@ -391,7 +391,7 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                 </button>
                 <div class="px-4 py-1 text-center">
                     <span class="text-base font-bold text-gray-900 dark:text-white capitalize">
-                        {{ \Carbon\Carbon::createFromDate($year, $month, 1)->translatedFormat('F / Y') }}
+                        {{ Carbon::createFromDate($year, $month, 1)->translatedFormat('F / Y') }}
                     </span>
                 </div>
                 <button
@@ -589,7 +589,7 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                     @forelse ($items as $item)
                         @php
-                            $employee = \App\Models\Employee::find($item['employee_id']);
+                            $employee = Employee::find($item['employee_id']);
                             $userId = $employee?->user_id;
                             $status = $item['status'];
                             $isEligibleForBatch = ! $item['is_closed'] && ! $item['has_unresolved_occurrences'];
@@ -656,7 +656,7 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
 
                                     @if (! empty($item['reviewed_by_name']))
                                         <div class="text-[11px] text-gray-400 dark:text-gray-500">
-                                            Por {{ $item['reviewed_by_name'] }} em {{ $item['reviewed_at'] ? \Carbon\Carbon::parse($item['reviewed_at'])->format('d/m H:i') : '—' }}
+                                            Por {{ $item['reviewed_by_name'] }} em {{ $item['reviewed_at'] ? Carbon::parse($item['reviewed_at'])->format('d/m H:i') : '—' }}
                                         </div>
                                     @endif
                                 </div>
@@ -709,7 +709,7 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
     <div class="block md:hidden space-y-3">
         @forelse ($items as $item)
             @php
-                $employee = \App\Models\Employee::find($item['employee_id']);
+                $employee = Employee::find($item['employee_id']);
                 $userId = $employee?->user_id;
                 $status = $item['status'];
             @endphp

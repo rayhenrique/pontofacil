@@ -14,6 +14,7 @@ use App\Models\ShiftAssignment;
 use App\Models\TreatmentEvent;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 
 class MonthlyAttendanceReviewService
 {
@@ -24,8 +25,10 @@ class MonthlyAttendanceReviewService
     /**
      * Retorna a lista de colaboradores elegíveis para visualização/conferência
      * considerando a hierarquia de permissões (gestores apenas seus setores, admin todos).
+     *
+     * @return Builder<Employee>
      */
-    public function getScopedEmployeesQuery(User $actor, ?int $sectorId = null)
+    public function getScopedEmployeesQuery(User $actor, ?int $sectorId = null): Builder
     {
         $query = Employee::with(['user', 'sector.establishment', 'workSchedule']);
 
@@ -38,7 +41,9 @@ class MonthlyAttendanceReviewService
             $query->where('sector_id', $sectorId);
         }
 
-        return $query->orderBy('id', 'desc');
+        $query->orderBy('id', 'desc');
+
+        return $query;
     }
 
     /**
@@ -237,6 +242,7 @@ class MonthlyAttendanceReviewService
         $withOccurrencesCount = 0;
 
         $items = [];
+        /** @var Employee $emp */
         foreach ($employees as $emp) {
             $data = $this->resolveEmployeeReviewData($emp, $year, $month);
             $items[] = $data;

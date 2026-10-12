@@ -353,7 +353,7 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
         $settlementService = app(WorkTimeSettlementService::class);
         $employeeAccounts = TimeBankAccount::with('employee.user')->get()->keyBy('employee_id');
 
-        $employeeBalances = $employees->map(function ($emp) use ($employeeAccounts, $settlementService, $periodDate) {
+        $employeeBalances = $employees->map(function (Employee $emp) use ($employeeAccounts, $settlementService, $periodDate) {
             $pol = $settlementService->resolvePolicy($emp, $periodDate);
             $operates = $pol->operatesTimeBank();
             $acc = $employeeAccounts->get($emp->id);
@@ -529,7 +529,7 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
                 <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">4. Banco de Horas</span>
                 @php $netTb = (int)$totalCredits + (int)$totalDebits; @endphp
                 <p class="text-xl font-bold font-mono {{ $netTb >= 0 ? 'text-emerald-700' : 'text-rose-700' }}">
-                    {{ \App\Models\TimeBankAccount::formatMinutes($netTb) }}
+                    {{ TimeBankAccount::formatMinutes($netTb) }}
                 </p>
                 <p class="text-[11px] text-gray-500 truncate" title="{{ $policy?->enabled ? $policy->closing_mode->label() : 'Banco desativado' }}">
                     {{ $policy?->enabled ? $policy->closing_mode->label() : 'Sem banco ativo' }}
@@ -568,7 +568,7 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
                     <label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">Mês</label>
                     <select wire:model.live="month" class="min-h-[44px] px-3 py-2 text-xs font-medium border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500">
                         @foreach(range(1, 12) as $m)
-                            <option value="{{ $m }}">{{ sprintf('%02d - %s', $m, \Carbon\Carbon::create(2026, $m, 1)->translatedFormat('F')) }}</option>
+                            <option value="{{ $m }}">{{ sprintf('%02d - %s', $m, Carbon::create(2026, $m, 1)->translatedFormat('F')) }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -732,10 +732,10 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
                                     </span>
                                 </td>
                                 <td class="px-4 py-3 text-right font-mono font-bold text-emerald-600 whitespace-nowrap">
-                                    {{ $t->minutes > 0 ? '+' . \App\Models\TimeBankAccount::formatMinutes($t->minutes) : '—' }}
+                                    {{ $t->minutes > 0 ? '+' . TimeBankAccount::formatMinutes($t->minutes) : '—' }}
                                 </td>
                                 <td class="px-4 py-3 text-right font-mono font-bold text-rose-600 whitespace-nowrap">
-                                    {{ $t->minutes < 0 ? \App\Models\TimeBankAccount::formatMinutes($t->minutes) : '—' }}
+                                    {{ $t->minutes < 0 ? TimeBankAccount::formatMinutes($t->minutes) : '—' }}
                                 </td>
                                 <td class="px-4 py-3 text-gray-600 whitespace-nowrap">
                                     {{ $t->creator?->name ?? 'Sistema' }}

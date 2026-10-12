@@ -185,8 +185,8 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
         $this->normative_entity = $employee->normative_entity ?? '';
         $this->normative_reference = $employee->normative_reference ?? '';
         $this->normative_act_number = $employee->normative_act_number ?? '';
-        $this->normative_effective_from = $employee->normative_effective_from?->format('Y-m-d') ?? '';
-        $this->normative_effective_until = $employee->normative_effective_until?->format('Y-m-d') ?? '';
+        $this->normative_effective_from = $employee->normative_effective_from ? Carbon::parse($employee->normative_effective_from)->format('Y-m-d') : '';
+        $this->normative_effective_until = $employee->normative_effective_until ? Carbon::parse($employee->normative_effective_until)->format('Y-m-d') : '';
         $this->normative_notes = $employee->normative_notes ?? '';
 
         // Escala
@@ -493,7 +493,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
                                 <div class="text-sm font-semibold text-gray-800">{{ $employee->job_title ?? 'Servidor Público' }}</div>
                                 <div class="flex items-center gap-1.5 mt-1">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium {{ $employee->legal_regime === \App\Enums\LegalRegime::CLT ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-slate-100 text-slate-700 border border-slate-200' }}">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium {{ $employee->legal_regime === LegalRegime::CLT ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-slate-100 text-slate-700 border border-slate-200' }}">
                                         {{ $employee->legal_regime?->label() ?? 'Legado / Não definido' }}
                                     </span>
                                     <span class="text-xs text-gray-400">• {{ $employee->contract_type ?? 'Efetivo' }}</span>

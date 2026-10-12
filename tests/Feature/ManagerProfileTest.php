@@ -30,11 +30,12 @@ class ManagerProfileTest extends TestCase
         $manager = User::factory()->create(['role' => UserRole::Manager]);
 
         $this->actingAs($manager)->get('/admin/employees')->assertOk();
+        $this->actingAs($manager)->get('/admin/reports')->assertOk();
         $this->actingAs($manager)->get('/admin/users')->assertForbidden();
         $this->actingAs($manager)->get('/admin/sectors')->assertForbidden();
         $this->actingAs($manager)->get('/admin/adjustment')->assertForbidden();
         $this->actingAs($manager)->get('/admin/audit')->assertForbidden();
-        $this->actingAs($manager)->get('/admin/reports')->assertForbidden();
+        $this->actingAs($manager)->get('/admin/time-bank')->assertForbidden();
     }
 
     public function test_employee_cannot_access_employees_page(): void

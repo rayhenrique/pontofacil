@@ -3,11 +3,16 @@
 namespace App\Models;
 
 use App\Domain\PTRP\Enums\TimeBankClosingMode;
+use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property Carbon|null $valid_from
+ * @property Carbon|null $valid_until
+ */
 class TimeBankPolicy extends Model
 {
     protected $fillable = [

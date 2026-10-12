@@ -6,6 +6,7 @@ use App\Http\Controllers\MonthlyAttendanceReportController;
 use App\Http\Controllers\ReceiptController;
 use App\Models\Sector;
 use App\Models\TreatmentEvent;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
@@ -86,12 +87,16 @@ Route::middleware('auth')->group(function () {
         }
 
         // Armazenamento privado (local) para novos documentos; fallback para public para registros legados
-        if (Storage::disk('local')->exists($event->attachment_path)) {
-            return Storage::disk('local')->response($event->attachment_path);
+        /** @var FilesystemAdapter $localDisk */
+        $localDisk = Storage::disk('local');
+        if ($localDisk->exists($event->attachment_path)) {
+            return $localDisk->response($event->attachment_path);
         }
 
-        if (Storage::disk('public')->exists($event->attachment_path)) {
-            return Storage::disk('public')->response($event->attachment_path);
+        /** @var FilesystemAdapter $publicDisk */
+        $publicDisk = Storage::disk('public');
+        if ($publicDisk->exists($event->attachment_path)) {
+            return $publicDisk->response($event->attachment_path);
         }
 
         abort(404, 'Comprovante/atestado médico não encontrado no armazenamento.');
@@ -122,8 +127,10 @@ Route::middleware('auth')->group(function () {
 // Endpoint dedicado para streaming seguro do logotipo da empresa
 Route::get('/company-logo', function () {
     $company = CurrentCompany::get();
-    if ($company?->logo_path && Storage::disk('public')->exists($company->logo_path)) {
-        return Storage::disk('public')->response($company->logo_path);
+    /** @var FilesystemAdapter $disk */
+    $disk = Storage::disk('public');
+    if ($company?->logo_path && $disk->exists($company->logo_path)) {
+        return $disk->response($company->logo_path);
     }
     abort(404);
 })->name('company.logo');

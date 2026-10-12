@@ -209,7 +209,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
 
         $dateStr = Carbon::parse($this->reqDate)->toDateString();
 
-        $punches = \App\Models\PunchEvent::where(function ($q) use ($employee) {
+        $punches = PunchEvent::where(function ($q) use ($employee) {
             $q->where('employee_id', $employee->id)
                 ->orWhere('user_id', $this->userId);
         })
@@ -350,7 +350,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
         } else {
             // punch_disregarded
             $referencePunchId = $this->reqReferencePunchId;
-            $punch = \App\Models\PunchEvent::find($referencePunchId);
+            $punch = PunchEvent::find($referencePunchId);
             if ($punch) {
                 $effectiveAt = $punch->occurred_at_local;
                 $newValueJson = [
@@ -448,7 +448,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
     {
         $this->validateAuthorizedUserId((int) $this->userId);
 
-        $treatment = \App\Models\TreatmentEvent::with(['requester', 'approver', 'rejecter', 'referencePunch'])->find($treatmentId);
+        $treatment = TreatmentEvent::with(['requester', 'approver', 'rejecter', 'referencePunch'])->find($treatmentId);
         if (! $treatment) {
             return;
         }
@@ -627,7 +627,6 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                     </a>
                 </div>
             </div>
-        </div>
     </header>
 
     {{-- 2. FILTRO DE COMPETÊNCIA E BUSCA SEGURA DE COLABORADOR --}}

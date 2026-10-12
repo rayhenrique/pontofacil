@@ -333,7 +333,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
 
     public function getPreviewDataProperty()
     {
-        $action = app(\App\Domain\WorkSchedule\Actions\ConfigureWorkScheduleAction::class);
+        $action = app(ConfigureWorkScheduleAction::class);
         $data = match ($this->template) {
             'administrative' => [
                 'days' => array_map('intval', (array) $this->admin_days),
@@ -376,7 +376,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             'apply_effective_until' => 'nullable|date|after_or_equal:apply_effective_from',
         ]);
 
-        $action = app(\App\Domain\WorkSchedule\Actions\ConfigureWorkScheduleAction::class);
+        $action = app(ConfigureWorkScheduleAction::class);
 
         try {
             $schedule = match ($this->template) {
@@ -643,10 +643,10 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap">
                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold {{ match($shift->status) {
-                                    \App\Enums\ShiftStatus::Scheduled => 'bg-sky-50 text-sky-700 border border-sky-200',
-                                    \App\Enums\ShiftStatus::Confirmed => 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-                                    \App\Enums\ShiftStatus::Swapped => 'bg-purple-50 text-purple-700 border border-purple-200',
-                                    \App\Enums\ShiftStatus::Cancelled => 'bg-rose-50 text-rose-700 border border-rose-200',
+                                    ShiftStatus::Scheduled => 'bg-sky-50 text-sky-700 border border-sky-200',
+                                    ShiftStatus::Confirmed => 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+                                    ShiftStatus::Swapped => 'bg-purple-50 text-purple-700 border border-purple-200',
+                                    ShiftStatus::Cancelled => 'bg-rose-50 text-rose-700 border border-rose-200',
                                     default => 'bg-slate-100 text-slate-700'
                                 } }}">
                                     {{ $shift->status->label() }}

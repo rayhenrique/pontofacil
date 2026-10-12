@@ -15,6 +15,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Auth;
 
+/**
+ * @property Carbon|null $normative_effective_from
+ * @property Carbon|null $normative_effective_until
+ */
 class Employee extends Model
 {
     protected $fillable = [

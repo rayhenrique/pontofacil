@@ -159,7 +159,7 @@ class ReceiptsTest extends TestCase
             ->call('verify')
             ->assertSet('searched', true)
             ->assertSet('hashValid', true)
-            ->assertSee('Registro Autêntico e Íntegro no Ledger')
+            ->assertSee('Registro Autêntico e Íntegro no PontoFácil')
             ->assertSee('Lucas Auditado')
             ->assertSee($code);
     }
