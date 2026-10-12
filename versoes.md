@@ -1,6 +1,24 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.1 (Atual)
+## v2.6.2 (Atual)
+- **Central de Ajuda Completa, Pesquisável & Manuais do Usuário:**
+  - **Interface Moderna e Acessível (`/ajuda`):**
+    - Redesenho completo com abas dedicadas: *Manuais*, *Perguntas Frequentes (FAQ)*, *Glossário Normativo* e *Histórico de Atualizações*.
+    - Indicadores visuais por tempo estimado de leitura, perfis de usuário e categorias operacionais.
+    - Suporte a impressão formal em formato A4 (`no-print` inteligente) e visualização limpa de documentos.
+  - **Motor de Busca Instantâneo com Relevância Contextual:**
+    - Busca em tempo real por palavras-chave com ranking ponderado (título, resumo, tags e corpo do artigo).
+    - Filtros dinâmicos por perfil profissional (Servidor, Gestor, Administrador RH, Auditor Fiscal) e categorias de processos.
+    - Deep linking total via URL (`?tab=...`, `?artigo=...` e `?q=...`) permitindo compartilhamento direto de instruções operacionais.
+  - **11 Manuais Operacionais Estruturados:**
+    - Cobertura completa de ponta a ponta: Visão Geral, Configuração Inicial pelo RH, Órgãos e Unidades, Gestão de Servidores, Horários e Jornadas Flexíveis/Plantões, Como Bater Ponto, Espelho de Ponto e Solicitações de Ajuste, Conferência Mensal pelo RH, Relatório Consolidado de Frequência, Governança/Auditoria/Compliance Portaria 671 e Instalação do Atalho no Celular (PWA/Android/iOS).
+  - **FAQ Interativo e Glossário Normativo:**
+    - 50 perguntas e respostas frequentes organizadas por assunto prático com links diretos para manuais e telas do sistema.
+    - Glossário com conceitos fundamentais da legislação trabalhista e Portaria 671/2021 MTP (REP-P, PTRP, ARP, AFD, AEJ, NSR, SHA-256 e ICP-Brasil).
+  - **Notificador de Atualização Integrado:**
+    - Modal de novidades automático para os usuários ao acessarem a versão v2.6.2.
+
+## v2.6.1
 - **Simplificação UX/UI Mobile-First e Experiência Operacional:**
   - **Navegação Adaptada por Papel:**
     - RH e Gestores com foco operacional no topo: *Conferência Mensal*, *Servidores*, *Horários & Escalas*, *Solicitações* e *Relatórios*.
@@ -13,14 +31,6 @@
     - Eliminação de jargões técnicos (termos como ledger e quitação financeira substituídos por extrato de movimentações e compensação).
   - **Navegação com Preservação de Filtros:**
     - Transição contextual preservando competência e setor entre Espelho de Ponto, Conferência Mensal e Relatórios Consolidados.
-  - **Central de Ajuda Completa, Pesquisável & Manual do Usuário:**
-    - Reformulação total de `/ajuda` com interface moderna e alinhada ao design system.
-    - Motor de busca instantâneo com ranking contextual por título, resumo, palavras-chave e corpo.
-    - Filtros por perfil (Servidor, Gestor, Administrador RH, Auditor Fiscal) e categorias operacionais.
-    - 11 Manuais completos em Markdown estruturado cobrindo da introdução à fiscalização trabalhista e atalho de celular.
-    - FAQ interativo com 50 perguntas e respostas divididas por assunto com atalhos para os manuais.
-    - Glossário normativo com conceitos fundamentais da Portaria 671/2021 MTP (REP-P, PTRP, ARP, NSR, SHA-256).
-    - Suporte a impressão formal A4 e atalhos de deep linking via URL (`?tab=...` e `?artigo=...`).
   - **Responsividade e Acessibilidade:**
     - Validado em 320px, 360px, 390px, 430px, 768px, 1024px, 1280px e 1440px sem rolagem horizontal da página.
 

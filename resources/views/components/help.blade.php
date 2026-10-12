@@ -22,7 +22,7 @@ new #[Layout('layouts.app')] #[Title('Central de Ajuda e Manual')] class extends
 
     public string $selectedProfile = 'all';
 
-    public string $currentVersionTag = 'v2.6.1';
+    public string $currentVersionTag = 'v2.6.2';
 
     public function mount(HelpCenterService $helpService): void
     {
