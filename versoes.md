@@ -1,6 +1,22 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.0 (Atual)
+## v2.6.1 (Atual)
+- **Simplificação UX/UI Mobile-First e Experiência Operacional:**
+  - **Navegação Adaptada por Papel:**
+    - RH e Gestores com foco operacional no topo: *Conferência Mensal*, *Servidores*, *Horários & Escalas*, *Solicitações* e *Relatórios*.
+    - Banco de Horas e configurações avançadas alocados em área secundária recolhível ("Configurações & Apoio").
+    - Visão do colaborador enxuta: *Bater Ponto*, *Espelho de Ponto*, *Folha de Ponto*, *Comprovantes* e *Ajuda*.
+    - Barra inferior mobile adaptativa com atalhos operacionais imediatos para gestores e colaboradores.
+  - **Experiência do Servidor Otimizada:**
+    - Fluxo mobile-first limpo com touch targets >= 44px e contraste AA.
+    - Ação contextual integrada no card de jornada para solicitar correção no Espelho.
+    - Eliminação de jargões técnicos (termos como ledger e quitação financeira substituídos por extrato de movimentações e compensação).
+  - **Navegação com Preservação de Filtros:**
+    - Transição contextual preservando competência e setor entre Espelho de Ponto, Conferência Mensal e Relatórios Consolidados.
+  - **Responsividade e Acessibilidade:**
+    - Validado em 320px, 360px, 390px, 430px, 768px, 1024px, 1280px e 1440px sem rolagem horizontal da página.
+
+## v2.6.0
 - **Relatório Mensal Consolidado de Frequência para o Setor de Pagamento:**
   - **Módulo Reformulado (`/admin/reports`):**
     - Substituição integral do relatório legado que listava apenas `TimeEntry` cru sem apuração PTRP.

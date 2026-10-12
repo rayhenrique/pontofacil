@@ -67,7 +67,7 @@ new class extends Component
                 Verificação de Comprovante de Ponto
             </h1>
             <p class="text-sm text-slate-600">
-                Consulte a integridade de qualquer comprovante do trabalhador no ledger imutável do PontoFácil.
+                Consulte a integridade de qualquer comprovante do trabalhador no registro oficial do PontoFácil.
             </p>
         </div>
 
@@ -119,7 +119,7 @@ new class extends Component
                                 </div>
                                 <div>
                                     <h3 class="text-base font-bold {{ $hashValid ? 'text-emerald-950' : 'text-amber-950' }}">
-                                        {{ $hashValid ? 'Registro Autêntico e Íntegro no Ledger' : 'Aviso: Divergência Detectada no Hash' }}
+                                        {{ $hashValid ? 'Registro Autêntico e Íntegro no PontoFácil' : 'Aviso: Divergência Detectada no Hash' }}
                                     </h3>
                                     <p class="text-xs {{ $hashValid ? 'text-emerald-700' : 'text-amber-700' }}">
                                         {{ $hashValid ? 'Os dados conferem com o registro inviolável persistido no banco de dados da empresa.' : 'O hash da carga útil não correspondeu ao esperado.' }}

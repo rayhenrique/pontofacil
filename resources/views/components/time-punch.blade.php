@@ -701,12 +701,16 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                     @endif
                 </div>
 
-                <!-- Rodapé do Card com Atalho para Central de Comprovantes -->
-                <div class="pt-3 mt-2 border-t border-gray-100 flex items-center justify-between text-xs">
-                    <span class="text-gray-500 font-medium">Registros oficiais REP-P</span>
-                    <a href="{{ route('receipts.center') }}" 
+                <!-- Rodapé do Card com Atalho para Correção e Comprovantes -->
+                <div class="pt-3 mt-2 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                    <a href="{{ route('timesheet') }}" 
                        class="font-semibold text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-1 py-1 px-1.5 rounded-lg hover:bg-indigo-50/50 transition">
-                        Ver todos os comprovantes &rarr;
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                        Esqueceu de registrar? Solicitar correção no Espelho &rarr;
+                    </a>
+                    <a href="{{ route('receipts.center') }}" 
+                       class="font-medium text-gray-500 hover:text-gray-900 inline-flex items-center gap-1 py-1 px-1.5 rounded-lg hover:bg-gray-50 transition sm:text-right">
+                        Comprovantes &rarr;
                     </a>
                 </div>
             </div>

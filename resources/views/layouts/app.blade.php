@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="h-full bg-gray-100">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="h-full bg-gray-100 overflow-x-hidden">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -25,16 +25,24 @@
             }
         </style>
     </head>
-    <body class="h-full font-sans antialiased text-gray-900 bg-gray-100" 
+    <body class="h-full font-sans antialiased text-gray-900 bg-gray-100 overflow-x-hidden" 
           x-data="{ 
               mobileMenuOpen: false,
               sidebarCollapsed: localStorage.getItem('pf_sidebar_collapsed') === 'true',
+              advancedOpen: false,
               toggleSidebar() {
                   this.sidebarCollapsed = !this.sidebarCollapsed;
                   localStorage.setItem('pf_sidebar_collapsed', this.sidebarCollapsed);
               }
           }">
         @auth
+        @php
+            $currentUser = Auth::user();
+            $isAdmin = $currentUser->role === App\Enums\UserRole::Admin;
+            $isManager = $currentUser->role === App\Enums\UserRole::Manager;
+            $isAuditor = $currentUser->role === App\Enums\UserRole::Auditor;
+            $isStaff = $isAdmin || $isManager;
+        @endphp
         <div class="min-h-full">
             <!-- Mobile Off-Canvas Drawer (Slide-over menu) -->
             <div x-show="mobileMenuOpen" class="no-print relative z-50 md:hidden" role="dialog" aria-modal="true" style="display: none;">
@@ -66,7 +74,7 @@
                                 <svg class="h-6 w-6 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
                                 PontoFácil
                             </span>
-                            <button @click="mobileMenuOpen = false" type="button" class="-m-2.5 p-2.5 text-indigo-200 hover:text-white">
+                            <button @click="mobileMenuOpen = false" type="button" class="-m-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 text-indigo-200 hover:text-white">
                                 <span class="sr-only">Fechar menu</span>
                                 <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
@@ -74,140 +82,135 @@
 
                         <!-- Mobile Nav Links -->
                         <div class="flex-1 overflow-y-auto px-4 py-4 space-y-1">
-                            <p class="px-3 text-[11px] font-semibold text-indigo-300 uppercase tracking-wider mb-2">Área do Colaborador</p>
-                            
-                            <a href="{{ route('home') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('home') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                                Bater Ponto
-                            </a>
-                            <a href="{{ route('timesheet') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('timesheet') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
-                                Espelho de Ponto
-                            </a>
-                            <a href="{{ route('folha-ponto') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('folha-ponto') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
-                                Folha de Ponto
-                            </a>
-                            <a href="{{ route('receipts.center') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('receipts.*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" /></svg>
-                                Comprovantes
-                            </a>
-                            <a href="{{ route('help') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('help') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" /></svg>
-                                Ajuda e Versões
-                            </a>
+                            @if($isStaff)
+                                <!-- ROTINA OPERACIONAL DO RH / GESTOR (PRIORIDADE MÁXIMA) -->
+                                <p class="px-3 text-[11px] font-bold text-indigo-300 uppercase tracking-wider mb-2">Rotina Operacional</p>
 
-                            @if(Auth::user()->role === App\Enums\UserRole::Admin)
+                                <a href="{{ route('admin.monthly-review') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition {{ request()->routeIs('admin.monthly-review*') ? 'bg-indigo-800 text-white shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
+                                    <svg class="h-5 w-5 flex-shrink-0 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    Conferência Mensal
+                                </a>
+                                <a href="{{ route('admin.employees') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.employees*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
+                                    <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
+                                    Servidores
+                                </a>
+                                <a href="{{ route('admin.shifts') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.shifts*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
+                                    <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                                    Horários & Escalas
+                                </a>
+                                <a href="{{ route('admin.treatment-requests') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.treatment-requests*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
+                                    <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" /></svg>
+                                    Solicitações
+                                </a>
+                                <a href="{{ route('admin.reports') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.reports*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
+                                    <svg class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>
+                                    Relatórios de Frequência
+                                </a>
+
+                                <!-- MEU REGISTRO PESSOAL -->
                                 <div class="pt-3 mt-3 border-t border-indigo-800/80 space-y-1">
-                                    <p class="px-3 text-[11px] font-semibold text-indigo-300 uppercase tracking-wider mb-1">Gestão & Pessoas</p>
-                                    
-                                    <a href="{{ route('admin.sectors') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.sectors*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                        <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12.25" /></svg>
-                                        Setores
-                                    </a>
-                                    <a href="{{ route('admin.employees') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.employees*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                        <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
-                                        Funcionários
-                                    </a>
-                                    <a href="{{ route('admin.shifts') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.shifts*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
+                                    <p class="px-3 text-[11px] font-bold text-indigo-300 uppercase tracking-wider mb-1">Meu Registro Pessoal</p>
+                                    <a href="{{ route('home') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('home') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
                                         <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                                        Plantões & Escalas
+                                        Bater Ponto
                                     </a>
-                                    <a href="{{ route('admin.users') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.users*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                        <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>
-                                        Usuários do Sistema
-                                    </a>
-                                </div>
-
-                                <div class="pt-3 mt-3 border-t border-indigo-800/80 space-y-1">
-                                    <p class="px-3 text-[11px] font-semibold text-indigo-300 uppercase tracking-wider mb-1">Jornada & Ponto</p>
-
-                                    <a href="{{ route('admin.monthly-review') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.monthly-review*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                        <svg class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                        Conferência Mensal
-                                    </a>
-                                    <a href="{{ route('admin.treatment-requests') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.treatment-requests*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                        <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" /></svg>
-                                        Tratamento de Ponto
-                                    </a>
-                                    <a href="{{ route('admin.adjustment') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.adjustment*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                        <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" /></svg>
-                                        Ajuste Manual
-                                    </a>
-                                    <a href="{{ route('admin.calendar') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.calendar*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
+                                    <a href="{{ route('timesheet') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('timesheet') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
                                         <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
-                                        Calendário Laboral
+                                        Espelho de Ponto
                                     </a>
-                                    <a href="{{ route('admin.time-bank') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.time-bank*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                        <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                                        Banco de Horas
-                                    </a>
-                                    <a href="{{ route('admin.settlement-policies') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.settlement-policies*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                        <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" /></svg>
-                                        Políticas de Compensação
+                                    <a href="{{ route('receipts.center') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('receipts.*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
+                                        <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" /></svg>
+                                        Comprovantes
                                     </a>
                                 </div>
 
-                                <div class="pt-3 mt-3 border-t border-indigo-800/80 space-y-1">
-                                    <p class="px-3 text-[11px] font-semibold text-indigo-300 uppercase tracking-wider mb-1">Auditoria & Fiscalização</p>
-
-                                    <a href="{{ route('admin.fiscalizacao') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.fiscalizacao*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                        <svg class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" /></svg>
-                                        Fiscalização MTE
-                                    </a>
-                                    <a href="{{ route('admin.audit') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.audit*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                        <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" /></svg>
-                                        Auditoria
-                                    </a>
-                                    <a href="{{ route('admin.reports') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.reports*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                        <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>
-                                        Relatórios
-                                    </a>
-                                </div>
-
-                                <div class="pt-3 mt-3 border-t border-indigo-800/80 space-y-1">
-                                    <p class="px-3 text-[11px] font-semibold text-indigo-300 uppercase tracking-wider mb-1">Sistema</p>
-
-                                    <a href="{{ route('admin.settings') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.settings*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                        <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 0 1 0 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 0 1 0-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
-                                        Configurações
-                                    </a>
-                                </div>
-                            @elseif(Auth::user()->role === App\Enums\UserRole::Manager)
-                                <div class="pt-3 mt-3 border-t border-indigo-800/80 space-y-1">
-                                    <p class="px-3 text-[11px] font-semibold text-indigo-300 uppercase tracking-wider mb-1">Gestão de Equipe</p>
-                                    
-                                    <a href="{{ route('admin.employees') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.employees*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                        <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
-                                        Funcionários
-                                    </a>
-                                    <a href="{{ route('admin.shifts') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.shifts*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                        <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                                        Plantões & Escalas
-                                    </a>
-                                    <a href="{{ route('admin.treatment-requests') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.treatment-requests*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                        <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" /></svg>
-                                        Tratamento de Ponto
-                                    </a>
-                                    <a href="{{ route('admin.monthly-review') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.monthly-review*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                        <svg class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                        Conferência Mensal
-                                    </a>
-                                    <a href="{{ route('admin.reports') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.reports*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                        <svg class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>
-                                        Relatórios de Frequência
-                                    </a>
-                                </div>
-                            @elseif(Auth::user()->role === App\Enums\UserRole::Auditor)
-                                <div class="pt-3 mt-3 border-t border-indigo-800/80 space-y-1">
-                                    <p class="px-3 text-[11px] font-semibold text-indigo-300 uppercase tracking-wider mb-1">Fiscalização Trabalhista</p>
-                                    
-                                    <a href="{{ route('admin.fiscalizacao') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.fiscalizacao*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
-                                        <svg class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" /></svg>
-                                        Fiscalização MTE
-                                    </a>
-                                </div>
+                                @if($isAdmin)
+                                    <!-- CONFIGURAÇÕES & APOIO (ÁREA SECUNDÁRIA EXPANSÍVEL) -->
+                                    <div class="pt-3 mt-3 border-t border-indigo-800/80">
+                                        <button @click="advancedOpen = !advancedOpen" type="button" class="w-full flex items-center justify-between px-3 py-2 text-[11px] font-bold text-indigo-300 uppercase tracking-wider hover:text-white transition">
+                                            <span>Configurações & Apoio</span>
+                                            <svg class="h-4 w-4 transform transition-transform" :class="advancedOpen ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+                                        </button>
+                                        
+                                        <div x-show="advancedOpen" class="space-y-1 mt-1 pl-1">
+                                            <a href="{{ route('admin.sectors') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.sectors*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:bg-indigo-800/60 hover:text-white' }}">
+                                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                                                Setores
+                                            </a>
+                                            <a href="{{ route('admin.calendar') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.calendar*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:bg-indigo-800/60 hover:text-white' }}">
+                                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                                Calendário Laboral
+                                            </a>
+                                            <a href="{{ route('admin.time-bank') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.time-bank*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:bg-indigo-800/60 hover:text-white' }}">
+                                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                Banco de Horas
+                                            </a>
+                                            <a href="{{ route('admin.adjustment') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.adjustment*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:bg-indigo-800/60 hover:text-white' }}">
+                                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                                Ajuste Manual
+                                            </a>
+                                            <a href="{{ route('admin.fiscalizacao') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.fiscalizacao*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:bg-indigo-800/60 hover:text-white' }}">
+                                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                                                Fiscalização MTE
+                                            </a>
+                                            <a href="{{ route('admin.audit') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.audit*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:bg-indigo-800/60 hover:text-white' }}">
+                                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                                                Auditoria
+                                            </a>
+                                            <a href="{{ route('admin.users') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.users*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:bg-indigo-800/60 hover:text-white' }}">
+                                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                                                Usuários do Sistema
+                                            </a>
+                                            <a href="{{ route('admin.settings') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.settings*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:bg-indigo-800/60 hover:text-white' }}">
+                                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /></svg>
+                                                Configurações
+                                            </a>
+                                        </div>
+                                    </div>
+                                @endif
+                            @elseif($isAuditor)
+                                <!-- PERFIL DE AUDITORIA FISCAL -->
+                                <p class="px-3 text-[11px] font-bold text-indigo-300 uppercase tracking-wider mb-2">Fiscalização Trabalhista</p>
+                                <a href="{{ route('admin.fiscalizacao') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.fiscalizacao*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
+                                    <svg class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                                    Fiscalização MTE
+                                </a>
+                                <a href="{{ route('admin.audit') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.audit*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
+                                    <svg class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                                    Auditoria
+                                </a>
+                                <a href="{{ route('admin.reports') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.reports*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
+                                    <svg class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>
+                                    Relatórios de Frequência
+                                </a>
+                            @else
+                                <!-- ÁREA EXCLUSIVA DO COLABORADOR -->
+                                <p class="px-3 text-[11px] font-bold text-indigo-300 uppercase tracking-wider mb-2">Menu Principal</p>
+                                
+                                <a href="{{ route('home') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('home') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
+                                    <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                                    Bater Ponto
+                                </a>
+                                <a href="{{ route('timesheet') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('timesheet') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
+                                    <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
+                                    Espelho de Ponto
+                                </a>
+                                <a href="{{ route('folha-ponto') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('folha-ponto') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
+                                    <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
+                                    Folha de Ponto
+                                </a>
+                                <a href="{{ route('receipts.center') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('receipts.*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:bg-indigo-800/60 hover:text-white' }}">
+                                    <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" /></svg>
+                                    Comprovantes
+                                </a>
                             @endif
+
+                            <div class="pt-3 mt-3 border-t border-indigo-800/80">
+                                <a href="{{ route('help') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('help') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-200 hover:bg-indigo-800/60 hover:text-white' }}">
+                                    <svg class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" /></svg>
+                                    Ajuda e Suporte
+                                </a>
+                            </div>
                         </div>
 
                         <!-- Drawer Footer (User & Logout) -->
@@ -219,7 +222,7 @@
                                 </div>
                                 <form method="POST" action="{{ route('logout') }}">
                                     @csrf
-                                    <button type="submit" class="px-3 py-1.5 text-xs font-semibold text-red-200 bg-red-900/60 rounded-md hover:bg-red-800 transition">
+                                    <button type="submit" class="min-h-[44px] px-3.5 py-2 text-xs font-semibold text-red-200 bg-red-900/60 rounded-lg hover:bg-red-800 transition cursor-pointer">
                                         Sair
                                     </button>
                                 </form>
@@ -242,7 +245,7 @@
                         <!-- Botão de Toggle do Menu (Otimizado para Tablets) -->
                         <button @click="toggleSidebar()" 
                                 type="button" 
-                                class="p-1.5 rounded-lg text-indigo-300 hover:text-white hover:bg-indigo-900/80 transition cursor-pointer"
+                                class="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-indigo-300 hover:text-white hover:bg-indigo-900/80 transition cursor-pointer"
                                 :title="sidebarCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral (modo tablet)'">
                             <svg x-show="!sidebarCollapsed" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5" />
@@ -256,146 +259,136 @@
                     <!-- Desktop Nav -->
                     <div class="flex-grow flex flex-col justify-between">
                         <nav class="flex-1 px-3 py-4 space-y-1">
-                            <p x-show="!sidebarCollapsed" class="px-3 text-[11px] font-semibold text-indigo-300 uppercase tracking-wider mb-1">Colaborador</p>
-                            
-                            <a href="{{ route('home') }}" :title="sidebarCollapsed ? 'Bater Ponto' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('home') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                                <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Bater Ponto</span>
-                            </a>
-                            <a href="{{ route('timesheet') }}" :title="sidebarCollapsed ? 'Espelho de Ponto' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('timesheet') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
-                                <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Espelho de Ponto</span>
-                            </a>
-                            <a href="{{ route('folha-ponto') }}" :title="sidebarCollapsed ? 'Folha de Ponto' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('folha-ponto') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
-                                <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Folha de Ponto</span>
-                            </a>
-                            <a href="{{ route('receipts.center') }}" :title="sidebarCollapsed ? 'Comprovantes' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('receipts.*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" /></svg>
-                                <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Comprovantes</span>
-                            </a>
-                            <a href="{{ route('help') }}" :title="sidebarCollapsed ? 'Ajuda e Versões' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('help') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" /></svg>
-                                <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Ajuda e Versões</span>
-                            </a>
+                            @if($isStaff)
+                                <!-- ROTINA OPERACIONAL DO RH / GESTOR (PRIORIDADE MÁXIMA) -->
+                                <p x-show="!sidebarCollapsed" class="px-3 text-[11px] font-bold text-indigo-300 uppercase tracking-wider mb-1.5">Rotina Operacional</p>
 
-                            @if(Auth::user()->role === App\Enums\UserRole::Admin)
+                                <a href="{{ route('admin.monthly-review') }}" :title="sidebarCollapsed ? 'Conferência Mensal' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[44px] flex items-center py-2.5 rounded-lg text-sm font-semibold transition {{ request()->routeIs('admin.monthly-review*') ? 'bg-indigo-800 text-white shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
+                                    <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Conferência Mensal</span>
+                                </a>
+                                <a href="{{ route('admin.employees') }}" :title="sidebarCollapsed ? 'Servidores' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[44px] flex items-center py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.employees*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
+                                    <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
+                                    <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Servidores</span>
+                                </a>
+                                <a href="{{ route('admin.shifts') }}" :title="sidebarCollapsed ? 'Horários & Escalas' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[44px] flex items-center py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.shifts*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
+                                    <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                                    <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Horários & Escalas</span>
+                                </a>
+                                <a href="{{ route('admin.treatment-requests') }}" :title="sidebarCollapsed ? 'Solicitações' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[44px] flex items-center py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.treatment-requests*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
+                                    <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" /></svg>
+                                    <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Solicitações</span>
+                                </a>
+                                <a href="{{ route('admin.reports') }}" :title="sidebarCollapsed ? 'Relatórios de Frequência' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[44px] flex items-center py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.reports*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
+                                    <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>
+                                    <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Relatórios</span>
+                                </a>
+
+                                <!-- MEU REGISTRO PESSOAL -->
                                 <div class="pt-3 mt-3 border-t border-indigo-800/80 space-y-1">
-                                    <p x-show="!sidebarCollapsed" class="px-3 text-[11px] font-semibold text-indigo-300 uppercase tracking-wider mb-1">Gestão & Pessoas</p>
+                                    <p x-show="!sidebarCollapsed" class="px-3 text-[11px] font-bold text-indigo-300 uppercase tracking-wider mb-1">Registro Pessoal</p>
                                     <div x-show="sidebarCollapsed" class="border-t border-indigo-800/80 my-2"></div>
-                                    
-                                    <a href="{{ route('admin.sectors') }}" :title="sidebarCollapsed ? 'Setores' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.sectors*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12.25" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Setores</span>
-                                    </a>
-                                    <a href="{{ route('admin.employees') }}" :title="sidebarCollapsed ? 'Funcionários' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.employees*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Funcionários</span>
-                                    </a>
-                                    <a href="{{ route('admin.shifts') }}" :title="sidebarCollapsed ? 'Plantões & Escalas' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.shifts*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
+
+                                    <a href="{{ route('home') }}" :title="sidebarCollapsed ? 'Bater Ponto' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[44px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('home') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
                                         <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Plantões & Escalas</span>
+                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Bater Ponto</span>
                                     </a>
-                                    <a href="{{ route('admin.users') }}" :title="sidebarCollapsed ? 'Usuários do Sistema' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.users*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Usuários do Sistema</span>
+                                    <a href="{{ route('timesheet') }}" :title="sidebarCollapsed ? 'Espelho de Ponto' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[44px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('timesheet') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
+                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
+                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Espelho de Ponto</span>
                                     </a>
-                                </div>
-
-                                <div class="pt-3 mt-3 border-t border-indigo-800/80 space-y-1">
-                                    <p x-show="!sidebarCollapsed" class="px-3 text-[11px] font-semibold text-indigo-300 uppercase tracking-wider mb-1">Jornada & Ponto</p>
-                                    <div x-show="sidebarCollapsed" class="border-t border-indigo-800/80 my-2"></div>
-
-                                    <a href="{{ route('admin.monthly-review') }}" :title="sidebarCollapsed ? 'Conferência Mensal' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.monthly-review*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Conferência Mensal</span>
-                                    </a>
-                                    <a href="{{ route('admin.treatment-requests') }}" :title="sidebarCollapsed ? 'Tratamento de Ponto' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.treatment-requests*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Tratamento de Ponto</span>
-                                    </a>
-                                    <a href="{{ route('admin.adjustment') }}" :title="sidebarCollapsed ? 'Ajuste Manual' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.adjustment*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Ajuste Manual</span>
-                                    </a>
-                                    <a href="{{ route('admin.calendar') }}" :title="sidebarCollapsed ? 'Calendário Laboral' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.calendar*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Calendário Laboral</span>
-                                    </a>
-                                    <a href="{{ route('admin.time-bank') }}" :title="sidebarCollapsed ? 'Banco de Horas' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.time-bank*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Banco de Horas</span>
-                                    </a>
-                                    <a href="{{ route('admin.settlement-policies') }}" :title="sidebarCollapsed ? 'Políticas de Compensação' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.settlement-policies*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Políticas de Compensação</span>
+                                    <a href="{{ route('receipts.center') }}" :title="sidebarCollapsed ? 'Comprovantes' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[44px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('receipts.*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
+                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" /></svg>
+                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Comprovantes</span>
                                     </a>
                                 </div>
 
-                                <div class="pt-3 mt-3 border-t border-indigo-800/80 space-y-1">
-                                    <p x-show="!sidebarCollapsed" class="px-3 text-[11px] font-semibold text-indigo-300 uppercase tracking-wider mb-1">Auditoria & Fiscalização</p>
-                                    <div x-show="sidebarCollapsed" class="border-t border-indigo-800/80 my-2"></div>
-
-                                    <a href="{{ route('admin.fiscalizacao') }}" :title="sidebarCollapsed ? 'Fiscalização MTE' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.fiscalizacao*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Fiscalização MTE</span>
-                                    </a>
-                                    <a href="{{ route('admin.audit') }}" :title="sidebarCollapsed ? 'Auditoria' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.audit*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Auditoria</span>
-                                    </a>
-                                    <a href="{{ route('admin.reports') }}" :title="sidebarCollapsed ? 'Relatórios' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.reports*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Relatórios</span>
-                                    </a>
-                                </div>
-
-                                <div class="pt-3 mt-3 border-t border-indigo-800/80 space-y-1">
-                                    <p x-show="!sidebarCollapsed" class="px-3 text-[11px] font-semibold text-indigo-300 uppercase tracking-wider mb-1">Sistema</p>
-                                    <div x-show="sidebarCollapsed" class="border-t border-indigo-800/80 my-2"></div>
-
-                                    <a href="{{ route('admin.settings') }}" :title="sidebarCollapsed ? 'Configurações' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.settings*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 0 1 0 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 0 1 0-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Configurações</span>
-                                    </a>
-                                </div>
-                            @elseif(Auth::user()->role === App\Enums\UserRole::Manager)
-                                <div class="pt-3 mt-3 border-t border-indigo-800/80 space-y-1">
-                                    <p x-show="!sidebarCollapsed" class="px-3 text-[11px] font-semibold text-indigo-300 uppercase tracking-wider mb-1">Gestão de Equipe</p>
-                                    <div x-show="sidebarCollapsed" class="border-t border-indigo-800/80 my-2"></div>
-                                    
-                                    <a href="{{ route('admin.employees') }}" :title="sidebarCollapsed ? 'Funcionários' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.employees*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Funcionários</span>
-                                    </a>
-                                    <a href="{{ route('admin.shifts') }}" :title="sidebarCollapsed ? 'Plantões & Escalas' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.shifts*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Plantões & Escalas</span>
-                                    </a>
-                                    <a href="{{ route('admin.treatment-requests') }}" :title="sidebarCollapsed ? 'Tratamento de Ponto' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.treatment-requests*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Tratamento de Ponto</span>
-                                    </a>
-                                    <a href="{{ route('admin.monthly-review') }}" :title="sidebarCollapsed ? 'Conferência Mensal' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.monthly-review*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Conferência Mensal</span>
-                                    </a>
-                                    <a href="{{ route('admin.reports') }}" :title="sidebarCollapsed ? 'Relatórios de Frequência' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.reports*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Relatórios de Frequência</span>
-                                    </a>
-                                </div>
-                            @elseif(Auth::user()->role === App\Enums\UserRole::Auditor)
-                                <div class="pt-3 mt-3 border-t border-indigo-800/80 space-y-1">
-                                    <p x-show="!sidebarCollapsed" class="px-3 text-[11px] font-semibold text-indigo-300 uppercase tracking-wider mb-1">Fiscalização Trabalhista</p>
-                                    <div x-show="sidebarCollapsed" class="border-t border-indigo-800/80 my-2"></div>
-                                    
-                                    <a href="{{ route('admin.fiscalizacao') }}" :title="sidebarCollapsed ? 'Fiscalização MTE' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.fiscalizacao*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
-                                        <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" /></svg>
-                                        <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Fiscalização MTE</span>
-                                    </a>
-                                </div>
+                                @if($isAdmin)
+                                    <!-- CONFIGURAÇÕES & APOIO (ÁREA SECUNDÁRIA EXPANSÍVEL) -->
+                                    <div class="pt-3 mt-3 border-t border-indigo-800/80">
+                                        <button @click="advancedOpen = !advancedOpen" type="button" :class="sidebarCollapsed ? 'justify-center px-1' : 'justify-between px-3'" class="w-full min-h-[44px] flex items-center py-1.5 text-[11px] font-bold text-indigo-300 uppercase tracking-wider hover:text-white transition cursor-pointer">
+                                            <span x-show="!sidebarCollapsed">Configurações & Apoio</span>
+                                            <svg class="h-4 w-4 transform transition-transform" :class="advancedOpen ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+                                        </button>
+                                        
+                                        <div x-show="advancedOpen || sidebarCollapsed" class="space-y-1 mt-1">
+                                            <a href="{{ route('admin.sectors') }}" :title="sidebarCollapsed ? 'Setores' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[40px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.sectors*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:text-white hover:bg-indigo-800/60' }}">
+                                                <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                                                <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Setores</span>
+                                            </a>
+                                            <a href="{{ route('admin.calendar') }}" :title="sidebarCollapsed ? 'Calendário Laboral' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[40px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.calendar*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:text-white hover:bg-indigo-800/60' }}">
+                                                <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                                <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Calendário</span>
+                                            </a>
+                                            <a href="{{ route('admin.time-bank') }}" :title="sidebarCollapsed ? 'Banco de Horas' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[40px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.time-bank*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:text-white hover:bg-indigo-800/60' }}">
+                                                <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Banco de Horas</span>
+                                            </a>
+                                            <a href="{{ route('admin.adjustment') }}" :title="sidebarCollapsed ? 'Ajuste Manual' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[40px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.adjustment*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:text-white hover:bg-indigo-800/60' }}">
+                                                <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                                <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Ajuste Manual</span>
+                                            </a>
+                                            <a href="{{ route('admin.fiscalizacao') }}" :title="sidebarCollapsed ? 'Fiscalização MTE' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[40px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.fiscalizacao*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:text-white hover:bg-indigo-800/60' }}">
+                                                <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                                                <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Fiscalização</span>
+                                            </a>
+                                            <a href="{{ route('admin.audit') }}" :title="sidebarCollapsed ? 'Auditoria' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[40px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.audit*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:text-white hover:bg-indigo-800/60' }}">
+                                                <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                                                <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Auditoria</span>
+                                            </a>
+                                            <a href="{{ route('admin.users') }}" :title="sidebarCollapsed ? 'Usuários do Sistema' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[40px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.users*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:text-white hover:bg-indigo-800/60' }}">
+                                                <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                                                <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Usuários</span>
+                                            </a>
+                                            <a href="{{ route('admin.settings') }}" :title="sidebarCollapsed ? 'Configurações' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[40px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.settings*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:text-white hover:bg-indigo-800/60' }}">
+                                                <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /></svg>
+                                                <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Configurações</span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                @endif
+                            @elseif($isAuditor)
+                                <p x-show="!sidebarCollapsed" class="px-3 text-[11px] font-bold text-indigo-300 uppercase tracking-wider mb-1.5">Fiscalização</p>
+                                <a href="{{ route('admin.fiscalizacao') }}" :title="sidebarCollapsed ? 'Fiscalização MTE' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[44px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.fiscalizacao*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
+                                    <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                                    <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Fiscalização MTE</span>
+                                </a>
+                                <a href="{{ route('admin.audit') }}" :title="sidebarCollapsed ? 'Auditoria' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[44px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.audit*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
+                                    <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                                    <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Auditoria</span>
+                                </a>
+                                <a href="{{ route('admin.reports') }}" :title="sidebarCollapsed ? 'Relatórios' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[44px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.reports*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
+                                    <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>
+                                    <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Relatórios</span>
+                                </a>
+                            @else
+                                <!-- COLABORADOR -->
+                                <p x-show="!sidebarCollapsed" class="px-3 text-[11px] font-bold text-indigo-300 uppercase tracking-wider mb-1.5">Colaborador</p>
+                                
+                                <a href="{{ route('home') }}" :title="sidebarCollapsed ? 'Bater Ponto' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[44px] flex items-center py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('home') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
+                                    <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                                    <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Bater Ponto</span>
+                                </a>
+                                <a href="{{ route('timesheet') }}" :title="sidebarCollapsed ? 'Espelho de Ponto' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[44px] flex items-center py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('timesheet') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
+                                    <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
+                                    <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Espelho de Ponto</span>
+                                </a>
+                                <a href="{{ route('folha-ponto') }}" :title="sidebarCollapsed ? 'Folha de Ponto' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[44px] flex items-center py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('folha-ponto') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
+                                    <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
+                                    <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Folha de Ponto</span>
+                                </a>
+                                <a href="{{ route('receipts.center') }}" :title="sidebarCollapsed ? 'Comprovantes' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[44px] flex items-center py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('receipts.*') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-100 hover:text-white hover:bg-indigo-800/60' }}">
+                                    <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" /></svg>
+                                    <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Comprovantes</span>
+                                </a>
                             @endif
+
+                            <div class="pt-3 mt-3 border-t border-indigo-800/80">
+                                <a href="{{ route('help') }}" :title="sidebarCollapsed ? 'Ajuda e Versões' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[44px] flex items-center py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('help') ? 'bg-indigo-800 text-white font-semibold shadow-xs' : 'text-indigo-200 hover:text-white hover:bg-indigo-800/60' }}">
+                                    <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" /></svg>
+                                    <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Ajuda e Versões</span>
+                                </a>
+                            </div>
                         </nav>
 
                         <!-- Desktop Sidebar Footer -->
@@ -407,7 +400,7 @@
                                 </div>
                                 <form method="POST" action="{{ route('logout') }}" :class="sidebarCollapsed ? '' : 'ml-2'" class="flex-shrink-0">
                                     @csrf
-                                    <button type="submit" class="text-xs text-indigo-300 hover:text-white font-medium p-1 cursor-pointer" title="Sair do sistema">
+                                    <button type="submit" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-xs text-indigo-300 hover:text-white font-medium p-1 cursor-pointer" title="Sair do sistema">
                                         <svg x-show="sidebarCollapsed" class="w-5 h-5 text-red-300 hover:text-red-100" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
                                         </svg>
@@ -426,7 +419,7 @@
                 <!-- Mobile Top Navigation Header -->
                 <header class="no-print sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-indigo-800 bg-indigo-900 px-4 text-white shadow-sm md:hidden">
                     <div class="flex items-center gap-3">
-                        <button @click="mobileMenuOpen = true" type="button" class="-m-2.5 p-2.5 text-indigo-200 hover:text-white focus:outline-none cursor-pointer" aria-label="Abrir menu lateral">
+                        <button @click="mobileMenuOpen = true" type="button" class="-m-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 text-indigo-200 hover:text-white focus:outline-none cursor-pointer" aria-label="Abrir menu lateral">
                             <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
                         </button>
                         <span class="text-lg font-bold tracking-tight text-white flex items-center gap-1.5">
@@ -439,7 +432,7 @@
                         <span class="text-xs text-indigo-200 font-medium max-w-[120px] truncate">{{ Auth::user()->name }}</span>
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
-                            <button type="submit" class="text-xs bg-indigo-950 text-indigo-200 hover:text-white px-2.5 py-1 rounded border border-indigo-700 cursor-pointer">
+                            <button type="submit" class="min-h-[44px] text-xs bg-indigo-950 text-indigo-200 hover:text-white px-3 py-2 rounded-lg border border-indigo-700 cursor-pointer flex items-center justify-center">
                                 Sair
                             </button>
                         </form>
@@ -455,24 +448,45 @@
                     {{ $slot }}
                 </main>
 
-                <!-- Mobile Bottom Tab Bar (App-like navigation for smartphones) -->
+                <!-- Mobile Bottom Tab Bar (App-like navigation for smartphones, adapted by role) -->
                 <nav class="no-print md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-xs border-t border-gray-200/90 shadow-lg flex items-center justify-around px-2 pt-1.5 pb-[max(0.6rem,env(safe-area-inset-bottom))]">
-                    <a href="{{ route('home') }}" class="min-h-[44px] flex flex-col items-center justify-center flex-1 py-1 text-xs transition rounded-lg focus-visible:outline-2 focus-visible:outline-indigo-600 {{ request()->routeIs('home') ? 'text-indigo-700 font-bold' : 'text-gray-500 hover:text-gray-900 font-medium' }}">
-                        <svg class="h-5 w-5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                        Ponto
-                    </a>
-                    <a href="{{ route('timesheet') }}" class="min-h-[44px] flex flex-col items-center justify-center flex-1 py-1 text-xs transition rounded-lg focus-visible:outline-2 focus-visible:outline-indigo-600 {{ request()->routeIs('timesheet') ? 'text-indigo-700 font-bold' : 'text-gray-500 hover:text-gray-900 font-medium' }}">
-                        <svg class="h-5 w-5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
-                        Espelho
-                    </a>
-                    <a href="{{ route('help') }}" class="min-h-[44px] flex flex-col items-center justify-center flex-1 py-1 text-xs transition rounded-lg focus-visible:outline-2 focus-visible:outline-indigo-600 {{ request()->routeIs('help') ? 'text-indigo-700 font-bold' : 'text-gray-500 hover:text-gray-900 font-medium' }}">
-                        <svg class="h-5 w-5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" /></svg>
-                        Ajuda
-                    </a>
-                    <button @click="mobileMenuOpen = true" type="button" class="min-h-[44px] flex flex-col items-center justify-center flex-1 py-1 text-xs transition rounded-lg focus-visible:outline-2 focus-visible:outline-indigo-600 text-gray-500 hover:text-gray-900 font-medium cursor-pointer">
-                        <svg class="h-5 w-5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
-                        Menu
-                    </button>
+                    @if($isStaff)
+                        <!-- SHORTCUTS OPERACIONAIS PARA RH/GESTOR -->
+                        <a href="{{ route('admin.monthly-review') }}" class="min-h-[48px] min-w-[48px] flex flex-col items-center justify-center flex-1 py-1 text-xs transition rounded-lg focus-visible:outline-2 focus-visible:outline-indigo-600 {{ request()->routeIs('admin.monthly-review*') ? 'text-indigo-700 font-bold' : 'text-gray-600 hover:text-gray-900 font-medium' }}">
+                            <svg class="h-5 w-5 mb-0.5 {{ request()->routeIs('admin.monthly-review*') ? 'text-emerald-600' : 'text-gray-500' }}" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            Conferência
+                        </a>
+                        <a href="{{ route('home') }}" class="min-h-[48px] min-w-[48px] flex flex-col items-center justify-center flex-1 py-1 text-xs transition rounded-lg focus-visible:outline-2 focus-visible:outline-indigo-600 {{ request()->routeIs('home') ? 'text-indigo-700 font-bold' : 'text-gray-600 hover:text-gray-900 font-medium' }}">
+                            <svg class="h-5 w-5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                            Ponto
+                        </a>
+                        <a href="{{ route('admin.reports') }}" class="min-h-[48px] min-w-[48px] flex flex-col items-center justify-center flex-1 py-1 text-xs transition rounded-lg focus-visible:outline-2 focus-visible:outline-indigo-600 {{ request()->routeIs('admin.reports*') ? 'text-indigo-700 font-bold' : 'text-gray-600 hover:text-gray-900 font-medium' }}">
+                            <svg class="h-5 w-5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>
+                            Relatórios
+                        </a>
+                        <button @click="mobileMenuOpen = true" type="button" class="min-h-[48px] min-w-[48px] flex flex-col items-center justify-center flex-1 py-1 text-xs transition rounded-lg focus-visible:outline-2 focus-visible:outline-indigo-600 text-gray-600 hover:text-gray-900 font-medium cursor-pointer">
+                            <svg class="h-5 w-5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+                            Menu
+                        </button>
+                    @else
+                        <!-- SHORTCUTS DO COLABORADOR -->
+                        <a href="{{ route('home') }}" class="min-h-[48px] min-w-[48px] flex flex-col items-center justify-center flex-1 py-1 text-xs transition rounded-lg focus-visible:outline-2 focus-visible:outline-indigo-600 {{ request()->routeIs('home') ? 'text-indigo-700 font-bold' : 'text-gray-600 hover:text-gray-900 font-medium' }}">
+                            <svg class="h-5 w-5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                            Ponto
+                        </a>
+                        <a href="{{ route('timesheet') }}" class="min-h-[48px] min-w-[48px] flex flex-col items-center justify-center flex-1 py-1 text-xs transition rounded-lg focus-visible:outline-2 focus-visible:outline-indigo-600 {{ request()->routeIs('timesheet') ? 'text-indigo-700 font-bold' : 'text-gray-600 hover:text-gray-900 font-medium' }}">
+                            <svg class="h-5 w-5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
+                            Espelho
+                        </a>
+                        <a href="{{ route('receipts.center') }}" class="min-h-[48px] min-w-[48px] flex flex-col items-center justify-center flex-1 py-1 text-xs transition rounded-lg focus-visible:outline-2 focus-visible:outline-indigo-600 {{ request()->routeIs('receipts.*') ? 'text-indigo-700 font-bold' : 'text-gray-600 hover:text-gray-900 font-medium' }}">
+                            <svg class="h-5 w-5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" /></svg>
+                            Comprovantes
+                        </a>
+                        <button @click="mobileMenuOpen = true" type="button" class="min-h-[48px] min-w-[48px] flex flex-col items-center justify-center flex-1 py-1 text-xs transition rounded-lg focus-visible:outline-2 focus-visible:outline-indigo-600 text-gray-600 hover:text-gray-900 font-medium cursor-pointer">
+                            <svg class="h-5 w-5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+                            Menu
+                        </button>
+                    @endif
                 </nav>
             </div>
         </div>

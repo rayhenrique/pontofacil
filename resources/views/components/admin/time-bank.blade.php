@@ -110,7 +110,7 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
             $this->dispatch('app-modal-alert', [
                 'type' => 'success',
                 'title' => 'Ajuste Manual Realizado!',
-                'message' => 'O lançamento no banco de horas foi gravado com sucesso no ledger auditável.',
+                'message' => 'O lançamento no banco de horas foi gravado com sucesso no extrato auditável.',
                 'buttonText' => 'OK',
             ]);
         } catch (\Throwable $e) {
@@ -428,7 +428,7 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
         </div>
 
         <div class="flex items-center gap-2 flex-wrap">
-            <a href="{{ route('admin.settlement-policies') }}" class="min-h-[44px] inline-flex items-center px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 rounded-xl text-xs font-bold transition shadow-xs gap-1.5" title="Configurar regras de apuração, banco e quitação">
+            <a href="{{ route('admin.settlement-policies') }}" class="min-h-[44px] inline-flex items-center px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 rounded-xl text-xs font-bold transition shadow-xs gap-1.5" title="Configurar regras de apuração e banco de horas">
                 <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" /></svg>
                 <span>Políticas de Jornada</span>
             </a>
@@ -603,7 +603,7 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
                 <button type="button" 
                         wire:click="setActiveTab('transactions')" 
                         class="min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer {{ $activeTab === 'transactions' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-gray-600 hover:text-gray-900' }}">
-                    Extrato do Ledger
+                    Extrato de Movimentações
                 </button>
                 <button type="button" 
                         wire:click="setActiveTab('balances')" 
@@ -647,10 +647,10 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
                     @endforelse
                 </div>
 
-                {{-- Bloco B: Destinações Pendentes de Execução / Quitação --}}
+                {{-- Bloco B: Destinações Pendentes de Execução / Compensação --}}
                 <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-4 space-y-3">
                     <div class="flex items-center justify-between border-b border-gray-100 pb-2">
-                        <h3 class="text-xs sm:text-sm font-bold text-gray-900">Destinações Pendentes de Quitação</h3>
+                        <h3 class="text-xs sm:text-sm font-bold text-gray-900">Destinações Pendentes de Compensação</h3>
                         <button type="button" wire:click="setActiveTab('settlements')" class="text-xs font-semibold text-indigo-600 hover:underline cursor-pointer">Ver todas</button>
                     </div>
                     @forelse($allSettlements->take(5) as $st)
@@ -827,13 +827,13 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
         </div>
     @endif
 
-    {{-- ABA 4: DESTINAÇÕES E QUITAÇÕES (WORK_TIME_SETTLEMENTS) --}}
+    {{-- ABA 4: DESTINAÇÕES E COMPENSAÇÕES (WORK_TIME_SETTLEMENTS) --}}
     @if($activeTab === 'settlements')
         <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 overflow-hidden space-y-3">
             <div class="p-4 border-b border-gray-100 flex items-center justify-between">
                 <div>
-                    <h3 class="text-sm font-bold text-gray-900">Operações de Destinação e Quitação de Horas</h3>
-                    <p class="text-xs text-gray-500">Aprovações, pagamentos em folha e folgas compensadas com comprovação documental.</p>
+                    <h3 class="text-sm font-bold text-gray-900">Operações de Destinação e Compensação de Horas</h3>
+                    <p class="text-xs text-gray-500">Aprovações, folgas compensatórias e relatórios para folha com comprovação.</p>
                 </div>
             </div>
 
@@ -846,7 +846,7 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
                             <th class="px-4 py-3.5">Tipo de Destinação</th>
                             <th class="px-4 py-3.5 text-right">Minutos</th>
                             <th class="px-4 py-3.5">Situação</th>
-                            <th class="px-4 py-3.5">Documento de Quitação</th>
+                            <th class="px-4 py-3.5">Documento de Comprovação</th>
                             <th class="px-4 py-3.5 text-center">Ações</th>
                         </tr>
                     </thead>
@@ -1038,7 +1038,7 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
                         @if($policy && $policy->enabled)
                             @if($policy->closing_mode === TimeBankClosingMode::MonthlyReset)
                                 <li class="text-amber-700 font-bold">
-                                    <strong>Compensação Mensal:</strong> O saldo residual da competência será registrado como pendente de destinação/quitação, sem perda do direito do colaborador.
+                                    <strong>Compensação Mensal:</strong> O saldo residual da competência será registrado como pendente de destinação/compensação, sem perda do direito do colaborador.
                                 </li>
                             @else
                                 <li class="text-indigo-700 font-bold">

@@ -600,7 +600,16 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                     </span>
                 @endif
 
-                <div class="flex items-center gap-2">
+                    @if(Auth::user()->can('manageEmployees', App\Models\User::class))
+                        <a href="{{ route('admin.monthly-review', ['year' => $this->year, 'month' => $this->month]) }}" 
+                           class="flex-1 sm:flex-initial min-h-[44px] inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-xl text-xs sm:text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+                            <svg class="w-4 h-4 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span>Conferência Mensal</span>
+                        </a>
+                    @endif
+
                     <a href="{{ route('folha-ponto', ['userId' => $this->userId, 'month' => $this->month, 'year' => $this->year]) }}" 
                        class="flex-1 sm:flex-initial min-h-[44px] inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white hover:bg-gray-50 active:bg-gray-100 text-gray-700 border border-gray-300 rounded-xl text-xs sm:text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
                         <svg class="w-4 h-4 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor">
@@ -872,7 +881,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                     <span class="font-bold text-amber-400 tabular-nums">{{ $timeBankSummary->formattedClosingReset() }}</span>
                 </div>
                 <p class="text-[11px] text-amber-200/70 font-sans">
-                    Competência encerrada sob regra legada de zeramento automático no fechamento. Este registro não comprova quitação fiscal fática sem evidência financeira anexa.
+                    Competência encerrada sob regra legada de zeramento no fechamento. Apenas comprova apuração de frequência física.
                 </p>
             </div>
         @endif
@@ -907,7 +916,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                         <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
                         </svg>
-                        <span>Auditoria e Conciliação do Ledger</span>
+                        <span>Auditoria e Conciliação de Horas</span>
                         <span class="px-1.5 py-0.2 rounded text-[10px] font-semibold {{ $reconciliationResult->badgeClass }}">
                             {{ $reconciliationResult->statusLabel }}
                         </span>

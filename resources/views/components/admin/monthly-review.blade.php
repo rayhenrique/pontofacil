@@ -48,6 +48,8 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
     {
         $this->year = (int) (request('year') ?? now()->year);
         $this->month = (int) (request('month') ?? now()->month);
+        $this->sectorId = (string) (request('sectorId') ?? '');
+        $this->search = (string) (request('search') ?? '');
     }
 
     public function previousMonth(): void
@@ -403,6 +405,17 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                     </svg>
                 </button>
             </div>
+
+            <a
+                href="{{ route('admin.reports', ['year' => $year, 'month' => $month, 'sectorId' => $sectorId]) }}"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-lg text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 shadow-xs transition"
+                title="Visualizar ou exportar relatório consolidado de frequência desta competência"
+            >
+                <svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span>Relatório Consolidado</span>
+            </a>
 
             @if ($user->isAdmin())
                 @if ($isClosed)

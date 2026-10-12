@@ -504,7 +504,7 @@ new #[Layout('layouts.app')] #[Title('Ajuda e Novidades')] class extends Compone
                     <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
                         <div class="flex items-center gap-2.5">
                             <span class="w-7 h-7 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-xs">C</span>
-                            <h4 class="font-bold text-gray-900 text-sm">Banco de Horas em Ledger & Fechamento</h4>
+                            <h4 class="font-bold text-gray-900 text-sm">Banco de Horas & Fechamento</h4>
                         </div>
                         <ul class="text-xs text-gray-600 space-y-2 list-disc pl-4 leading-relaxed">
                             <li>Ative o regime de banco de horas em <strong>"Configurações"</strong> e escolha entre acumular (CARRY_OVER) ou zerar no fechamento (MONTHLY_RESET).</li>

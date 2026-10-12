@@ -641,7 +641,7 @@ new #[Layout('layouts.app')] #[Title('Configurações')] class extends Component
                 <div>
                     <span class="text-sm font-bold text-gray-900">Regime de Banco de Horas</span>
                     <p class="text-xs text-gray-500 mt-0.5">
-                        {{ $time_bank_enabled ? 'O banco de horas está ATIVADO. Horas extras e déficits serão computados no ledger.' : 'O banco de horas está DESATIVADO (padrão). Horas extras e atrasos serão tratados fora do banco.' }}
+                        {{ $time_bank_enabled ? 'O banco de horas está ATIVADO. Horas extras e déficits serão computados no banco de horas.' : 'O banco de horas está DESATIVADO (padrão). Horas extras e atrasos serão tratados fora do banco.' }}
                     </p>
                 </div>
                 <label class="relative inline-flex items-center cursor-pointer">
@@ -680,7 +680,7 @@ new #[Layout('layouts.app')] #[Title('Configurações')] class extends Component
                                     <span class="text-sm font-bold text-gray-900">Zerar ao fechar o mês</span>
                                 </div>
                                 <p class="text-xs text-gray-500 leading-relaxed pl-7">
-                                    No fechamento formal pelo RH, é registrado um lançamento compensatório no ledger (positivo ou negativo) para iniciar o próximo mês com saldo zero, preservando o histórico integral.
+                                    No fechamento formal pelo RH, é registrado um lançamento compensatório no extrato (positivo ou negativo) para iniciar o próximo mês com saldo zero, preservando o histórico integral.
                                 </p>
                             </label>
                         </div>

@@ -218,6 +218,18 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
                 Imprimir / PDF
             </a>
 
+            <!-- Atalho para Conferência Mensal -->
+            <a
+                href="{{ route('admin.monthly-review', ['year' => $year, 'month' => $month, 'sectorId' => $sectorId]) }}"
+                class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 dark:bg-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 shadow-2xs transition"
+                title="Ir para a tela de conferência mensal desta competência"
+            >
+                <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Conferência do Mês
+            </a>
+
             <!-- Botão Encaminhar ao Pagamento -->
             <button
                 wire:click="openDispatchModal"

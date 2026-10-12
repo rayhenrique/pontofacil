@@ -117,7 +117,7 @@
                 <a href="{{ $receipt->verificationUrl() }}" target="_blank" class="text-indigo-600 font-semibold text-[11px] hover:underline">
                     {{ $receipt->verificationUrl() }}
                 </a>
-                <p class="text-[10px] text-slate-400 mt-0.5">Consulte este link público para auditar o registro no ledger.</p>
+                <p class="text-[10px] text-slate-400 mt-0.5">Consulte este link público para auditar a autenticidade deste comprovante.</p>
             </div>
         </div>
 
