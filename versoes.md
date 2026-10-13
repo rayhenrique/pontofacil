@@ -1,6 +1,12 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.9 (Atual)
+## v2.6.10 (Atual)
+- **Horários e Escalas com Permissões Claras:**
+  - Modelos de jornada (criar, alterar, desativar) são cuidados só pelo RH/Administrador. Gestor usa os modelos aprovados com sua equipe e cuida dos plantões do seu setor.
+  - Plantões 12×36 e 24×72 valem só com norma configurada para o regime. Sem norma, o sistema explica o motivo e recusa a atribuição — sem travar o ponto.
+  - A tela ganhou três abas leves (Horários, Servidores e Plantões), cada uma carregando só o necessário. Horário fixo não gera plantão artificial.
+
+## v2.6.9
 - **Relatórios Fiéis ao Mês Fechado:**
   - O relatório do mês fechado mostra exatamente quem estava lá na época, com nome, cargo e setor da época — mesmo se a pessoa mudou de setor, foi desligada ou teve o cadastro alterado depois.
   - Gestor vê só o histórico dos setores que gerencia; ninguém acessa outro setor só por saber um código.

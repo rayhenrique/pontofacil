@@ -20,6 +20,7 @@ use App\Models\ClosedPeriod;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Establishment;
+use App\Models\LaborRuleProfile;
 use App\Models\PunchEvent;
 use App\Models\Sector;
 use App\Models\ShiftAssignment;
@@ -80,33 +81,37 @@ class CyclicShiftsAndPlanningTest extends TestCase
             'job_title' => 'Médico Plantonista',
             'legal_regime' => LegalRegime::MunicipalStatutory,
         ]);
+
+        // Norma municipal configurada pelo RH para plantões do hospital.
+        LaborRuleProfile::createMunicipalStatutoryProfile(
+            'Plantões Hospital Municipal (Lei 12x36/24x72)',
+            'hospital-municipal-plantoes',
+            'Lei Municipal nº 1.234/2024, art. 10 (plantões 12x36 e 24x72)',
+        );
     }
 
-    public function test_fixed_weekly_schedule_shift_generation(): void
+    public function test_fixed_weekly_schedule_shift_generation_is_blocked(): void
     {
         $schedule = WorkSchedule::createDefault40h();
         $action = app(GenerateCyclicShiftsAction::class);
 
-        // Gera de segunda a domingo (2026-10-05 Segunda a 2026-10-11 Domingo)
-        $shifts = $action->execute(
-            employee: $this->employee,
-            schedule: $schedule,
-            anchorDate: '2026-10-05',
-            startDate: '2026-10-05',
-            endDate: '2026-10-11',
-            assignedBy: $this->adminUser,
-            includeOffDays: false,
-        );
+        // Jornadas fixas usam a atribuição vigente: gerar plantões artificiais é vedado.
+        try {
+            $action->execute(
+                employee: $this->employee,
+                schedule: $schedule,
+                anchorDate: '2026-10-05',
+                startDate: '2026-10-05',
+                endDate: '2026-10-11',
+                assignedBy: $this->adminUser,
+                includeOffDays: false,
+            );
+            $this->fail('Geração para jornada fixa deveria ser bloqueada.');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('não precisam de plantões gerados', $e->getMessage());
+        }
 
-        // Deve gerar 5 dias úteis (Segunda a Sexta)
-        $this->assertCount(5, $shifts);
-
-        $mondayShift = $shifts->first();
-        $this->assertEquals('2026-10-05 08:00:00', $mondayShift->start_at_local->format('Y-m-d H:i:s'));
-        $this->assertEquals('2026-10-05 18:00:00', $mondayShift->end_at_local->format('Y-m-d H:i:s'));
-        $this->assertEquals(480, $mondayShift->expected_work_minutes);
-        $this->assertEquals(ShiftType::Regular, $mondayShift->shift_type);
-        $this->assertFalse($mondayShift->crosses_midnight);
+        $this->assertEquals(0, ShiftAssignment::where('employee_id', $this->employee->id)->count());
     }
 
     public function test_six_by_one_cyclic_shift_generation(): void
@@ -430,7 +435,18 @@ class CyclicShiftsAndPlanningTest extends TestCase
             'work_behavior' => WorkBehavior::NoWorkExpected,
         ]);
 
-        $schedule = WorkSchedule::createDefault40h();
+        $schedule = WorkSchedule::create([
+            'name' => 'Escala 12×36 Diurna Feriado',
+            'modality' => WorkScheduleModality::TwelveByThirtySix,
+            'cycle_days' => 2,
+            'cycle_data' => [
+                'start_time' => '07:00',
+                'end_time' => '19:00',
+                'break_minutes' => 60,
+                'is_night_shift' => false,
+            ],
+            'active' => true,
+        ]);
         $action = app(GenerateCyclicShiftsAction::class);
 
         $shifts = $action->execute(
@@ -450,16 +466,28 @@ class CyclicShiftsAndPlanningTest extends TestCase
 
     public function test_idempotent_cyclic_generation_does_not_duplicate_shifts(): void
     {
-        $schedule = WorkSchedule::createDefault40h();
+        $schedule = WorkSchedule::create([
+            'name' => 'Escala 12×36 Idempotência',
+            'modality' => WorkScheduleModality::TwelveByThirtySix,
+            'cycle_days' => 2,
+            'cycle_data' => [
+                'start_time' => '07:00',
+                'end_time' => '19:00',
+                'break_minutes' => 60,
+                'is_night_shift' => false,
+            ],
+            'active' => true,
+        ]);
         $action = app(GenerateCyclicShiftsAction::class);
 
-        // Primeira execução
+        // Primeira execução (plantões em 05, 07 e 09 + folgas em 06 e 08)
         $action->execute(
             employee: $this->employee,
             schedule: $schedule,
             anchorDate: '2026-10-05',
             startDate: '2026-10-05',
             endDate: '2026-10-09',
+            includeOffDays: true,
         );
 
         $countFirst = ShiftAssignment::where('employee_id', $this->employee->id)->count();
@@ -472,6 +500,7 @@ class CyclicShiftsAndPlanningTest extends TestCase
             anchorDate: '2026-10-05',
             startDate: '2026-10-05',
             endDate: '2026-10-09',
+            includeOffDays: true,
         );
 
         $countSecond = ShiftAssignment::where('employee_id', $this->employee->id)->count();
@@ -516,7 +545,18 @@ class CyclicShiftsAndPlanningTest extends TestCase
 
     public function test_timezone_conversion_utc_and_local(): void
     {
-        $schedule = WorkSchedule::createDefault40h();
+        $schedule = WorkSchedule::create([
+            'name' => 'Escala 12×36 Fuso',
+            'modality' => WorkScheduleModality::TwelveByThirtySix,
+            'cycle_days' => 2,
+            'cycle_data' => [
+                'start_time' => '07:00',
+                'end_time' => '19:00',
+                'break_minutes' => 60,
+                'is_night_shift' => false,
+            ],
+            'active' => true,
+        ]);
         $action = app(GenerateCyclicShiftsAction::class);
 
         $shifts = $action->execute(
@@ -529,9 +569,49 @@ class CyclicShiftsAndPlanningTest extends TestCase
         );
 
         $shift = $shifts->first();
-        $this->assertEquals('2026-10-05 08:00:00', $shift->start_at_local->format('Y-m-d H:i:s'));
-        // Em America/Sao_Paulo (UTC-3), 08:00 equivale a 11:00 em UTC
-        $this->assertEquals('2026-10-05 11:00:00', $shift->start_at_utc->format('Y-m-d H:i:s'));
+        $this->assertEquals('2026-10-05 07:00:00', $shift->start_at_local->format('Y-m-d H:i:s'));
+        // Em America/Sao_Paulo (UTC-3), 07:00 equivale a 10:00 em UTC
+        $this->assertEquals('2026-10-05 10:00:00', $shift->start_at_utc->format('Y-m-d H:i:s'));
+    }
+
+    public function test_statutory_without_configured_norm_is_blocked(): void
+    {
+        $stateUser = User::create([
+            'name' => 'Estadual Sem Norma',
+            'email' => 'estadual.sem.norma@test.com',
+            'password' => 'secret123',
+            'role' => UserRole::Employee,
+        ]);
+        $stateEmployee = Employee::create([
+            'user_id' => $stateUser->id,
+            'sector_id' => $this->sector->id,
+            'legal_regime' => LegalRegime::StateStatutory,
+        ]);
+
+        $schedule = WorkSchedule::create([
+            'name' => 'Escala 12×36 Estadual',
+            'modality' => WorkScheduleModality::TwelveByThirtySix,
+            'cycle_days' => 2,
+            'cycle_data' => ['start_time' => '07:00', 'end_time' => '19:00', 'break_minutes' => 60],
+            'active' => true,
+        ]);
+
+        // Sem perfil normativo configurado para o regime: bloqueio com explicação,
+        // sem presumir norma estadual inexistente.
+        try {
+            app(GenerateCyclicShiftsAction::class)->execute(
+                employee: $stateEmployee,
+                schedule: $schedule,
+                anchorDate: '2026-10-05',
+                startDate: '2026-10-05',
+                endDate: '2026-10-05',
+            );
+            $this->fail('Geração sem norma configurada deveria ser bloqueada.');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('perfil normativo', $e->getMessage());
+        }
+
+        $this->assertEquals(0, ShiftAssignment::where('employee_id', $stateEmployee->id)->count());
     }
 
     public function test_cannot_modify_or_generate_shifts_in_closed_period(): void

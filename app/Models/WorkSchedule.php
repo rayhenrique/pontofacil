@@ -94,6 +94,47 @@ class WorkSchedule extends Model
     }
 
     /**
+     * Valida a autorização normativa da escala especial para o colaborador.
+     *
+     * Retorna null quando a atribuição é permitida ou uma mensagem
+     * explicativa (sem jargão) quando irregular. Plantões 12×36 e 24×72
+     * nunca são autorizados apenas pelo vínculo: exigem lista de regimes
+     * da escala e perfil normativo aprovado com a modalidade permitida,
+     * configurado pelo RH. Nenhuma norma municipal ou estadual é presumida.
+     */
+    public function modalityAuthorizationErrorFor(Employee $employee, ?CarbonInterface $date = null): ?string
+    {
+        $modality = $this->modality;
+        $modalityName = $modality?->label() ?? 'Especial';
+
+        if ($this->requires_legal_authorization && ! $this->isAuthorizedForRegime($employee->legal_regime)) {
+            return "A escala '{$this->name}' ({$modalityName}) requer autorização normativa específica não habilitada para o regime do colaborador.";
+        }
+
+        $modalityKey = match ($modality) {
+            WorkScheduleModality::TwelveByThirtySix => '12x36',
+            WorkScheduleModality::TwentyFourBySeventyTwo => '24x72',
+            default => null,
+        };
+
+        if ($modalityKey === null) {
+            return null;
+        }
+
+        $profile = $employee->getLaborRuleProfileForDate($date);
+
+        if ($profile === null) {
+            return "A escala '{$this->name}' ({$modalityName}) exige perfil normativo aprovado para o regime do colaborador. Peça ao RH para configurar a norma aplicável — o registro de ponto segue liberado.";
+        }
+
+        if (! $profile->isModalityAllowed($modalityKey)) {
+            return "A escala '{$this->name}' ({$modalityName}) não está autorizada no perfil normativo '{$profile->name}' vigente para o regime do colaborador.";
+        }
+
+        return null;
+    }
+
+    /**
      * Retorna a configuração de horários para o dia da semana fornecido (0 = Domingo ... 6 = Sábado).
      */
     public function getScheduleForDay(int $dayOfWeek): array

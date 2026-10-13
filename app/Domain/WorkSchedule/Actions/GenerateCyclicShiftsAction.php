@@ -81,16 +81,26 @@ class GenerateCyclicShiftsAction
             $periodCursor->addMonth();
         }
 
-        // 2. Validação de autorização normativa para modalidades especiais (ex: 24x72)
-        if ($schedule->requires_legal_authorization) {
-            if (! $schedule->isAuthorizedForRegime($employee->legal_regime)) {
-                $modalityLabel = $schedule->modality?->label() ?? 'Especial';
-                throw ValidationException::withMessages([
-                    'work_schedule_id' => [
-                        "A escala '{$schedule->name}' ({$modalityLabel}) requer amparo legal ou regime específico não compatível com o vínculo do colaborador.",
-                    ],
-                ]);
-            }
+        // 2. Jornadas fixas usam a atribuição vigente: não gerar plantões artificiais.
+        $cyclicModalities = [
+            WorkScheduleModality::TwelveByThirtySix,
+            WorkScheduleModality::TwentyFourBySeventyTwo,
+            WorkScheduleModality::SixByOne,
+            WorkScheduleModality::CustomCycle,
+            WorkScheduleModality::VariableShifts,
+        ];
+
+        if (! in_array($schedule->modality, $cyclicModalities, true)) {
+            throw ValidationException::withMessages([
+                'work_schedule_id' => ['Horários fixos (administrativo/corrido) usam a atribuição vigente e não precisam de plantões gerados. Gere ciclos apenas para escalas 12×36, 24×72, 6×1 ou personalizadas.'],
+            ]);
+        }
+
+        // 3. Validação de autorização normativa da escala especial para o vínculo.
+        if ($authorizationError = $schedule->modalityAuthorizationErrorFor($employee, $start)) {
+            throw ValidationException::withMessages([
+                'work_schedule_id' => [$authorizationError],
+            ]);
         }
 
         $establishment = $employee->sector?->establishment ?? Establishment::first();

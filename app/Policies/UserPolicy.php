@@ -41,6 +41,11 @@ class UserPolicy
         return $this->scopeService->canManageSchedules($user);
     }
 
+    public function manageScheduleModels(User $user): bool
+    {
+        return $this->scopeService->canManageScheduleModels($user);
+    }
+
     public function manageSectorScope(User $user, Sector $sector): bool
     {
         return $this->scopeService->canManageSector($user, (int) $sector->id);

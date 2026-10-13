@@ -14,13 +14,16 @@ use App\Models\ClosedPeriod;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Establishment;
+use App\Models\LaborRuleProfile;
 use App\Models\Sector;
+use App\Models\ShiftAssignment;
 use App\Models\User;
 use App\Models\WorkSchedule;
 use App\Models\WorkScheduleAssignment;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -385,7 +388,25 @@ class ScheduleManagementTest extends TestCase
         $this->assertEquals(0, $result['applied_count']);
         $this->assertNotEmpty($result['errors']);
 
+        // Estatutário sem norma configurada: bloqueado sem presumir norma.
         $statutoryEmployee = $this->createEmployee('Servidor Estatutário', $this->sectorA, LegalRegime::MunicipalStatutory);
+
+        $deniedResult = app(ConfigureWorkScheduleAction::class)->applyToEmployees(
+            schedule: $shift24,
+            employeeIds: [$statutoryEmployee->id],
+            effectiveFrom: '2026-09-01',
+            actor: $this->adminUser,
+        );
+
+        $this->assertEquals(0, $deniedResult['applied_count']);
+        $this->assertNotEmpty($deniedResult['errors']);
+
+        // Com norma municipal configurada pelo RH: permitido.
+        LaborRuleProfile::createMunicipalStatutoryProfile(
+            'Guarda Municipal (Lei 24x72)',
+            'guarda-municipal-24x72',
+            'Lei Municipal nº 2.000/2024, art. 5º (plantão 24x72 da Guarda)',
+        );
 
         $okResult = app(ConfigureWorkScheduleAction::class)->applyToEmployees(
             schedule: $shift24,
@@ -507,5 +528,163 @@ class ScheduleManagementTest extends TestCase
             ->call('switchTab', 'shifts')
             ->set('selected_employee_id', (string) $empWithoutShifts->id)
             ->assertSee('Nenhum plantão gerado nesta competência.');
+    }
+
+    public function test_admin_can_create_and_deactivate_model(): void
+    {
+        $this->actingAs($this->adminUser);
+
+        Livewire::test('admin.shifts-management')
+            ->call('openCreateScheduleModal', 'administrative')
+            ->assertSet('showScheduleModal', true)
+            ->set('sched_name', 'Modelo RH Novo')
+            ->call('saveSchedule')
+            ->assertSet('showScheduleModal', false)
+            ->assertHasNoErrors();
+
+        $schedule = WorkSchedule::where('name', 'Modelo RH Novo')->first();
+        $this->assertNotNull($schedule);
+
+        Livewire::test('admin.shifts-management')
+            ->call('openDeactivateModal', $schedule->id)
+            ->assertSet('showDeactivateModal', true)
+            ->call('toggleScheduleActive')
+            ->assertHasNoErrors();
+
+        $this->assertFalse($schedule->fresh()->active);
+    }
+
+    public function test_manager_cannot_manage_global_models(): void
+    {
+        $schedule = $this->createAdministrativeSchedule();
+
+        $this->actingAs($this->managerA);
+
+        Livewire::test('admin.shifts-management')
+            ->call('openCreateScheduleModal', 'administrative')
+            ->assertForbidden();
+
+        Livewire::test('admin.shifts-management')
+            ->set('sched_name', 'Modelo Gestor')
+            ->call('saveSchedule')
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('work_schedules', ['name' => 'Modelo Gestor']);
+
+        Livewire::test('admin.shifts-management')
+            ->call('openDeactivateModal', $schedule->id)
+            ->assertForbidden();
+
+        Livewire::test('admin.shifts-management')
+            ->set('deactivating_schedule_id', $schedule->id)
+            ->call('toggleScheduleActive')
+            ->assertForbidden();
+
+        $this->assertTrue($schedule->fresh()->active);
+    }
+
+    public function test_manager_views_shared_model_and_assigns_own_employees(): void
+    {
+        $schedule = $this->createAdministrativeSchedule('Modelo Compartilhado');
+        $emp = $this->createEmployee('Servidor Gestor', $this->sectorA);
+
+        $this->actingAs($this->managerA);
+
+        Livewire::test('admin.shifts-management')
+            ->assertSee('Modelo Compartilhado');
+
+        Livewire::test('admin.shifts-management')
+            ->call('openAssignModal', $schedule->id, $emp->id)
+            ->assertSet('showAssignModal', true)
+            ->set('assign_effective_from', '2026-09-01')
+            ->set('assign_reason', 'Atribuição do gestor')
+            ->call('assignSchedule')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('work_schedule_assignments', [
+            'employee_id' => $emp->id,
+            'work_schedule_id' => $schedule->id,
+        ]);
+    }
+
+    public function test_clt_12x36_allowed_with_standard_profile(): void
+    {
+        $shift12 = app(ConfigureWorkScheduleAction::class)->createShift12h([
+            'name' => 'P12 CLT', 'start_time' => '07:00', 'end_time' => '19:00',
+            'break_minutes' => 60, 'anchor_date' => '2026-10-05', 'is_night_shift' => false,
+        ], $this->adminUser);
+
+        $emp = $this->createEmployee('CLT 12x36', $this->sectorA, LegalRegime::CLT);
+
+        $assignment = app(AssignWorkScheduleAction::class)->execute(
+            employee: $emp, schedule: $shift12,
+            effectiveFrom: '2026-10-01', reason: 'CLT com norma padrão', assignedBy: $this->adminUser,
+        );
+
+        $this->assertEquals($shift12->id, $assignment->work_schedule_id);
+    }
+
+    public function test_statutory_12x36_without_norm_blocked_with_reason(): void
+    {
+        $shift12 = app(ConfigureWorkScheduleAction::class)->createShift12h([
+            'name' => 'P12 Sem Norma', 'start_time' => '07:00', 'end_time' => '19:00',
+            'break_minutes' => 60, 'anchor_date' => '2026-10-05', 'is_night_shift' => false,
+        ], $this->adminUser);
+
+        $emp = $this->createEmployee('Estatutário Sem Norma', $this->sectorA, LegalRegime::MunicipalStatutory);
+
+        try {
+            app(AssignWorkScheduleAction::class)->execute(
+                employee: $emp, schedule: $shift12,
+                effectiveFrom: '2026-10-01', reason: 'Tentativa sem norma', assignedBy: $this->adminUser,
+            );
+            $this->fail('Atribuição sem norma configurada deveria ser bloqueada.');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('perfil normativo', $e->getMessage());
+            $this->assertStringContainsString('registro de ponto segue liberado', $e->getMessage());
+        }
+
+        $this->assertDatabaseMissing('work_schedule_assignments', ['employee_id' => $emp->id]);
+    }
+
+    public function test_statutory_12x36_with_configured_norm_allowed(): void
+    {
+        LaborRuleProfile::createMunicipalStatutoryProfile(
+            'Norma Municipal 12x36',
+            'norma-municipal-12x36',
+            'Lei Municipal nº 4.000/2024, art. 3º (plantão 12x36)',
+        );
+
+        $shift12 = app(ConfigureWorkScheduleAction::class)->createShift12h([
+            'name' => 'P12 Com Norma', 'start_time' => '07:00', 'end_time' => '19:00',
+            'break_minutes' => 60, 'anchor_date' => '2026-10-05', 'is_night_shift' => false,
+        ], $this->adminUser);
+
+        $emp = $this->createEmployee('Estatutário Com Norma', $this->sectorA, LegalRegime::MunicipalStatutory);
+
+        $assignment = app(AssignWorkScheduleAction::class)->execute(
+            employee: $emp, schedule: $shift12,
+            effectiveFrom: '2026-10-01', reason: 'Com norma municipal', assignedBy: $this->adminUser,
+        );
+
+        $this->assertEquals($shift12->id, $assignment->work_schedule_id);
+    }
+
+    public function test_fixed_generation_blocked_via_livewire(): void
+    {
+        $schedule = $this->createAdministrativeSchedule();
+        $emp = $this->createEmployee('Fixo Livewire', $this->sectorA);
+
+        $this->actingAs($this->adminUser);
+        Livewire::test('admin.shifts-management')
+            ->set('gen_employee_id', (string) $emp->id)
+            ->set('gen_schedule_id', (string) $schedule->id)
+            ->set('gen_anchor_date', '2026-10-01')
+            ->set('gen_start_date', '2026-10-01')
+            ->set('gen_end_date', '2026-10-07')
+            ->call('generateCyclicShifts')
+            ->assertHasErrors(['gen_work_schedule_id']);
+
+        $this->assertEquals(0, ShiftAssignment::where('employee_id', $emp->id)->count());
     }
 }

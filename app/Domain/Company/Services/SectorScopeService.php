@@ -34,6 +34,15 @@ class SectorScopeService
         return $user->isAdmin() || $user->isManager();
     }
 
+    /**
+     * Pode administrar modelos globais de jornada (criar, alterar, desativar).
+     * Modelos valem para toda a instalação: ato exclusivo do RH/Administrador.
+     */
+    public function canManageScheduleModels(User $user): bool
+    {
+        return $user->isAdmin();
+    }
+
     public function canManageSector(User $user, ?int $sectorId): bool
     {
         if ($user->isAdmin()) {
@@ -247,6 +256,16 @@ class SectorScopeService
     public function authorizeSchedules(User $user): void
     {
         if (! $this->canManageSchedules($user)) {
+            throw new AuthorizationException('Acesso não autorizado.');
+        }
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    public function authorizeScheduleModels(User $user): void
+    {
+        if (! $this->canManageScheduleModels($user)) {
             throw new AuthorizationException('Acesso não autorizado.');
         }
     }

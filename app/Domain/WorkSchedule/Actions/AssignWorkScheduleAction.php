@@ -54,16 +54,13 @@ class AssignWorkScheduleAction
             ]);
         }
 
-        // 2. Regra de autorização normativa para a modalidade da escala (ex: 12x36, 24x72)
-        if ($schedule->requires_legal_authorization) {
-            if (! $schedule->isAuthorizedForRegime($employee->legal_regime)) {
-                $modalityName = $schedule->modality?->label() ?? 'Especial';
-                throw ValidationException::withMessages([
-                    'work_schedule_id' => [
-                        "A escala '{$schedule->name}' ({$modalityName}) requer autorização normativa específica não habilitada para o regime do colaborador.",
-                    ],
-                ]);
-            }
+        // 2. Regra de autorização normativa para a modalidade da escala (ex: 12x36, 24x72).
+        // Plantões especiais nunca são autorizados apenas pelo vínculo: exigem
+        // lista de regimes da escala e perfil normativo aprovado com a modalidade.
+        if ($authorizationError = $schedule->modalityAuthorizationErrorFor($employee, $from)) {
+            throw ValidationException::withMessages([
+                'work_schedule_id' => [$authorizationError],
+            ]);
         }
 
         return DB::transaction(function () use ($employee, $schedule, $from, $until, $reason, $assignedBy, $notes) {

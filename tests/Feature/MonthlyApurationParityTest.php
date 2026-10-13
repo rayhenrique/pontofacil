@@ -25,6 +25,7 @@ use App\Models\CalendarEvent;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Establishment;
+use App\Models\LaborRuleProfile;
 use App\Models\PunchEvent;
 use App\Models\Sector;
 use App\Models\User;
@@ -241,6 +242,13 @@ class MonthlyApurationParityTest extends TestCase
             'name' => 'P24', 'start_time' => '07:00', 'end_time' => '07:00',
             'break_minutes' => 120, 'anchor_date' => '2026-10-01',
         ], $this->admin);
+
+        // Norma municipal configurada para o regime do plantonista.
+        LaborRuleProfile::createMunicipalStatutoryProfile(
+            'Guarda Paridade (Lei 24x72)',
+            'guarda-paridade-24x72',
+            'Lei Municipal nº 3.000/2024, art. 2º (plantão 24x72)',
+        );
 
         $emp = $this->createEmployee('Plant 24', LegalRegime::MunicipalStatutory);
         $this->assign($emp, $schedule);

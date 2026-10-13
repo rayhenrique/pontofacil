@@ -297,6 +297,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
 
     public function openDeactivateModal($scheduleId): void
     {
+        $this->scopeService()->authorizeScheduleModels(Auth::user());
         $schedule = WorkSchedule::findOrFail($scheduleId);
         $this->deactivating_schedule_id = $schedule->id;
         $this->showDeactivateModal = true;
@@ -309,7 +310,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
         }
 
         $schedule = WorkSchedule::findOrFail($this->deactivating_schedule_id);
-        $this->scopeService()->authorizeSchedules(Auth::user());
+        $this->scopeService()->authorizeScheduleModels(Auth::user());
 
         if ($schedule->active) {
             $hasCurrentAssignments = \App\Models\WorkScheduleAssignment::where('work_schedule_id', $schedule->id)
@@ -471,7 +472,14 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
         if ($this->gen_employee_id) {
             $employee = Employee::find($this->gen_employee_id);
             $schedule = $employee?->getWorkScheduleForDate($startOfMonth);
-            $this->gen_schedule_id = $schedule ? (string) $schedule->id : '';
+            $isCyclic = $schedule && in_array($schedule->modality, [
+                \App\Enums\WorkScheduleModality::TwelveByThirtySix,
+                \App\Enums\WorkScheduleModality::TwentyFourBySeventyTwo,
+                \App\Enums\WorkScheduleModality::SixByOne,
+                \App\Enums\WorkScheduleModality::CustomCycle,
+                \App\Enums\WorkScheduleModality::VariableShifts,
+            ], true);
+            $this->gen_schedule_id = $isCyclic ? (string) $schedule->id : '';
         }
 
         $this->showGenerateModal = true;
@@ -631,6 +639,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
 
     public function openCreateScheduleModal($initialTemplate = 'administrative')
     {
+        $this->scopeService()->authorizeScheduleModels(Auth::user());
         $this->template = $initialTemplate;
         $this->updateTemplateDefaults();
         $this->apply_effective_from = Carbon::today()->format('Y-m-d');
@@ -728,7 +737,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             'apply_effective_until' => 'nullable|date|after_or_equal:apply_effective_from',
         ]);
 
-        $this->scopeService()->authorizeSchedules(Auth::user());
+        $this->scopeService()->authorizeScheduleModels(Auth::user());
 
         if (! empty($this->apply_employee_ids)) {
             foreach (array_map('intval', (array) $this->apply_employee_ids) as $applyEmployeeId) {
@@ -839,65 +848,86 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
         $startOfMonth = Carbon::createFromDate($this->year, $this->month, 1)->startOfMonth();
         $endOfMonth = $startOfMonth->copy()->endOfMonth();
 
-        // Carregar plantões do período
-        $shiftsQuery = ShiftAssignment::with(['employee.user', 'workSchedule', 'assignedByUser', 'swappedWithEmployee.user'])
-            ->forPeriod($startOfMonth, $endOfMonth)
-            ->orderBy('start_at_local', 'asc');
+        // Modelos ativos para os modais (lista pequena e global).
+        $workSchedules = WorkSchedule::where('active', true)->orderBy('name')->get();
 
-        if ($this->selected_employee_id) {
-            $shiftsQuery->where('employee_id', $this->selected_employee_id);
-        } elseif ($this->selected_sector_id) {
-            $sectorEmployeeIds = Employee::where('sector_id', $this->selected_sector_id)->pluck('id');
-            $shiftsQuery->whereIn('employee_id', $sectorEmployeeIds);
-        } elseif ($isManager) {
-            $shiftsQuery->whereIn('employee_id', $employees->pluck('id'));
-        }
+        // Modelos cíclicos para geração de plantões (fixos usam atribuição vigente).
+        $cyclicSchedules = $workSchedules->filter(fn (WorkSchedule $schedule) => in_array($schedule->modality, [
+            \App\Enums\WorkScheduleModality::TwelveByThirtySix,
+            \App\Enums\WorkScheduleModality::TwentyFourBySeventyTwo,
+            \App\Enums\WorkScheduleModality::SixByOne,
+            \App\Enums\WorkScheduleModality::CustomCycle,
+            \App\Enums\WorkScheduleModality::VariableShifts,
+        ], true))->values();
 
-        $shifts = $isManager && $employees->isEmpty() ? collect() : $shiftsQuery->get();
-
-        // Validação de conflitos quando um colaborador específico está selecionado
+        $shifts = collect();
         $conflictReport = null;
-        if ($this->selected_employee_id) {
-            $selectedEmp = Employee::find($this->selected_employee_id);
-            if ($selectedEmp) {
-                $this->scopeService()->authorizeEmployee($user, $selectedEmp);
-                $conflictReport = app(ValidateShiftConflictsAction::class)->execute($selectedEmp, $shifts);
+        $schedules = collect();
+        $linkedCounts = collect();
+        $assignments = collect();
+
+        if ($this->activeTab === 'shifts') {
+            // Carregar plantões do período
+            $shiftsQuery = ShiftAssignment::with(['employee.user', 'workSchedule', 'assignedByUser', 'swappedWithEmployee.user'])
+                ->forPeriod($startOfMonth, $endOfMonth)
+                ->orderBy('start_at_local', 'asc');
+
+            if ($this->selected_employee_id) {
+                $shiftsQuery->where('employee_id', $this->selected_employee_id);
+            } elseif ($this->selected_sector_id) {
+                $sectorEmployeeIds = Employee::where('sector_id', $this->selected_sector_id)->pluck('id');
+                $shiftsQuery->whereIn('employee_id', $sectorEmployeeIds);
+            } elseif ($isManager) {
+                $shiftsQuery->whereIn('employee_id', $employees->pluck('id'));
+            }
+
+            $shifts = $isManager && $employees->isEmpty() ? collect() : $shiftsQuery->get();
+
+            // Validação de conflitos quando um colaborador específico está selecionado
+            if ($this->selected_employee_id) {
+                $selectedEmp = Employee::find($this->selected_employee_id);
+                if ($selectedEmp) {
+                    $this->scopeService()->authorizeEmployee($user, $selectedEmp);
+                    $conflictReport = app(ValidateShiftConflictsAction::class)->execute($selectedEmp, $shifts);
+                }
             }
         }
 
-        $workSchedules = WorkSchedule::where('active', true)->orderBy('name')->get();
+        if ($this->activeTab === 'schedules') {
+            // Visão 1: horários cadastrados (todos os modelos, inclusive sem atribuição)
+            $schedulesQuery = WorkSchedule::orderBy('name');
+            if (trim($this->scheduleSearch) !== '') {
+                $schedulesQuery->where('name', 'like', '%'.trim($this->scheduleSearch).'%');
+            }
+            $schedules = $schedulesQuery->get();
 
-        // Visão 1: horários cadastrados (todos os modelos, inclusive sem atribuição)
-        $schedulesQuery = WorkSchedule::orderBy('name');
-        if (trim($this->scheduleSearch) !== '') {
-            $schedulesQuery->where('name', 'like', '%'.trim($this->scheduleSearch).'%');
-        }
-        $schedules = $schedulesQuery->get();
-
-        $linkedCounts = \App\Models\WorkScheduleAssignment::query()
-            ->selectRaw('work_schedule_id, COUNT(DISTINCT employee_id) as total')
-            ->whereIn('work_schedule_id', $schedules->pluck('id'))
-            ->groupBy('work_schedule_id')
-            ->pluck('total', 'work_schedule_id');
-
-        // Visão 2: servidores e jornadas (atribuições versionadas com escopo)
-        $assignmentsQuery = \App\Models\WorkScheduleAssignment::with(['employee.user', 'employee.sector', 'workSchedule', 'assignedByUser'])
-            ->orderBy('effective_from', 'desc');
-
-        if ($this->selected_employee_id) {
-            $assignmentsQuery->where('employee_id', $this->selected_employee_id);
-        } elseif ($this->selected_sector_id) {
-            $assignmentsQuery->whereHas('employee', function ($q) {
-                $q->where('sector_id', $this->selected_sector_id);
-            });
-        } elseif ($isManager) {
-            $managedIds = $sectors->pluck('id');
-            $assignmentsQuery->whereHas('employee', function ($q) use ($managedIds) {
-                $q->whereIn('sector_id', $managedIds);
-            });
+            $linkedCounts = \App\Models\WorkScheduleAssignment::query()
+                ->selectRaw('work_schedule_id, COUNT(DISTINCT employee_id) as total')
+                ->whereIn('work_schedule_id', $schedules->pluck('id'))
+                ->groupBy('work_schedule_id')
+                ->pluck('total', 'work_schedule_id');
         }
 
-        $assignments = $isManager && $sectors->isEmpty() ? collect() : $assignmentsQuery->get();
+        if ($this->activeTab === 'assignments') {
+            // Visão 2: servidores e jornadas (atribuições versionadas com escopo)
+            $assignmentsQuery = \App\Models\WorkScheduleAssignment::with(['employee.user', 'employee.sector', 'workSchedule', 'assignedByUser'])
+                ->orderBy('effective_from', 'desc');
+
+            if ($this->selected_employee_id) {
+                $assignmentsQuery->where('employee_id', $this->selected_employee_id);
+            } elseif ($this->selected_sector_id) {
+                $assignmentsQuery->whereHas('employee', function ($q) {
+                    $q->where('sector_id', $this->selected_sector_id);
+                });
+            } elseif ($isManager) {
+                $managedIds = $sectors->pluck('id');
+                $assignmentsQuery->whereHas('employee', function ($q) use ($managedIds) {
+                    $q->whereIn('sector_id', $managedIds);
+                });
+            }
+
+            $assignments = $isManager && $sectors->isEmpty() ? collect() : $assignmentsQuery->get();
+        }
 
         return [
             'sectors' => $sectors,
@@ -905,6 +935,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             'shifts' => $shifts,
             'conflictReport' => $conflictReport,
             'workSchedules' => $workSchedules,
+            'cyclicSchedules' => $cyclicSchedules,
             'schedules' => $schedules,
             'linkedCounts' => $linkedCounts,
             'assignments' => $assignments,
@@ -1323,11 +1354,12 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                         <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Modelo de Escala</label>
                         <select wire:model="gen_schedule_id" class="block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl bg-white" required>
                             <option value="">Selecione a escala</option>
-                            @foreach($workSchedules as $ws)
+                            @foreach($cyclicSchedules as $ws)
                                 <option value="{{ $ws->id }}">{{ $ws->name }} ({{ $ws->modality?->label() ?? 'Semanal' }})</option>
                             @endforeach
                         </select>
                         @error('gen_schedule_id') <span class="text-rose-500 text-xs">{{ $message }}</span> @enderror
+                        <p class="text-[11px] text-slate-500 mt-1">Somente escalas cíclicas (12×36, 24×72, 6×1 ou personalizadas). Horários fixos usam a atribuição vigente.</p>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1485,7 +1517,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                             </div>
                             <div class="mt-3">
                                 <div class="text-xs font-bold text-slate-900">Plantão 12x36</div>
-                                <div class="text-[10px] text-slate-500 mt-0.5 leading-tight">12h de serviço x 36h descanso (diurno/noturno)</div>
+                                <div class="text-[10px] text-slate-500 mt-0.5 leading-tight">12h de serviço x 36h descanso. Exige norma autorizada para o regime.</div>
                             </div>
                         </button>
 
@@ -1497,10 +1529,11 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                             </div>
                             <div class="mt-3">
                                 <div class="text-xs font-bold text-slate-900">Plantão 24x72</div>
-                                <div class="text-[10px] text-slate-500 mt-0.5 leading-tight">24h de serviço x 72h descanso (regime legal)</div>
+                                <div class="text-[10px] text-slate-500 mt-0.5 leading-tight">24h de serviço x 72h descanso. Só com norma configurada pelo RH.</div>
                             </div>
                         </button>
                     </div>
+                    <p class="text-[11px] text-slate-500 mt-2">Plantões especiais valem somente para regimes com autorização normativa configurada. Sem norma, a atribuição é recusada com explicação — o ponto continua liberado.</p>
                 </div>
 
                 <form wire:submit="saveSchedule" class="space-y-5">

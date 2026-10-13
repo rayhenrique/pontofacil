@@ -396,7 +396,8 @@ class AttendanceIntegrityTest extends TestCase
         $emp = $this->createEmployee('Andamento');
         $this->assign($emp);
 
-        $punchTime = Carbon::now()->subMinutes(30)->format('Y-m-d H:i:00');
+        // Entrada de hoje sem saída (horário fixo do dia, independente da hora de execução).
+        $punchTime = Carbon::today()->setTime(8, 0)->format('Y-m-d H:i:00');
         $this->addPunch($emp, $punchTime, 'in');
 
         $journey = app(CalculateDailyJourneyAction::class)->execute($emp, Carbon::today());

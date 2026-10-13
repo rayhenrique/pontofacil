@@ -530,7 +530,7 @@ class IntegratedJourneyAndSettlementAuditTest extends TestCase
         $this->assertFalse($shifts12x36[0]->is_day_off);
         $this->assertTrue($shifts12x36[1]->is_day_off);
 
-        // 3. Plantão 24x72 autorizado para regime estatutário
+        // 3. Plantão 24x72 autorizado para regime estatutário com norma configurada
         $sched24x72 = WorkSchedule::create([
             'name' => 'Plantão 24x72 Socorrista',
             'modality' => WorkScheduleModality::TwentyFourBySeventyTwo,
@@ -545,6 +545,11 @@ class IntegratedJourneyAndSettlementAuditTest extends TestCase
             'active' => true,
         ]);
         $empStat = $this->createEmployee('Socorrista', '12312312303', LegalRegime::MunicipalStatutory, $sched24x72);
+        LaborRuleProfile::createMunicipalStatutoryProfile(
+            'Socorristas Municipais (Lei 24x72)',
+            'socorristas-municipais-24x72',
+            'Lei Municipal nº 5.000/2024, art. 8º (plantão 24x72 do socorro)',
+        );
         $shifts24x72 = app(GenerateCyclicShiftsAction::class)->execute(
             employee: $empStat,
             schedule: $sched24x72,

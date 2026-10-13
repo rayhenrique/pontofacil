@@ -12,6 +12,7 @@ use App\Models\ClosedPeriod;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Establishment;
+use App\Models\LaborRuleProfile;
 use App\Models\Sector;
 use App\Models\User;
 use App\Models\WorkSchedule;
@@ -414,7 +415,26 @@ class WorkScheduleVersioningAndLegalRegimesTest extends TestCase
             $this->assertStringContainsString('requer autorização normativa específica', $e->getMessage());
         }
 
-        // Estatutário Municipal usando 24x72: permitido
+        // Estatutário Municipal sem norma configurada: rejeitado sem presumir norma
+        try {
+            $action->execute(
+                employee: $statutoryEmployee,
+                schedule: $schedule24x72,
+                effectiveFrom: '2026-11-01',
+                reason: 'Atribuição sem norma',
+            );
+            $this->fail('Deveria ter lançado ValidationException sem norma configurada');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('perfil normativo', $e->getMessage());
+        }
+
+        // Estatutário Municipal com norma municipal configurada pelo RH: permitido
+        LaborRuleProfile::createMunicipalStatutoryProfile(
+            'Guarda Municipal (Lei 24x72)',
+            'guarda-municipal-24x72',
+            'Lei Municipal nº 2.000/2024, art. 5º (plantão 24x72 da Guarda)',
+        );
+
         $assignment = $action->execute(
             employee: $statutoryEmployee,
             schedule: $schedule24x72,
