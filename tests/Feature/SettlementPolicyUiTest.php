@@ -18,6 +18,7 @@ use App\Models\WorkSchedule;
 use App\Models\WorkTimeSettlementPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Tests\Support\ReviewForClose;
 use Tests\TestCase;
 
 class SettlementPolicyUiTest extends TestCase
@@ -286,6 +287,7 @@ class SettlementPolicyUiTest extends TestCase
         ]);
 
         // Fecha formalmente a competência de 01/2026
+        ReviewForClose::reviewAll(Employee::all(), 2026, 1, $this->admin);
         $closed = app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,

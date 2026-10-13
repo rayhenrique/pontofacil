@@ -501,6 +501,10 @@ class MonthlyAttendanceReviewService
 
         if (! $isClosed) {
             // Verificar condições de fechamento ordinário
+            if ($totalEmployees === 0) {
+                $blockingReasons[] = 'Nenhum servidor abrangido pela competência.';
+            }
+
             if ($totalChecked < $totalEmployees) {
                 $missing = $totalEmployees - $totalChecked;
                 $blockingReasons[] = "Existem {$missing} colaborador(es) sem conferência concluída.";

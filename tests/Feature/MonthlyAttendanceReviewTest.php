@@ -338,8 +338,7 @@ class MonthlyAttendanceReviewTest extends TestCase
             $closeAction->execute(
                 year: 2026,
                 month: 10,
-                closedBy: $this->adminUser,
-                enforceAttendanceReview: true,
+                closedBy: $this->adminUser
             );
             $this->fail('Deveria ter bloqueado o fechamento por falta de conferência.');
         } catch (\DomainException $e) {
@@ -353,8 +352,7 @@ class MonthlyAttendanceReviewTest extends TestCase
         $closedPeriod = $closeAction->execute(
             year: 2026,
             month: 10,
-            closedBy: $this->adminUser,
-            enforceAttendanceReview: true,
+            closedBy: $this->adminUser
         );
 
         $this->assertEquals('closed', $closedPeriod->status);
@@ -380,7 +378,7 @@ class MonthlyAttendanceReviewTest extends TestCase
 
         // Homologar e fechar
         app(ReviewMonthlyAttendanceAction::class)->reviewEmployee($emp, 2026, 10, $this->managerA);
-        app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->adminUser, enforceAttendanceReview: true);
+        app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->adminUser);
 
         // Consulta através do serviço
         $service = app(MonthlyAttendanceReviewService::class);
@@ -415,7 +413,7 @@ class MonthlyAttendanceReviewTest extends TestCase
         $emp = $this->createEmployee('Servidor Reabertura', $this->sectorA, $this->standardSchedule);
         app(ReviewMonthlyAttendanceAction::class)->reviewEmployee($emp, 2026, 10, $this->managerA);
 
-        $closed = app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->adminUser, enforceAttendanceReview: true);
+        $closed = app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->adminUser);
         $this->assertEquals('closed', $closed->status);
 
         // Tentativa de reabrir sem justificativa suficiente (< 10 caracteres) -> Falha

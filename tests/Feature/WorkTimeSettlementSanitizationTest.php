@@ -37,6 +37,7 @@ use Carbon\Carbon;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Tests\Support\ReviewForClose;
 use Tests\TestCase;
 
 class WorkTimeSettlementSanitizationTest extends TestCase
@@ -244,6 +245,7 @@ class WorkTimeSettlementSanitizationTest extends TestCase
             'description' => 'Horas extras outubro',
         ]);
 
+        ReviewForClose::reviewAll(Employee::all(), 2026, 10, $this->admin);
         $closedPeriod = app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 10,

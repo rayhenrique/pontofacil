@@ -197,7 +197,7 @@ class MonthlyAttendanceReportTest extends TestCase
 
         // Homologar e fechar mês
         app(ReviewMonthlyAttendanceAction::class)->reviewEmployee($emp, 2026, 10, $this->managerSaude);
-        $closedPeriod = app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->adminUser, enforceAttendanceReview: true);
+        $closedPeriod = app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->adminUser);
 
         $service = app(MonthlyAttendanceReportService::class);
         $reportBefore = $service->getReportData(2026, 10, $this->adminUser);

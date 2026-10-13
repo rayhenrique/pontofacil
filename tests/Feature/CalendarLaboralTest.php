@@ -23,6 +23,7 @@ use App\Models\WorkSchedule;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Tests\Support\ReviewForClose;
 use Tests\TestCase;
 
 class CalendarLaboralTest extends TestCase
@@ -484,7 +485,10 @@ class CalendarLaboralTest extends TestCase
         $punchAction->execute(user: $this->user, direction: 'out', establishment: $this->establishment);
         Carbon::setTestNow(null);
 
-        // 2. Fechar a competência 01/2026
+        // 2. Conferência mensal obrigatória antes do fechamento
+        ReviewForClose::reviewAll(Employee::all(), 2026, 1, $admin);
+
+        // 3. Fechar a competência 01/2026
         $closedPeriod = app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,

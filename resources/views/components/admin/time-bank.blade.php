@@ -1,8 +1,6 @@
 <?php
 
 use App\Domain\PTRP\Actions\AdjustTimeBankAction;
-use App\Domain\PTRP\Actions\CloseMonthlyPeriodAction;
-use App\Domain\PTRP\Enums\TimeBankClosingMode;
 use App\Domain\PTRP\Enums\TimeBankTransactionType;
 use App\Domain\PTRP\Enums\TreatmentEventStatus;
 use App\Domain\Settlement\Enums\WorkTimeSettlementStatus;
@@ -38,10 +36,6 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
     public $adjustMinutes = 60;
     public $adjustDate = '';
     public $adjustReason = '';
-
-    // Modal Fechamento de Competência
-    public $showClosePeriodModal = false;
-    public $closeNotes = '';
 
     // Modal Reabertura de Competência
     public $showReopenPeriodModal = false;
@@ -117,49 +111,6 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
             $this->dispatch('app-modal-alert', [
                 'type' => 'error',
                 'title' => 'Erro ao Lançar Ajuste',
-                'message' => $e->getMessage(),
-                'buttonText' => 'Fechar',
-            ]);
-        }
-    }
-
-    public function openClosePeriodModal(): void
-    {
-        if (ClosedPeriod::isClosed((int) $this->year, (int) $this->month)) {
-            $this->dispatch('app-modal-alert', [
-                'type' => 'warning',
-                'title' => 'Competência Já Fechada',
-                'message' => sprintf('A competência %02d/%04d já foi congelada anteriormente.', $this->month, $this->year),
-                'buttonText' => 'Entendido',
-            ]);
-            return;
-        }
-
-        $this->closeNotes = '';
-        $this->showClosePeriodModal = true;
-    }
-
-    public function confirmClosePeriod(): void
-    {
-        try {
-            app(CloseMonthlyPeriodAction::class)->execute(
-                year: (int) $this->year,
-                month: (int) $this->month,
-                closedBy: Auth::user(),
-                notes: $this->closeNotes,
-            );
-
-            $this->showClosePeriodModal = false;
-            $this->dispatch('app-modal-alert', [
-                'type' => 'success',
-                'title' => 'Competência Fechada com Sucesso!',
-                'message' => sprintf('A competência %02d/%04d foi fechada e as regras de jornada foram aplicadas.', $this->month, $this->year),
-                'buttonText' => 'OK',
-            ]);
-        } catch (\Throwable $e) {
-            $this->dispatch('app-modal-alert', [
-                'type' => 'error',
-                'title' => 'Falha no Fechamento',
                 'message' => $e->getMessage(),
                 'buttonText' => 'Fechar',
             ]);
@@ -422,7 +373,7 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
                 </div>
                 <div>
                     <h1 class="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Gestão de Jornada, Banco e Compensação</h1>
-                    <p class="text-xs sm:text-sm text-gray-500 mt-0.5">Acompanhe pendências, autorize destinações, confira saldos e realize fechamentos periódicos</p>
+                    <p class="text-xs sm:text-sm text-gray-500 mt-0.5">Acompanhe pendências, autorize destinações e confira saldos. O fechamento da competência acontece na Conferência Mensal.</p>
                 </div>
             </div>
         </div>
@@ -434,10 +385,10 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
             </a>
 
             @if(!$isClosed)
-                <button wire:click="openClosePeriodModal" class="min-h-[44px] inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm gap-1.5 cursor-pointer">
+                <a href="{{ route('admin.monthly-review', ['year' => $year, 'month' => $month]) }}" class="min-h-[44px] inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm gap-1.5 cursor-pointer" title="Conferir a frequência e fechar a competência na tela de Conferência Mensal">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>
-                    <span>Fechar Competência</span>
-                </button>
+                    <span>Conferir e Fechar na Conferência Mensal</span>
+                </a>
             @else
                 <span class="min-h-[44px] inline-flex items-center px-3 py-1.5 bg-slate-100 border border-slate-300 text-slate-800 rounded-xl text-xs font-bold gap-1.5 select-none">
                     <svg class="w-4 h-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
@@ -1018,48 +969,6 @@ new #[Layout('layouts.app')] #[Title('Extrato e Gestão do Banco de Horas')] cla
                         <button type="submit" class="min-h-[44px] px-5 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-sm cursor-pointer">Gravar Ajuste</button>
                     </div>
                 </form>
-            </div>
-        </div>
-    @endif
-
-    <!-- MODAL FECHAR COMPETÊNCIA -->
-    @if($showClosePeriodModal)
-        <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
-                <div class="flex items-center gap-3 text-emerald-700 border-b pb-3">
-                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>
-                    <h3 class="text-base font-bold text-gray-900">Fechar e Congelar Competência {{ sprintf('%02d/%04d', $month, $year) }}</h3>
-                </div>
-
-                <div class="space-y-3 text-xs text-gray-600 leading-relaxed">
-                    <p>Ao fechar a competência:</p>
-                    <ul class="list-disc pl-5 space-y-1">
-                        <li>O espelho de ponto deste mês será <strong>congelado em snapshot auditado</strong> contra alterações ordinárias.</li>
-                        @if($policy && $policy->enabled)
-                            @if($policy->closing_mode === TimeBankClosingMode::MonthlyReset)
-                                <li class="text-amber-700 font-bold">
-                                    <strong>Compensação Mensal:</strong> O saldo residual da competência será registrado como pendente de destinação/compensação, sem perda do direito do colaborador.
-                                </li>
-                            @else
-                                <li class="text-indigo-700 font-bold">
-                                    <strong>Banco Acumulativo (Carry-Over):</strong> O saldo é transportado para a próxima competência de forma auditável.
-                                </li>
-                            @endif
-                        @else
-                            <li>Para colaboradores sem banco de horas, as diferenças apuradas permanecem registradas para tratamento em folha ou compensação acordada.</li>
-                        @endif
-                    </ul>
-
-                    <div>
-                        <label class="block font-bold text-gray-700 uppercase mb-1">Anotações do Fechamento (Opcional)</label>
-                        <textarea wire:model="closeNotes" rows="2" class="w-full px-3 py-2 border rounded-xl" placeholder="Observações do RH sobre a competência..."></textarea>
-                    </div>
-                </div>
-
-                <div class="flex justify-end gap-2 pt-3 border-t">
-                    <button type="button" wire:click="$set('showClosePeriodModal', false)" class="min-h-[44px] px-4 py-2 border rounded-xl font-bold text-gray-600 hover:bg-gray-50 cursor-pointer">Cancelar</button>
-                    <button type="button" wire:click="confirmClosePeriod" class="min-h-[44px] px-5 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-sm cursor-pointer">Confirmar Fechamento</button>
-                </div>
             </div>
         </div>
     @endif

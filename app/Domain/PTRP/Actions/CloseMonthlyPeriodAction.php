@@ -33,15 +33,24 @@ class CloseMonthlyPeriodAction
     /**
      * Fecha formalmente uma competência mensal, realizando o congelamento analítico
      * de todos os empregados em snapshots imutáveis e aplicando as regras de banco de horas.
+     *
+     * A validação da Conferência Mensal é obrigatória e incondicional:
+     * nenhuma rota, tela ou serviço pode fechar sem conferências concluídas,
+     * tratamentos aprovados e ausência de ocorrências sem ressalva.
+     * Somente RH/Administrador fecha a competência global.
+     *
+     * @throws \DomainException
      */
     public function execute(
         int $year,
         int $month,
         User $closedBy,
         ?string $notes = null,
-        bool $allowLegacyUnprovenReset = false,
-        bool $enforceAttendanceReview = false,
     ): ClosedPeriod {
+        if (! $closedBy->isAdmin()) {
+            throw new \DomainException('Apenas usuários com perfil Administrador/RH podem realizar o fechamento formal da competência.');
+        }
+
         $existingPeriod = ClosedPeriod::findForPeriod($year, $month);
 
         if ($existingPeriod && $existingPeriod->status === 'closed') {
@@ -51,24 +60,46 @@ class CloseMonthlyPeriodAction
         $periodStart = Carbon::createFromDate($year, $month, 1)->startOfMonth();
         $periodEnd = Carbon::createFromDate($year, $month, 1)->endOfMonth();
 
-        // 21.4 Bloqueio por Tratamentos Pendentes
-        $pendingTreatmentsCount = TreatmentEvent::where('status', TreatmentEventStatus::Pending)
-            ->whereBetween('effective_at', [$periodStart, $periodEnd])
-            ->count();
+        return DB::transaction(function () use ($year, $month, $closedBy, $notes, $periodStart, $periodEnd) {
+            $lockedPeriod = ClosedPeriod::where('year', $year)
+                ->where('month', $month)
+                ->lockForUpdate()
+                ->first();
 
-        if ($pendingTreatmentsCount > 0) {
-            throw new \DomainException(sprintf(
-                'Não é possível fechar a competência %02d/%04d: existem %d solicitações de tratamento pendentes de aprovação pelo RH. Revise as pendências em /admin/treatment-requests antes de fechar.',
-                $month,
-                $year,
-                $pendingTreatmentsCount
-            ));
-        }
+            if ($lockedPeriod && $lockedPeriod->status === 'closed') {
+                throw new \DomainException(sprintf('A competência %02d/%04d já se encontra fechada e congelada.', $month, $year));
+            }
 
-        // Bloqueio do fechamento ordinário por conferências pendentes ou ocorrências não ressalvadas
-        if ($enforceAttendanceReview) {
+            // Trava as conferências para serializar contra confirmações simultâneas.
+            MonthlyAttendanceReview::where('year', $year)
+                ->where('month', $month)
+                ->lockForUpdate()
+                ->get();
+
+            // Revalidação obrigatória dentro da transação, após as travas.
+            $pendingTreatmentsCount = TreatmentEvent::where('status', TreatmentEventStatus::Pending)
+                ->whereBetween('effective_at', [$periodStart, $periodEnd])
+                ->count();
+
+            if ($pendingTreatmentsCount > 0) {
+                throw new \DomainException(sprintf(
+                    'Não é possível fechar a competência %02d/%04d: existem %d solicitações de tratamento pendentes de aprovação pelo RH. Revise as pendências em /admin/treatment-requests antes de fechar.',
+                    $month,
+                    $year,
+                    $pendingTreatmentsCount
+                ));
+            }
+
             $overview = app(MonthlyAttendanceReviewService::class)
                 ->getCompetenceOverview($year, $month, $closedBy);
+
+            if ($overview['total_employees'] === 0) {
+                throw new \DomainException(sprintf(
+                    'Não é possível fechar a competência %02d/%04d: Nenhum servidor abrangido pela competência.',
+                    $month,
+                    $year
+                ));
+            }
 
             if (! empty($overview['blocking_reasons'])) {
                 throw new \DomainException(sprintf(
@@ -78,20 +109,9 @@ class CloseMonthlyPeriodAction
                     implode(' ', $overview['blocking_reasons'])
                 ));
             }
-        }
 
-        // Localizar política de banco de horas vigente na competência
-        $policy = TimeBankPolicy::forDate($periodEnd);
-
-        return DB::transaction(function () use ($year, $month, $closedBy, $notes, $periodStart, $periodEnd, $policy) {
-            $lockedPeriod = ClosedPeriod::where('year', $year)
-                ->where('month', $month)
-                ->lockForUpdate()
-                ->first();
-
-            if ($lockedPeriod && $lockedPeriod->status === 'closed') {
-                throw new \DomainException(sprintf('A competência %02d/%04d já se encontra fechada e congelada.', $month, $year));
-            }
+            // Localizar política de banco de horas vigente na competência
+            $policy = TimeBankPolicy::forDate($periodEnd);
 
             $snapshotVersion = $lockedPeriod ? ($lockedPeriod->snapshot_version + 1) : 1;
 

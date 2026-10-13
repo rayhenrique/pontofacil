@@ -26,6 +26,7 @@ use App\Models\WorkTimeSettlementPolicy;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Tests\Support\ReviewForClose;
 use Tests\TestCase;
 
 class FrequencyControlClosingTest extends TestCase
@@ -188,7 +189,10 @@ class FrequencyControlClosingTest extends TestCase
         $this->assertEquals(-45, $j2->dailyDifferenceMinutes());
         $this->assertEquals('Diferença: -45 minutos.', $j2->humanDifference());
 
-        // 2. Fechamento mensal de frequência
+        // 2. Conferência mensal obrigatória antes do fechamento
+        ReviewForClose::reviewAll([$employee], 2026, 10, $this->adminUser);
+
+        // 3. Fechamento mensal de frequência
         $closedPeriod = app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 10,
@@ -252,6 +256,8 @@ class FrequencyControlClosingTest extends TestCase
         $this->registerPunch($employee, $day->copy()->setTime(13, 0), 'in');
         $this->registerPunch($employee, $day->copy()->setTime(18, 0), 'out'); // 9h = +60 min
 
+        ReviewForClose::reviewAll([$employee], 2026, 10, $this->adminUser);
+
         $closedPeriod = app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 10,
@@ -292,6 +298,8 @@ class FrequencyControlClosingTest extends TestCase
         ]);
 
         // Fechamento de novo período não altera nem remove registros legados
+        ReviewForClose::reviewAll([$employee], 2026, 10, $this->adminUser);
+
         $closedPeriod = app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 10,

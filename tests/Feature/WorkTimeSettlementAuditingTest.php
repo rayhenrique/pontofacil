@@ -29,6 +29,7 @@ use Carbon\Carbon;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Tests\Support\ReviewForClose;
 use Tests\TestCase;
 
 class WorkTimeSettlementAuditingTest extends TestCase
@@ -362,6 +363,7 @@ class WorkTimeSettlementAuditingTest extends TestCase
         $this->assertEquals(180, $account->currentBalance());
 
         // Fechamento SEM destinação aprovada prévia
+        ReviewForClose::reviewAll([$this->employee], 2026, 1, $this->admin);
         $closedPeriod = app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,
@@ -441,6 +443,7 @@ class WorkTimeSettlementAuditingTest extends TestCase
             'description' => 'Saldo para transporte',
         ]);
 
+        ReviewForClose::reviewAll([$this->employee], 2026, 1, $this->admin);
         app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,
@@ -622,6 +625,7 @@ class WorkTimeSettlementAuditingTest extends TestCase
             'description' => 'Saldo não compensado no mês',
         ]);
 
+        ReviewForClose::reviewAll([$this->employee], 2026, 1, $this->admin);
         $closedPeriod = app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,
@@ -655,6 +659,7 @@ class WorkTimeSettlementAuditingTest extends TestCase
             'justification' => 'Pagamento a ser feito no mês seguinte',
         ], $this->admin);
 
+        ReviewForClose::reviewAll([$this->employee], 2026, 1, $this->admin);
         $closedPeriod = app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,
@@ -694,6 +699,7 @@ class WorkTimeSettlementAuditingTest extends TestCase
         $account = TimeBankAccount::getOrCreateForEmployee($this->employee);
         $initialTxCount = TimeBankTransaction::where('time_bank_account_id', $account->id)->count();
 
+        ReviewForClose::reviewAll([$this->employee], 2026, 1, $this->admin);
         app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,
@@ -728,6 +734,7 @@ class WorkTimeSettlementAuditingTest extends TestCase
         ]);
 
         // Fechamento de novo período não altera a transação antiga
+        ReviewForClose::reviewAll([$this->employee], 2026, 1, $this->admin);
         app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,

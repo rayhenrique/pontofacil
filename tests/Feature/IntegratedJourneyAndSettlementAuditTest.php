@@ -44,6 +44,7 @@ use Carbon\Carbon;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Tests\Support\ReviewForClose;
 use Tests\TestCase;
 
 class IntegratedJourneyAndSettlementAuditTest extends TestCase
@@ -226,7 +227,8 @@ class IntegratedJourneyAndSettlementAuditTest extends TestCase
         $this->assertNotNull($discharge);
         $this->assertEquals('FOLHA-PAGTO-10-2026-RUBRICA-050', $discharge->document_reference);
 
-        // 9. Fechamento mensal
+        // 9. Conferência mensal obrigatória e fechamento mensal
+        ReviewForClose::reviewAll([$employee], 2026, 10, $this->adminUser);
         $closedPeriod = app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->adminUser, 'Fechamento de Outubro/2026');
         $this->assertEquals('closed', $closedPeriod->status);
 
@@ -296,6 +298,7 @@ class IntegratedJourneyAndSettlementAuditTest extends TestCase
         $this->assertEquals(180, $account->currentBalance());
 
         // Fechamento da competência NÃO extingue pendências automaticamente nem apaga saldo sem quitação
+        ReviewForClose::reviewAll([$employee], 2026, 10, $this->adminUser);
         $closedPeriod = app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->adminUser, 'Fechamento Mensal');
         $this->assertEquals('closed', $closedPeriod->status);
 
@@ -354,6 +357,7 @@ class IntegratedJourneyAndSettlementAuditTest extends TestCase
         $this->assertEquals(180, $account->balanceUntil('2026-10-31'));
 
         // Fechar Setembro não afeta movimentações de Outubro
+        ReviewForClose::reviewAll([$employee], 2026, 9, $this->adminUser);
         $closedSept = app(CloseMonthlyPeriodAction::class)->execute(2026, 9, $this->adminUser, 'Fechamento Setembro');
         $this->assertEquals('closed', $closedSept->status);
 
@@ -436,6 +440,7 @@ class IntegratedJourneyAndSettlementAuditTest extends TestCase
         $this->registerStandardPunches($employee, $workDate, ['08:00', '12:00', '13:00', '18:00']);
 
         // Fecha a competência de Setembro
+        ReviewForClose::reviewAll([$employee], 2026, 9, $this->adminUser);
         $closedPeriod = app(CloseMonthlyPeriodAction::class)->execute(2026, 9, $this->adminUser, 'Fechamento Setembro');
         $this->assertEquals('closed', $closedPeriod->status);
 

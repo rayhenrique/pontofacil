@@ -26,6 +26,7 @@ use App\Models\WorkSchedule;
 use App\Models\WorkTimeSettlement;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\ReviewForClose;
 use Tests\TestCase;
 
 class ClosedPeriodSnapshotTest extends TestCase
@@ -135,6 +136,7 @@ class ClosedPeriodSnapshotTest extends TestCase
         $this->assertEquals(480, $account->balanceUntil('2026-01-31'));
 
         // Fechar retroativamente a competência de Janeiro
+        ReviewForClose::reviewAll(Employee::all(), 2026, 1, $this->admin);
         $closedPeriod = app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,
@@ -199,6 +201,7 @@ class ClosedPeriodSnapshotTest extends TestCase
     public function test_modifications_are_strictly_blocked_for_closed_periods(): void
     {
         // Fecha Janeiro normalmente
+        ReviewForClose::reviewAll(Employee::all(), 2026, 1, $this->admin);
         app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,
@@ -241,6 +244,7 @@ class ClosedPeriodSnapshotTest extends TestCase
     public function test_reopening_competence_requires_reason_preserves_history_and_increments_version(): void
     {
         // 1. Fechar Janeiro pela primeira vez
+        ReviewForClose::reviewAll(Employee::all(), 2026, 1, $this->admin);
         $period = app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,

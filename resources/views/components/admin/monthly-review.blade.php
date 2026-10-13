@@ -291,7 +291,6 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                 month: $this->month,
                 closedBy: Auth::user(),
                 notes: $this->closeNotes,
-                enforceAttendanceReview: true,
             );
 
             $this->showCloseModal = false;

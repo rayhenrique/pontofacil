@@ -25,6 +25,7 @@ use App\Models\WorkSchedule;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Tests\Support\ReviewForClose;
 use Tests\TestCase;
 
 class FolhaPontoTest extends TestCase
@@ -470,6 +471,7 @@ class FolhaPontoTest extends TestCase
         $this->createPunch($user, 'out', '2026-10-05 12:00:00');
 
         // Fechar a competência 10/2026
+        ReviewForClose::reviewAll(Employee::all(), 2026, 10, $admin);
         app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $admin);
 
         // Alterar o cargo atual do colaborador no banco (depois do fechamento)

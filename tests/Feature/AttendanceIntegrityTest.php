@@ -216,7 +216,7 @@ class AttendanceIntegrityTest extends TestCase
         $this->assertFalse($overview['can_close']);
 
         try {
-            app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->admin, enforceAttendanceReview: true);
+            app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->admin);
             $this->fail('Fechamento deveria ser bloqueado.');
         } catch (\DomainException $e) {
             $this->assertStringContainsString('nova validação', $e->getMessage());
@@ -292,7 +292,7 @@ class AttendanceIntegrityTest extends TestCase
         $this->fullDay($emp, 6);
 
         app(ReviewMonthlyAttendanceAction::class)->reviewEmployee($emp, 2026, 10, $this->managerA);
-        app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->admin, enforceAttendanceReview: true);
+        app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->admin);
 
         $emp->update(['sector_id' => $this->sectorB->id]);
 
@@ -408,7 +408,7 @@ class AttendanceIntegrityTest extends TestCase
         $this->fullDay($emp, 6);
 
         app(ReviewMonthlyAttendanceAction::class)->reviewEmployee($emp, 2026, 10, $this->managerA);
-        $closed = app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->admin, enforceAttendanceReview: true);
+        $closed = app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->admin);
 
         $other = app(ConfigureWorkScheduleAction::class)->createAdministrative([
             'name' => 'Nova Escala Posterior', 'days' => [1, 2, 3],
@@ -433,7 +433,7 @@ class AttendanceIntegrityTest extends TestCase
         $this->fullDay($emp, 6);
 
         app(ReviewMonthlyAttendanceAction::class)->reviewEmployee($emp, 2026, 10, $this->managerA);
-        $closed = app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->admin, enforceAttendanceReview: true);
+        $closed = app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->admin);
 
         $response = $this->actingAs($this->admin)->get('/admin/reports/consolidated-pdf?year=2026&month=10');
         $response->assertOk();
@@ -504,7 +504,7 @@ class AttendanceIntegrityTest extends TestCase
         $punchCount = PunchEvent::where('employee_id', $emp->id)->count();
 
         app(ReviewMonthlyAttendanceAction::class)->reviewEmployee($emp, 2026, 10, $this->managerA);
-        $closed = app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->admin, enforceAttendanceReview: true);
+        $closed = app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->admin);
         $hash = $closed->snapshot_hash;
         $snapshotRows = ClosedPeriodEmployeeSnapshot::where('closed_period_id', $closed->id)->count();
         $this->assertGreaterThan(0, $snapshotRows);

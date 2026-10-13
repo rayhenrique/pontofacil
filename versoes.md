@@ -1,6 +1,13 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.6 (Atual)
+## v2.6.7 (Atual)
+- **Fechamento Mensal Unificado e Protegido:**
+  - O mês só fecha pela Conferência Mensal, depois de todos os servidores conferidos e sem pendências. Não há mais atalho de fechamento pelo Banco de Horas (que agora leva para a conferência).
+  - Somente o RH/Administrador fecha. Gestores, servidores e auditores são bloqueados.
+  - Se algo mudar depois da conferência (escala ou tratamento), o sistema pede nova validação antes de fechar.
+  - Competência vazia ou já fechada também é bloqueada, com avisos simples do que falta.
+
+## v2.6.6
 - **Conferência Mensal e Relatórios com Integridade Garantida:**
   - Sem conferência registrada, o sistema mostra "Aguardando conferência" — nunca aprova sozinho nem inventa confirmação.
   - Mês fechado lê somente os registros congelados. Se faltar histórico de alguém, aparece "Histórico indisponível" em vez de número inventado.

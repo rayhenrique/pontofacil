@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Models\WorkTimeSettlement;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\ReviewForClose;
 use Tests\TestCase;
 
 class TimeBankLedgerTest extends TestCase
@@ -109,6 +110,7 @@ class TimeBankLedgerTest extends TestCase
         $this->assertEquals(480, $account->currentBalance());
 
         // Fechar competência de Janeiro
+        ReviewForClose::reviewAll([$this->employee], 2026, 1, $this->admin);
         app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,
@@ -157,6 +159,7 @@ class TimeBankLedgerTest extends TestCase
         $initialTxCount = TimeBankTransaction::count();
 
         // Fechar competência de Janeiro
+        ReviewForClose::reviewAll([$this->employee], 2026, 1, $this->admin);
         app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,
@@ -205,6 +208,7 @@ class TimeBankLedgerTest extends TestCase
         $this->assertEquals(-150, $account->currentBalance());
 
         // Fechar competência
+        ReviewForClose::reviewAll([$this->employee], 2026, 1, $this->admin);
         app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,
@@ -340,6 +344,7 @@ class TimeBankLedgerTest extends TestCase
 
     public function test_cannot_close_already_closed_period(): void
     {
+        ReviewForClose::reviewAll([$this->employee], 2026, 3, $this->admin);
         app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 3,

@@ -373,7 +373,7 @@ class MonthlyApurationParityTest extends TestCase
         $this->addPunch($emp, '2026-10-06 17:00:00', 'out');
 
         app(ReviewMonthlyAttendanceAction::class)->reviewEmployee($emp, 2026, 10, $this->admin);
-        $closed = app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->admin, enforceAttendanceReview: true);
+        $closed = app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $this->admin);
 
         $service = app(MonthlyAttendanceReviewService::class);
         $data = $service->resolveEmployeeReviewData($emp, 2026, 10);

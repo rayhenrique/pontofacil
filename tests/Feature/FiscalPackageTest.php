@@ -13,6 +13,7 @@ use App\Models\Sector;
 use App\Models\User;
 use App\Models\WorkSchedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\ReviewForClose;
 use Tests\TestCase;
 use ZipArchive;
 
@@ -97,7 +98,8 @@ class FiscalPackageTest extends TestCase
 
     public function test_generate_fiscal_package_creates_valid_zip_with_all_regulatory_files(): void
     {
-        // 1. Fechar competência
+        // 1. Conferência mensal obrigatória e fechamento da competência
+        ReviewForClose::reviewAll(Employee::all(), 2026, 1, $this->admin);
         $closedPeriod = app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,
@@ -147,6 +149,7 @@ class FiscalPackageTest extends TestCase
 
     public function test_admin_and_auditor_can_download_fiscal_package_while_regular_employee_is_forbidden(): void
     {
+        ReviewForClose::reviewAll(Employee::all(), 2026, 1, $this->admin);
         app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,
@@ -175,6 +178,7 @@ class FiscalPackageTest extends TestCase
 
     public function test_individual_afd_and_aej_downloads_work_for_auditor(): void
     {
+        ReviewForClose::reviewAll(Employee::all(), 2026, 1, $this->admin);
         app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,

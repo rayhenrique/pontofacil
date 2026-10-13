@@ -29,6 +29,7 @@ use App\Models\WorkTimeSettlementPolicy;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Tests\Support\ReviewForClose;
 use Tests\TestCase;
 
 class WorkTimeSettlementPolicyTest extends TestCase
@@ -421,6 +422,7 @@ class WorkTimeSettlementPolicyTest extends TestCase
             'approval_status' => SettlementPolicyApprovalStatus::Approved,
         ]);
 
+        ReviewForClose::reviewAll(Employee::all(), 2026, 1, $this->admin);
         $closedPeriod = app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,
@@ -469,6 +471,7 @@ class WorkTimeSettlementPolicyTest extends TestCase
             'description' => 'Horas extras de teste',
         ]);
 
+        ReviewForClose::reviewAll(Employee::all(), 2026, 1, $this->admin);
         $closedPeriod = app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,

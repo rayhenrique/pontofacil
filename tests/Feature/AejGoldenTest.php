@@ -23,6 +23,7 @@ use App\Models\User;
 use App\Models\WorkSchedule;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\ReviewForClose;
 use Tests\TestCase;
 
 /**
@@ -947,6 +948,13 @@ class AejGoldenTest extends TestCase
         $punchAction->execute(user: $this->worker, direction: 'out', establishment: $this->establishment);
 
         Carbon::setTestNow();
+
+        ReviewForClose::reviewAll(
+            Employee::all(),
+            2026,
+            1,
+            $this->admin
+        );
 
         app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,

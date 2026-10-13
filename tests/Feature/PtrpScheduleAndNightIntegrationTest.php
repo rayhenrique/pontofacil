@@ -35,6 +35,7 @@ use App\Models\WorkScheduleAssignment;
 use App\Models\WorkTimeSettlementPolicy;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\ReviewForClose;
 use Tests\TestCase;
 
 /**
@@ -716,6 +717,8 @@ class PtrpScheduleAndNightIntegrationTest extends TestCase
         $this->createPunch('in', '2026-01-05 14:00:00');
         $this->createPunch('out', '2026-01-05 18:00:00');
 
+        ReviewForClose::reviewAll(Employee::all(), 2026, 1, $this->admin);
+
         $closed = app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,
@@ -750,6 +753,8 @@ class PtrpScheduleAndNightIntegrationTest extends TestCase
 
         $this->createPunch('in', '2026-01-05 08:00:00');
         $this->createPunch('out', '2026-01-05 18:00:00');
+
+        ReviewForClose::reviewAll(Employee::all(), 2026, 1, $this->admin);
 
         $closed = app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
@@ -792,6 +797,8 @@ class PtrpScheduleAndNightIntegrationTest extends TestCase
         $this->createPunch('in', '2026-01-05 13:00:00');
         $this->createPunch('out', '2026-01-05 17:00:00');
 
+        ReviewForClose::reviewAll(Employee::all(), 2026, 1, $this->admin);
+
         app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,
@@ -831,6 +838,8 @@ class PtrpScheduleAndNightIntegrationTest extends TestCase
         $journey = $this->calculateJourneyAction->execute($this->employee, Carbon::parse('2026-01-05'));
 
         // Executa fechamento mensal
+        ReviewForClose::reviewAll(Employee::all(), 2026, 1, $this->admin);
+
         app(CloseMonthlyPeriodAction::class)->execute(
             year: 2026,
             month: 1,
