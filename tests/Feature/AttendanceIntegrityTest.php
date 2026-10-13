@@ -300,11 +300,14 @@ class AttendanceIntegrityTest extends TestCase
         $row = collect($report['rows'])->firstWhere('employee_id', $emp->id);
         $this->assertEquals('Setor A', $row['department']);
 
-        // O escopo acompanha a lotação atual.
+        // O escopo histórico acompanha a lotação congelada: o gestor do
+        // setor de origem mantém acesso; o do setor atual, não.
         $managerReport = app(MonthlyAttendanceReportService::class)->getReportData(2026, 10, $this->managerA, []);
-        $this->assertNull(collect($managerReport['rows'])->firstWhere('employee_id', $emp->id));
+        $managerRow = collect($managerReport['rows'])->firstWhere('employee_id', $emp->id);
+        $this->assertNotNull($managerRow);
+        $this->assertEquals('Setor A', $managerRow['department']);
         $managerBReport = app(MonthlyAttendanceReportService::class)->getReportData(2026, 10, $this->managerB, []);
-        $this->assertNotNull(collect($managerBReport['rows'])->firstWhere('employee_id', $emp->id));
+        $this->assertNull(collect($managerBReport['rows'])->firstWhere('employee_id', $emp->id));
     }
 
     public function test_night_shift_crossing_competence_boundary(): void

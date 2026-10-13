@@ -171,6 +171,8 @@ class CloseMonthlyPeriodAction
                 $establishment = $employee->sector?->establishment ?? Establishment::first();
                 $employeeSnapshot = [
                     'id' => $employee->id,
+                    'user_id' => $employee->user_id,
+                    'sector_id' => $employee->sector_id,
                     'name' => $employee->user?->name ?? 'Colaborador '.$employee->id,
                     'cpf' => $employee->cpf,
                     'registration_number' => $employee->registration_number,

@@ -1,6 +1,13 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.8 (Atual)
+## v2.6.9 (Atual)
+- **Relatórios Fiéis ao Mês Fechado:**
+  - O relatório do mês fechado mostra exatamente quem estava lá na época, com nome, cargo e setor da época — mesmo se a pessoa mudou de setor, foi desligada ou teve o cadastro alterado depois.
+  - Gestor vê só o histórico dos setores que gerencia; ninguém acessa outro setor só por saber um código.
+  - Sem conferência individual, ninguém aparece como responsável por ela. Sem histórico, aparece "Histórico indisponível" em vez de número inventado.
+  - PDF, CSV e tela com os mesmos totais; CSV protegido contra fórmulas escondidas.
+
+## v2.6.8
 - **Conferência Acompanha Mudanças na Jornada:**
   - Ao conferir, o sistema registra uma impressão digital dos dados analisados (marcações, tratamentos, escala, plantões, calendário e regras).
   - Se chegar marcação nova, tratamento aprovado ou mudança de escala/plantão/calendário depois da conferência, ela aparece como desatualizada e o mês só fecha após nova análise.

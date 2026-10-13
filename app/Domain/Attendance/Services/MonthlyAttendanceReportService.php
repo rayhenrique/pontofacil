@@ -18,6 +18,7 @@ use App\Models\TreatmentEvent;
 use App\Models\User;
 use App\Models\WorkScheduleAssignment;
 use Carbon\Carbon;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 
 class MonthlyAttendanceReportService
@@ -85,51 +86,70 @@ class MonthlyAttendanceReportService
         ?array $managedSectorIds,
     ): array {
         $company = CurrentCompany::get();
+        $scopeService = app(SectorScopeService::class);
 
-        // Elenco filtrado pelos mesmos critérios da prévia ao vivo
-        // (escopo, estabelecimento, setor e servidor).
-        $employees = $this->scopedEmployeesQuery($actor, $establishmentId, $sectorId, $employeeId, $managedSectorIds)->get();
-        $employeeIds = $employees->map(fn (Employee $employee) => $employee->id)->all();
+        if (! $actor->isAdmin() && ! $actor->isManager()) {
+            throw new AuthorizationException('Acesso não autorizado.');
+        }
 
-        $snapshotsByEmployee = $employeeIds
-            ? $closedPeriod->currentSnapshots()
-                ->whereIn('employee_id', $employeeIds)
-                ->get()
-                ->keyBy(fn ($snapshot) => $snapshot->employee_id)
-            : collect();
+        // População congelada: todos os snapshots vigentes da competência,
+        // independentemente de transferências, desativação ou alterações
+        // cadastrais posteriores.
+        $snapshots = $closedPeriod->currentSnapshots()->get();
 
-        // Carregar reviews da competência
-        $reviews = $employeeIds
+        // Cadastros atuais apenas como reserva para snapshots legados
+        // sem lotação congelada.
+        $currentSectorsByEmployee = Employee::whereIn(
+            'id',
+            $snapshots->map(fn ($snapshot) => $snapshot->employee_id)->all()
+        )->get(['id', 'sector_id'])->keyBy('id');
+
+        // Conferências da competência para os snapshots.
+        $reviews = $snapshots->isNotEmpty()
             ? MonthlyAttendanceReview::with('reviewer')
                 ->where('year', $year)
                 ->where('month', $month)
-                ->whereIn('employee_id', $employeeIds)
+                ->whereIn('employee_id', $snapshots->map(fn ($snapshot) => $snapshot->employee_id)->all())
                 ->get()
                 ->keyBy('employee_id')
             : collect();
 
-        // Vestígios na competência para distinguir "sem snapshot" de "fora da competência".
-        $tracedEmployeeIds = $this->tracedEmployeeIds($employeeIds, $year, $month);
-
         $rows = [];
         $totals = $this->initializeTotals();
 
-        foreach ($employees as $emp) {
-            $snap = $snapshotsByEmployee->get($emp->id);
-            $review = $reviews->get($emp->id);
+        foreach ($snapshots as $snap) {
+            $empData = $snap->employee_snapshot ?? [];
 
-            if ($snap === null) {
-                // Sem snapshot congelado: nunca apurar ao vivo como definitivo.
-                if (! isset($tracedEmployeeIds[$emp->id])) {
-                    continue;
-                }
+            // Lotação congelada; reserva para snapshots legados.
+            $frozenSectorId = isset($empData['sector_id']) && $empData['sector_id'] !== null
+                ? (int) $empData['sector_id']
+                : null;
+            $frozenEstablishmentId = isset($empData['establishment_id']) && $empData['establishment_id'] !== null
+                ? (int) $empData['establishment_id']
+                : null;
 
-                $unavailableRow = $this->unavailableRow($emp, $review);
-                $rows[] = $unavailableRow;
-                $this->accumulateTotals($totals, $unavailableRow);
+            if ($frozenSectorId === null) {
+                $frozenSectorId = $currentSectorsByEmployee->get($snap->employee_id)?->sector_id;
+            }
 
+            // Escopo histórico explícito: sem lotação verificável, fora do alcance.
+            if (! $scopeService->canAccessHistoricalSector($actor, $frozenSectorId)) {
                 continue;
             }
+
+            if ($establishmentId && $frozenEstablishmentId != $establishmentId) {
+                continue;
+            }
+
+            if ($sectorId && $frozenSectorId != $sectorId) {
+                continue;
+            }
+
+            if ($employeeId && $snap->employee_id != $employeeId) {
+                continue;
+            }
+
+            $review = $reviews->get($snap->employee_id);
 
             $empData = $snap->employee_snapshot ?? [];
             $schedData = $snap->schedule_snapshot ?? [];
@@ -195,12 +215,49 @@ class MonthlyAttendanceReportService
                 'review_status' => $reviewStatus,
                 'review_status_label' => $reviewStatus->label(),
                 'reservation_notes' => $review?->reservation_notes,
-                'reviewed_by_name' => $review?->reviewer?->name ?? $closedPeriod->closer?->name ?? 'RH',
-                'reviewed_at' => $review?->reviewed_at ?? $closedPeriod->closed_at,
+                'reviewed_by_name' => $review?->reviewer?->name,
+                'reviewed_at' => $review?->reviewed_at,
+                'history_unavailable' => false,
             ];
 
             $rows[] = $row;
             $this->accumulateTotals($totals, $row);
+        }
+
+        // Servidores atuais com vestígios na competência mas sem snapshot:
+        // histórico indisponível, sem inventar horas ou aprovação.
+        $snapshottedIds = $snapshots->map(fn ($snapshot) => $snapshot->employee_id)->all();
+        $candidates = $this->scopedEmployeesQuery($actor, null, $sectorId, $employeeId, $managedSectorIds)
+            ->whereNotIn('id', $snapshottedIds ?: [0])
+            ->get();
+
+        if ($candidates->isNotEmpty()) {
+            $tracedIds = $this->tracedEmployeeIds(
+                $candidates->map(fn (Employee $employee) => $employee->id)->all(),
+                $year,
+                $month
+            );
+            $candidateReviews = MonthlyAttendanceReview::where('year', $year)
+                ->where('month', $month)
+                ->whereIn('employee_id', array_keys($tracedIds))
+                ->get()
+                ->keyBy('employee_id');
+
+            foreach ($candidates as $candidate) {
+                if (! isset($tracedIds[$candidate->id])) {
+                    continue;
+                }
+
+                // Sem snapshot não há lotação congelada para confrontar
+                // filtro de estabelecimento: exclui nesses casos.
+                if ($establishmentId) {
+                    continue;
+                }
+
+                $unavailableRow = $this->unavailableRow($candidate, $candidateReviews->get($candidate->id));
+                $rows[] = $unavailableRow;
+                $this->accumulateTotals($totals, $unavailableRow);
+            }
         }
 
         // Ordenar alfabeticamente por nome
@@ -212,9 +269,9 @@ class MonthlyAttendanceReportService
             'is_closed' => true,
             'is_provisional' => false,
             'report_type_title' => 'RELATÓRIO MENSAL CONSOLIDADO DE FREQUÊNCIA',
-            'report_badge_label' => 'DEFINITIVO / HOMOLOGADO',
+            'report_badge_label' => 'DEFINITIVO / FECHADO',
             'provisional_notice' => null,
-            'history_unavailable' => $snapshotsByEmployee->isEmpty(),
+            'history_unavailable' => $snapshots->isEmpty(),
             'closed_period_id' => $closedPeriod->id,
             'closed_version' => $closedPeriod->snapshot_version,
             'closed_hash' => $closedPeriod->snapshot_hash,
@@ -670,6 +727,11 @@ class MonthlyAttendanceReportService
 
         // Campos sistêmicos estritos (horas 00:00 e contagens) não oferecem vetor de fórmula.
         if (preg_match('/^[+-]?\d{2}:\d{2}$/', $value) === 1 || preg_match('/^\d+$/', $value) === 1) {
+            // Preserva zeros à esquerda (CPF, matrícula) como texto.
+            if (preg_match('/^0\d+$/', $value) === 1) {
+                return '"\''.$value.'"';
+            }
+
             return '"'.$value.'"';
         }
 

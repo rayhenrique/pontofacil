@@ -206,7 +206,7 @@ class MonthlyAttendanceReportTest extends TestCase
         $this->assertFalse($reportBefore['is_provisional']);
         $this->assertEquals($closedPeriod->id, $reportBefore['closed_period_id']);
         $this->assertEquals($closedPeriod->snapshot_hash, $reportBefore['closed_hash']);
-        $this->assertEquals('DEFINITIVO / HOMOLOGADO', $reportBefore['report_badge_label']);
+        $this->assertEquals('DEFINITIVO / FECHADO', $reportBefore['report_badge_label']);
 
         // Alterar escala e criar batidas posteriores no banco de dados
         $newSchedule = WorkSchedule::create([

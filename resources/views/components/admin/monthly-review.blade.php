@@ -546,7 +546,7 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
         <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-blue-200 dark:border-blue-800/50 shadow-sm">
             <span class="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Com Ressalva</span>
             <div class="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">{{ $overview['reviewed_with_reservation_count'] }}</div>
-            <span class="text-xs text-blue-600/70 dark:text-blue-400/70">Homologados c/ justificativa</span>
+                            <span class="text-xs text-blue-600/70 dark:text-blue-400/70">Conferidos c/ justificativa</span>
         </div>
 
         <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-rose-200 dark:border-rose-800/50 shadow-sm">
@@ -933,7 +933,7 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                                 @endforeach
                             </ul>
                             <p class="text-[11px] pt-1 text-rose-700 dark:text-rose-400 italic">
-                                * É obrigatório registrar uma justificativa formal/ressalva fundamentada abaixo para homologar este servidor.
+                                * É obrigatório registrar uma justificativa formal/ressalva fundamentada abaixo para concluir a conferência deste servidor.
                             </p>
                         </div>
                     @endif

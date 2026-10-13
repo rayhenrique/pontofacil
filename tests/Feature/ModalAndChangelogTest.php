@@ -42,13 +42,13 @@ class ModalAndChangelogTest extends TestCase
         $test = Livewire::actingAs($user)
             ->test('version-notifier')
             ->assertSet('showModal', true)
-            ->assertSet('currentVersion', 'v2.6.8')
-            ->assertSee('PontoFácil v2.6.8')
+            ->assertSet('currentVersion', 'v2.6.9')
+            ->assertSee('PontoFácil v2.6.9')
             ->call('close')
             ->assertSet('showModal', false);
 
         $user->refresh();
-        $this->assertEquals('v2.6.8', $user->last_seen_version);
+        $this->assertEquals('v2.6.9', $user->last_seen_version);
     }
 
     public function test_version_notifier_does_not_show_modal_if_user_already_viewed_current_version(): void
@@ -58,13 +58,13 @@ class ModalAndChangelogTest extends TestCase
             'email' => 'colab_updated@test.com',
             'password' => 'secret123',
             'role' => UserRole::Employee,
-            'last_seen_version' => 'v2.6.8',
+            'last_seen_version' => 'v2.6.9',
         ]);
 
         Livewire::actingAs($user)
             ->test('version-notifier')
             ->assertSet('showModal', false)
-            ->assertSet('currentVersion', 'v2.6.8');
+            ->assertSet('currentVersion', 'v2.6.9');
     }
 
     public function test_help_page_changelog_items_are_properly_parsed_without_empty_melhoria_titles(): void

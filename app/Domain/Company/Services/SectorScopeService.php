@@ -47,6 +47,19 @@ class SectorScopeService
         return in_array($sectorId, $this->managedSectorIds($user), true);
     }
 
+    /**
+     * Escopo histórico explícito para competências fechadas.
+     *
+     * A gestão é avaliada no momento da consulta (setores atualmente
+     * sob gestão), aplicada sobre a lotação congelada no snapshot.
+     * Sem lotação verificável, o acesso é negado — conhecer um ID
+     * nunca concede acesso.
+     */
+    public function canAccessHistoricalSector(User $user, ?int $frozenSectorId): bool
+    {
+        return $this->canManageSector($user, $frozenSectorId);
+    }
+
     public function canManageEmployee(User $user, ?Employee $employee): bool
     {
         if ($user->isAdmin()) {
