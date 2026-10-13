@@ -25,6 +25,10 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
     public string $search = '';
     public string $statusFilter = 'all';
 
+    // Paginação da listagem (totais gerais sempre preservados)
+    public int $page = 1;
+    public int $perPage = 20;
+
     // Seleção em lote
     public array $selectedIds = [];
     public bool $selectAll = false;
@@ -61,6 +65,7 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
         $this->month = $date->month;
         $this->selectedIds = [];
         $this->selectAll = false;
+        $this->page = 1;
     }
 
     public function nextMonth(): void
@@ -70,6 +75,34 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
         $this->month = $date->month;
         $this->selectedIds = [];
         $this->selectAll = false;
+        $this->page = 1;
+    }
+
+    public function updatedSectorId(): void
+    {
+        $this->page = 1;
+        $this->selectedIds = [];
+        $this->selectAll = false;
+    }
+
+    public function updatedSearch(): void
+    {
+        $this->page = 1;
+    }
+
+    public function updatedStatusFilter(): void
+    {
+        $this->page = 1;
+    }
+
+    public function previousPage(): void
+    {
+        $this->page = max(1, $this->page - 1);
+    }
+
+    public function nextPage(): void
+    {
+        $this->page = $this->page + 1;
     }
 
     public function updatedSelectAll(bool $value): void
@@ -385,6 +418,17 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
             $sectorsQuery->where('manager_id', $user->id);
         }
         $availableSectors = $sectorsQuery->orderBy('name')->get();
+
+        // Paginação da listagem (totais do cabeçalho sempre sobre o conjunto filtrado)
+        $totalFiltered = $items->count();
+        $totalPages = max(1, (int) ceil($totalFiltered / $this->perPage));
+        $currentPage = min(max(1, $this->page), $totalPages);
+        $pagedItems = $items->slice(($currentPage - 1) * $this->perPage, $this->perPage)->values();
+
+        // Identificadores exibidos em uma única consulta (sem N+1 por linha).
+        $employeesMap = Employee::whereIn('id', $pagedItems->pluck('employee_id')->all())
+            ->get(['id', 'user_id'])
+            ->keyBy('id');
     @endphp
 
     <!-- Cabeçalho Principal e Navegação de Competência -->
@@ -596,6 +640,9 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                 </div>
             @endif
         </div>
+        <div wire:loading class="pt-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400" aria-live="polite">
+            Atualizando conferência…
+        </div>
     </div>
 
     <!-- VISÃO DESKTOP: Tabela Operacional de Alta Densidade -->
@@ -624,9 +671,9 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                    @forelse ($items as $item)
+                    @forelse ($pagedItems as $item)
                         @php
-                            $employee = Employee::find($item['employee_id']);
+                            $employee = $employeesMap->get($item['employee_id']);
                             $userId = $employee?->user_id;
                             $status = $item['status'];
                             $isEligibleForBatch = ! $item['is_closed'] && ! $item['has_unresolved_occurrences'];
@@ -744,9 +791,9 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
 
     <!-- VISÃO MOBILE-FIRST: Cards Otimizados para Celular/Tablet -->
     <div class="block md:hidden space-y-3">
-        @forelse ($items as $item)
+        @forelse ($pagedItems as $item)
             @php
-                $employee = Employee::find($item['employee_id']);
+                $employee = $employeesMap->get($item['employee_id']);
                 $userId = $employee?->user_id;
                 $status = $item['status'];
             @endphp
@@ -826,6 +873,31 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
             </div>
         @endforelse
     </div>
+
+    <!-- Paginação da listagem -->
+    @if ($totalPages > 1)
+        <div class="flex items-center justify-between gap-3 bg-white dark:bg-gray-800 px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+            <button
+                wire:click="previousPage"
+                type="button"
+                @disabled($currentPage <= 1)
+                class="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+            >
+                ← Anterior
+            </button>
+            <span class="text-xs font-semibold text-gray-500 dark:text-gray-400" aria-live="polite">
+                Página {{ $currentPage }} de {{ $totalPages }} ({{ $totalFiltered }} servidores)
+            </span>
+            <button
+                wire:click="nextPage"
+                type="button"
+                @disabled($currentPage >= $totalPages)
+                class="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+            >
+                Próxima →
+            </button>
+        </div>
+    @endif
 
     <!-- MODAL DE CONFERÊNCIA INDIVIDUAL -->
     @if ($showReviewModal && $reviewingData)

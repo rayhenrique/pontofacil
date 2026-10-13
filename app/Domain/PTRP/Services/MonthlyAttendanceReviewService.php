@@ -8,6 +8,7 @@ use App\Domain\PTRP\Enums\TreatmentEventStatus;
 use App\Enums\AttendanceReviewStatus;
 use App\Enums\UserRole;
 use App\Models\ClosedPeriod;
+use App\Models\ClosedPeriodEmployeeSnapshot;
 use App\Models\Employee;
 use App\Models\MonthlyAttendanceReview;
 use App\Models\Sector;
@@ -58,7 +59,7 @@ class MonthlyAttendanceReviewService
      * Resolve o resumo analítico de conferência para um colaborador na competência especificada.
      * Se a competência estiver fechada, consulta ESTRITAMENTE os snapshots imutáveis (sem recálculo vivo).
      */
-    public function resolveEmployeeReviewData(Employee $employee, int $year, int $month): array
+    public function resolveEmployeeReviewData(Employee $employee, int $year, int $month, ?MonthlyBatchContext $batch = null): array
     {
         $closedPeriod = ClosedPeriod::findForPeriod($year, $month);
         $isClosed = $closedPeriod && $closedPeriod->status === 'closed';
@@ -67,7 +68,17 @@ class MonthlyAttendanceReviewService
             return $this->resolveFromClosedSnapshot($employee, $closedPeriod, $year, $month);
         }
 
-        return $this->resolveFromLiveCalculation($employee, $year, $month);
+        $batch ??= app(MonthlyJourneyBatchService::class)->forCompetence(collect([$employee]), $year, $month);
+
+        return $this->buildLiveItem(
+            employee: $employee,
+            year: $year,
+            month: $month,
+            batch: $batch,
+            pendingTreatmentsCount: $this->pendingTreatmentsCountFor($employee, $year, $month),
+            hasShiftsInPeriod: $this->hasShiftsInPeriod($employee, $year, $month),
+            review: $this->findReview($employee, $year, $month),
+        );
     }
 
     /**
@@ -78,6 +89,25 @@ class MonthlyAttendanceReviewService
         $snapshot = $closedPeriod->currentSnapshots()
             ->where('employee_id', $employee->id)
             ->first();
+
+        // Buscar registro de conferência associado
+        $review = MonthlyAttendanceReview::where('employee_id', $employee->id)
+            ->where('year', $year)
+            ->where('month', $month)
+            ->first();
+
+        return $this->buildClosedItem($employee, $closedPeriod, $snapshot, $review);
+    }
+
+    /**
+     * Agrega os dados congelados de um colaborador (snapshots imutáveis, sem recálculo).
+     */
+    protected function buildClosedItem(
+        Employee $employee,
+        ClosedPeriod $closedPeriod,
+        ?ClosedPeriodEmployeeSnapshot $snapshot,
+        ?MonthlyAttendanceReview $review,
+    ): array {
 
         $empSnapshot = $snapshot?->employee_snapshot ?? [];
         $schedSnapshot = $snapshot?->schedule_snapshot ?? [];
@@ -103,12 +133,6 @@ class MonthlyAttendanceReviewService
         }
 
         $balanceMinutes = $workedMinutes - $scheduledMinutes;
-
-        // Buscar registro de conferência associado
-        $review = MonthlyAttendanceReview::where('employee_id', $employee->id)
-            ->where('year', $year)
-            ->where('month', $month)
-            ->first();
 
         $status = $review?->status ?? AttendanceReviewStatus::Reviewed;
 
@@ -139,10 +163,34 @@ class MonthlyAttendanceReviewService
     /**
      * Resolve dados do colaborador ao vivo na competência aberta utilizando o motor existente.
      */
-    protected function resolveFromLiveCalculation(Employee $employee, int $year, int $month): array
+    protected function resolveFromLiveCalculation(Employee $employee, int $year, int $month, ?MonthlyBatchContext $batch = null): array
     {
-        $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth();
-        $endDate = $startDate->copy()->endOfMonth();
+        $batch ??= app(MonthlyJourneyBatchService::class)->forCompetence(collect([$employee]), $year, $month);
+
+        return $this->buildLiveItem(
+            employee: $employee,
+            year: $year,
+            month: $month,
+            batch: $batch,
+            pendingTreatmentsCount: $this->pendingTreatmentsCountFor($employee, $year, $month),
+            hasShiftsInPeriod: $this->hasShiftsInPeriod($employee, $year, $month),
+            review: $this->findReview($employee, $year, $month),
+        );
+    }
+
+    /**
+     * Agrega a apuração viva de um colaborador sobre o lote mensal compartilhado.
+     */
+    protected function buildLiveItem(
+        Employee $employee,
+        int $year,
+        int $month,
+        MonthlyBatchContext $batch,
+        int $pendingTreatmentsCount,
+        bool $hasShiftsInPeriod,
+        ?MonthlyAttendanceReview $review,
+    ): array {
+        $endDate = Carbon::createFromDate($year, $month, 1)->endOfMonth();
         $daysInMonth = $endDate->day;
 
         $scheduledMinutes = 0;
@@ -154,7 +202,7 @@ class MonthlyAttendanceReviewService
 
         for ($d = 1; $d <= $daysInMonth; $d++) {
             $curDate = Carbon::createFromDate($year, $month, $d);
-            $journey = $this->calculateDailyJourneyAction->execute($employee, $curDate);
+            $journey = $batch->journeyFor($employee, $curDate);
 
             $scheduledMinutes += $journey->scheduledMinutes;
             $workedMinutes += $journey->workedMinutes;
@@ -165,8 +213,8 @@ class MonthlyAttendanceReviewService
         }
 
         // 1. Ausência total de escala ou plantões no período
-        $hasNoScheduleAssigned = ($employee->getWorkScheduleForDate($endDate) === null)
-            && ! ShiftAssignment::where('employee_id', $employee->id)->forPeriod($startDate, $endDate)->exists();
+        $hasNoScheduleAssigned = ($batch->scheduleFor($employee, $endDate) === null)
+            && ! $hasShiftsInPeriod;
 
         if ($hasNoScheduleAssigned) {
             $occurrences[] = 'Servidor sem escala de trabalho ou plantões atribuídos na competência';
@@ -178,26 +226,12 @@ class MonthlyAttendanceReviewService
         }
 
         // 3. Tratamentos pendentes do colaborador no mês
-        $pendingTreatmentsCount = TreatmentEvent::where(function ($q) use ($employee) {
-            $q->where('employee_id', $employee->id)
-                ->orWhere('employment_id', $employee->id);
-        })
-            ->where('status', TreatmentEventStatus::Pending)
-            ->whereBetween('effective_at', [$startDate, $endDate])
-            ->count();
-
         if ($pendingTreatmentsCount > 0) {
             $occurrences[] = "{$pendingTreatmentsCount} solicitação(ões) de tratamento aguardando aprovação pelo RH";
         }
 
         $balanceMinutes = $workedMinutes - $scheduledMinutes;
         $hasUnresolvedOccurrences = count($occurrences) > 0;
-
-        // Buscar registro salvo no banco
-        $review = MonthlyAttendanceReview::where('employee_id', $employee->id)
-            ->where('year', $year)
-            ->where('month', $month)
-            ->first();
 
         // Determinar status inteligente
         $status = AttendanceReviewStatus::Pending;
@@ -207,7 +241,7 @@ class MonthlyAttendanceReviewService
             $status = AttendanceReviewStatus::WithOccurrences;
         }
 
-        $schedule = $employee->getWorkScheduleForDate($endDate) ?? $employee->workSchedule;
+        $schedule = $batch->scheduleFor($employee, $endDate) ?? $employee->workSchedule;
 
         return [
             'employee_id' => $employee->id,
@@ -241,8 +275,31 @@ class MonthlyAttendanceReviewService
         $closedPeriod = ClosedPeriod::findForPeriod($year, $month);
         $isClosed = $closedPeriod && $closedPeriod->status === 'closed';
 
+        if ($isClosed) {
+            $closedPeriod->loadMissing('closer');
+        }
+
         $employees = $this->getScopedEmployeesQuery($actor, $sectorId)->get();
         $totalEmployees = $employees->count();
+        $employeeIds = $employees->map(fn (Employee $employee) => $employee->id)->all();
+
+        $startOfMonth = Carbon::createFromDate($year, $month, 1)->startOfMonth();
+        $endOfMonth = $startOfMonth->copy()->endOfMonth();
+
+        // Conferências da competência em uma única consulta.
+        $reviewsByEmployee = $employeeIds
+            ? MonthlyAttendanceReview::with('reviewer')
+                ->where('year', $year)
+                ->where('month', $month)
+                ->whereIn('employee_id', $employeeIds)
+                ->get()
+                ->keyBy(fn (MonthlyAttendanceReview $review) => $review->employee_id)
+            : collect();
+
+        $batch = null;
+        $pendingCounts = [];
+        $shiftsExistence = [];
+        $snapshotsByEmployee = collect();
 
         $reviewedCount = 0;
         $reviewedWithReservationCount = 0;
@@ -250,17 +307,79 @@ class MonthlyAttendanceReviewService
         $withOccurrencesCount = 0;
 
         $items = [];
-        /** @var Employee $emp */
-        foreach ($employees as $emp) {
-            $data = $this->resolveEmployeeReviewData($emp, $year, $month);
-            $items[] = $data;
 
-            match ($data['status']) {
-                AttendanceReviewStatus::Reviewed => $reviewedCount++,
-                AttendanceReviewStatus::ReviewedWithReservation => $reviewedWithReservationCount++,
-                AttendanceReviewStatus::WithOccurrences => $withOccurrencesCount++,
-                default => $pendingCount++,
-            };
+        // Processamento em blocos para limitar o pico de memória,
+        // preservando totais e itens idênticos ao processamento integral.
+        foreach ($employees->chunk(100) as $chunk) {
+            $chunkIds = $chunk->map(fn (Employee $employee) => $employee->id)->all();
+
+            if ($isClosed) {
+                // Snapshots congelados do bloco (sem recálculo).
+                $snapshotsByEmployee = $closedPeriod->currentSnapshots()
+                    ->whereIn('employee_id', $chunkIds)
+                    ->get()
+                    ->keyBy(fn (ClosedPeriodEmployeeSnapshot $snapshot) => $snapshot->employee_id);
+            } else {
+                // Lote mensal compartilhado do bloco.
+                $batch = app(MonthlyJourneyBatchService::class)->forCompetence($chunk, $year, $month);
+
+                // Tratamentos pendentes por colaborador do bloco.
+                // Um tratamento com vínculo e emprego distintos conta para ambos,
+                // espelhando a consulta original (employee_id = X OR employment_id = X).
+                $pendingCounts = [];
+                $pendingEvents = TreatmentEvent::where('status', TreatmentEventStatus::Pending)
+                    ->whereBetween('effective_at', [$startOfMonth, $endOfMonth])
+                    ->where(function ($query) use ($chunkIds) {
+                        $query->whereIn('employee_id', $chunkIds)
+                            ->orWhereIn('employment_id', $chunkIds);
+                    })
+                    ->get(['employee_id', 'employment_id']);
+
+                foreach ($pendingEvents as $event) {
+                    foreach (array_unique(array_filter([$event->employee_id, $event->employment_id])) as $ownerId) {
+                        $pendingCounts[$ownerId] = ($pendingCounts[$ownerId] ?? 0) + 1;
+                    }
+                }
+
+                // Existência de plantões no período para o bloco.
+                $shiftsExistence = [];
+                $shiftOwnerIds = ShiftAssignment::whereIn('employee_id', $chunkIds)
+                    ->forPeriod($startOfMonth, $endOfMonth)
+                    ->distinct()
+                    ->pluck('employee_id')
+                    ->all();
+
+                foreach ($shiftOwnerIds as $ownerId) {
+                    $shiftsExistence[$ownerId] = true;
+                }
+            }
+
+            /** @var Employee $emp */
+            foreach ($chunk as $emp) {
+                $review = $reviewsByEmployee->get($emp->id);
+
+                $data = $isClosed
+                    ? $this->buildClosedItem($emp, $closedPeriod, $snapshotsByEmployee->get($emp->id), $review)
+                    : $this->buildLiveItem(
+                        employee: $emp,
+                        year: $year,
+                        month: $month,
+                        batch: $batch,
+                        pendingTreatmentsCount: $pendingCounts[$emp->id] ?? 0,
+                        hasShiftsInPeriod: $shiftsExistence[$emp->id] ?? false,
+                        review: $review,
+                    );
+                $items[] = $data;
+
+                match ($data['status']) {
+                    AttendanceReviewStatus::Reviewed => $reviewedCount++,
+                    AttendanceReviewStatus::ReviewedWithReservation => $reviewedWithReservationCount++,
+                    AttendanceReviewStatus::WithOccurrences => $withOccurrencesCount++,
+                    default => $pendingCount++,
+                };
+            }
+
+            unset($batch, $snapshotsByEmployee, $pendingCounts, $shiftsExistence);
         }
 
         $totalChecked = $reviewedCount + $reviewedWithReservationCount;
@@ -303,5 +422,46 @@ class MonthlyAttendanceReviewService
             'blocking_reasons' => $blockingReasons,
             'items' => $items,
         ];
+    }
+
+    /**
+     * Quantidade de tratamentos pendentes do colaborador na competência.
+     */
+    protected function pendingTreatmentsCountFor(Employee $employee, int $year, int $month): int
+    {
+        $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth();
+        $endDate = $startDate->copy()->endOfMonth();
+
+        return TreatmentEvent::where(function ($query) use ($employee) {
+            $query->where('employee_id', $employee->id)
+                ->orWhere('employment_id', $employee->id);
+        })
+            ->where('status', TreatmentEventStatus::Pending)
+            ->whereBetween('effective_at', [$startDate, $endDate])
+            ->count();
+    }
+
+    /**
+     * Indica se o colaborador possui plantões no período da competência.
+     */
+    protected function hasShiftsInPeriod(Employee $employee, int $year, int $month): bool
+    {
+        $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth();
+        $endDate = $startDate->copy()->endOfMonth();
+
+        return ShiftAssignment::where('employee_id', $employee->id)
+            ->forPeriod($startDate, $endDate)
+            ->exists();
+    }
+
+    /**
+     * Registro de conferência salvo para o colaborador na competência.
+     */
+    protected function findReview(Employee $employee, int $year, int $month): ?MonthlyAttendanceReview
+    {
+        return MonthlyAttendanceReview::where('employee_id', $employee->id)
+            ->where('year', $year)
+            ->where('month', $month)
+            ->first();
     }
 }

@@ -24,6 +24,10 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
     public string $sectorId = '';
     public string $employeeId = '';
 
+    // Paginação da listagem (totais gerais sempre preservados)
+    public int $page = 1;
+    public int $perPage = 20;
+
     // Modal de Encaminhamento ao Setor de Pagamento
     public bool $showDispatchModal = false;
     public ?int $selectedLogId = null;
@@ -43,6 +47,7 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
         $date = Carbon::createFromDate($this->year, $this->month, 1)->subMonth();
         $this->year = $date->year;
         $this->month = $date->month;
+        $this->page = 1;
     }
 
     public function nextMonth(): void
@@ -50,6 +55,32 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
         $date = Carbon::createFromDate($this->year, $this->month, 1)->addMonth();
         $this->year = $date->year;
         $this->month = $date->month;
+        $this->page = 1;
+    }
+
+    public function updatedEstablishmentId(): void
+    {
+        $this->page = 1;
+    }
+
+    public function updatedSectorId(): void
+    {
+        $this->page = 1;
+    }
+
+    public function updatedEmployeeId(): void
+    {
+        $this->page = 1;
+    }
+
+    public function previousPage(): void
+    {
+        $this->page = max(1, $this->page - 1);
+    }
+
+    public function nextPage(): void
+    {
+        $this->page = $this->page + 1;
     }
 
     public function openDispatchModal(?int $logId = null): void
@@ -377,6 +408,9 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
                 </a>
             </div>
         </div>
+        <div wire:loading class="pt-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400" aria-live="polite">
+            Atualizando relatório…
+        </div>
     </div>
 
     <!-- Cards de Totais Agregados da Competência -->
@@ -446,9 +480,18 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700 font-sans">
-                    @forelse ($rows as $r)
+                    @php
+                        $totalRows = count($rows);
+                        $totalPages = max(1, (int) ceil($totalRows / $this->perPage));
+                        $currentPage = min(max(1, $this->page), $totalPages);
+                        $pagedRows = array_slice($rows, ($currentPage - 1) * $this->perPage, $this->perPage);
+                        $reportEmployeesMap = \App\Models\Employee::whereIn('id', collect($pagedRows)->pluck('employee_id')->all())
+                            ->get(['id', 'user_id'])
+                            ->keyBy('id');
+                    @endphp
+                    @forelse ($pagedRows as $r)
                         @php
-                            $employeeModel = \App\Models\Employee::find($r['employee_id']);
+                            $employeeModel = $reportEmployeesMap->get($r['employee_id']);
                             $userId = $employeeModel?->user_id;
                             $status = $r['review_status'];
                         @endphp
@@ -540,6 +583,30 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
             </table>
         </div>
     </div>
+
+    @if ($totalPages > 1)
+        <div class="flex items-center justify-between gap-3 bg-white dark:bg-gray-800 px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
+            <button
+                wire:click="previousPage"
+                type="button"
+                @disabled($currentPage <= 1)
+                class="px-4 py-2 rounded-xl text-sm font-semibold border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+            >
+                ← Anterior
+            </button>
+            <span class="text-xs font-semibold text-gray-500 dark:text-gray-400" aria-live="polite">
+                Página {{ $currentPage }} de {{ $totalPages }} ({{ $totalRows }} servidores)
+            </span>
+            <button
+                wire:click="nextPage"
+                type="button"
+                @disabled($currentPage >= $totalPages)
+                class="px-4 py-2 rounded-xl text-sm font-semibold border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+            >
+                Próxima →
+            </button>
+        </div>
+    @endif
 
     <!-- Histórico de Emissões & Encaminhamento ao Setor de Pagamento -->
     <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-4">

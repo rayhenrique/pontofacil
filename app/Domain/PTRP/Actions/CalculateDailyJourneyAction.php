@@ -6,6 +6,7 @@ use App\Domain\Calendar\Services\WorkCalendarService;
 use App\Domain\LaborRules\Actions\CalculateNightWorkAction;
 use App\Domain\LaborRules\DTOs\WorkInterval;
 use App\Domain\PTRP\DTOs\CalculatedJourney;
+use App\Domain\PTRP\DTOs\DailyJourneyPrefetch;
 use App\Domain\PTRP\Enums\TreatmentEventStatus;
 use App\Domain\PTRP\Enums\TreatmentEventType;
 use App\Domain\PTRP\Policies\LaborPolicy;
@@ -44,16 +45,30 @@ class CalculateDailyJourneyAction
         ?Collection $prefetchedRawPunches = null,
         ?Collection $prefetchedApprovedTreatments = null,
         ?ShiftAssignment $prefetchedShift = null,
+        ?DailyJourneyPrefetch $prefetch = null,
     ): CalculatedJourney {
         $dateStr = $date->format('Y-m-d');
+        $dayStart = $date->copy()->startOfDay();
+        $dayEnd = $date->copy()->addDay()->startOfDay();
 
         // 1. Resolver Plantão (ShiftAssignment) e Escala de Trabalho (WorkSchedule)
-        $shift = $prefetchedShift ?? ShiftAssignment::where('employee_id', $employee->id)
-            ->active()
-            ->whereDate('start_at_local', $dateStr)
-            ->first();
+        if ($prefetch !== null && $prefetch->shiftResolved) {
+            $shift = $prefetch->shift;
+        } else {
+            $shift = $prefetchedShift ?? ShiftAssignment::where('employee_id', $employee->id)
+                ->active()
+                ->where('start_at_local', '>=', $dayStart)
+                ->where('start_at_local', '<', $dayEnd)
+                ->first();
+        }
 
-        $workSchedule = $schedule ?? $shift?->workSchedule ?? $employee->getWorkScheduleForDate($date);
+        if ($schedule !== null) {
+            $workSchedule = $schedule;
+        } elseif ($prefetch !== null && $prefetch->scheduleResolved) {
+            $workSchedule = $prefetch->resolvedSchedule;
+        } else {
+            $workSchedule = $shift?->workSchedule ?? $employee->getWorkScheduleForDate($date);
+        }
         $isScheduleAuthorized = $workSchedule ? $workSchedule->isAuthorizedForRegime($employee->legal_regime) : false;
 
         $hasSchedule = ($shift !== null) || ($workSchedule !== null && $isScheduleAuthorized);
@@ -93,7 +108,11 @@ class CalculateDailyJourneyAction
         }
 
         // 2. Perfil de regras jurídicas aplicável (CLT, Estatutário Federal, Estadual ou Municipal)
-        $ruleProfile = $employee->getLaborRuleProfileForDate($date);
+        if ($prefetch !== null && $prefetch->ruleProfileResolved) {
+            $ruleProfile = $prefetch->ruleProfile;
+        } else {
+            $ruleProfile = $employee->getLaborRuleProfileForDate($date);
+        }
         $laborRuleProfileId = $ruleProfile?->id;
         $laborRuleProfileCode = $ruleProfile?->code;
 
@@ -104,9 +123,9 @@ class CalculateDailyJourneyAction
         );
 
         // 4. Consultar Calendário Laboral (20.18.8)
-        $establishment = $employee->sector?->establishment ?? Establishment::first();
+        $establishment = $prefetch?->establishment ?? $employee->sector?->establishment ?? Establishment::first();
         $calendarService = app(WorkCalendarService::class);
-        $calendarDay = $calendarService->resolveDay($date, $establishment, $scheduledMinutes, $expectedPeriods);
+        $calendarDay = $calendarService->resolveDay($date, $establishment, $scheduledMinutes, $expectedPeriods, $prefetch?->calendarEvents);
 
         $is12x36 = ($shift?->shift_type === ShiftType::Shift12x36) || ($workSchedule?->modality === WorkScheduleModality::TwelveByThirtySix);
 
@@ -142,7 +161,8 @@ class CalculateDailyJourneyAction
             $q->where('employee_id', $employee->id)
                 ->orWhere('user_id', $employee->user_id);
         })
-            ->whereDate('occurred_at_local', $dateStr)
+            ->where('occurred_at_local', '>=', $dayStart)
+            ->where('occurred_at_local', '<', $dayEnd)
             ->orderBy('occurred_at_local', 'asc')
             ->get();
 
@@ -152,7 +172,8 @@ class CalculateDailyJourneyAction
                 ->orWhere('employment_id', $employee->id);
         })
             ->where('status', TreatmentEventStatus::Approved)
-            ->whereDate('effective_at', $dateStr)
+            ->where('effective_at', '>=', $dayStart)
+            ->where('effective_at', '<', $dayEnd)
             ->get();
 
         $disregardedPunchIds = $approvedTreatments
@@ -188,10 +209,13 @@ class CalculateDailyJourneyAction
 
         // Fallback para histórico legado em TimeEntry se não houver registros em PunchEvent
         if ($rawPunches->isEmpty() && $employee->user_id) {
-            $legacyEntries = TimeEntry::where('user_id', $employee->user_id)
-                ->whereDate('timestamp', $dateStr)
-                ->orderBy('timestamp', 'asc')
-                ->get();
+            $legacyEntries = ($prefetch !== null && $prefetch->legacyResolved)
+                ? $prefetch->legacyEntries
+                : TimeEntry::where('user_id', $employee->user_id)
+                    ->where('timestamp', '>=', $dayStart)
+                    ->where('timestamp', '<', $dayEnd)
+                    ->orderBy('timestamp', 'asc')
+                    ->get();
 
             foreach ($legacyEntries as $entry) {
                 $entryTime = Carbon::parse($entry->timestamp);
@@ -237,25 +261,36 @@ class CalculateDailyJourneyAction
             if ($firstDir === 'out') {
                 $prevDate = $date->copy()->subDay();
                 $prevDateStr = $prevDate->format('Y-m-d');
-                $prevShift = ShiftAssignment::where('employee_id', $employee->id)
-                    ->active()
-                    ->whereDate('start_at_local', $prevDateStr)
-                    ->where('crosses_midnight', true)
-                    ->first();
+                $prevDayStart = $prevDate->copy()->startOfDay();
+                $prevDayEnd = $date->copy()->startOfDay();
 
-                $prevPunches = PunchEvent::where(function ($q) use ($employee) {
-                    $q->where('employee_id', $employee->id)
-                        ->orWhere('user_id', $employee->user_id);
-                })
-                    ->whereDate('occurred_at_local', $prevDateStr)
-                    ->orderBy('occurred_at_local', 'asc')
-                    ->get();
+                if ($prefetch !== null && $prefetch->neighborsResolved) {
+                    $prevShift = $prefetch->prevShift;
+                    $prevPunches = $prefetch->prevDayPunches;
+                } else {
+                    $prevShift = ShiftAssignment::where('employee_id', $employee->id)
+                        ->active()
+                        ->where('start_at_local', '>=', $prevDayStart)
+                        ->where('start_at_local', '<', $prevDayEnd)
+                        ->where('crosses_midnight', true)
+                        ->first();
 
-                if ($prevPunches->isEmpty() && $employee->user_id) {
-                    $prevPunches = TimeEntry::where('user_id', $employee->user_id)
-                        ->whereDate('timestamp', $prevDateStr)
-                        ->orderBy('timestamp', 'asc')
+                    $prevPunches = PunchEvent::where(function ($q) use ($employee) {
+                        $q->where('employee_id', $employee->id)
+                            ->orWhere('user_id', $employee->user_id);
+                    })
+                        ->where('occurred_at_local', '>=', $prevDayStart)
+                        ->where('occurred_at_local', '<', $prevDayEnd)
+                        ->orderBy('occurred_at_local', 'asc')
                         ->get();
+
+                    if ($prevPunches->isEmpty() && $employee->user_id) {
+                        $prevPunches = TimeEntry::where('user_id', $employee->user_id)
+                            ->where('timestamp', '>=', $prevDayStart)
+                            ->where('timestamp', '<', $prevDayEnd)
+                            ->orderBy('timestamp', 'asc')
+                            ->get();
+                    }
                 }
 
                 if ($prevPunches->isNotEmpty()) {
@@ -291,19 +326,28 @@ class CalculateDailyJourneyAction
             if ($isNightShift) {
                 $nextDate = $date->copy()->addDay();
                 $nextDateStr = $nextDate->format('Y-m-d');
-                $nextPunches = PunchEvent::where(function ($q) use ($employee) {
-                    $q->where('employee_id', $employee->id)
-                        ->orWhere('user_id', $employee->user_id);
-                })
-                    ->whereDate('occurred_at_local', $nextDateStr)
-                    ->orderBy('occurred_at_local', 'asc')
-                    ->get();
+                $nextDayStart = $nextDate->copy()->startOfDay();
+                $nextDayEnd = $nextDate->copy()->addDay()->startOfDay();
 
-                if ($nextPunches->isEmpty() && $employee->user_id) {
-                    $nextPunches = TimeEntry::where('user_id', $employee->user_id)
-                        ->whereDate('timestamp', $nextDateStr)
-                        ->orderBy('timestamp', 'asc')
+                if ($prefetch !== null && $prefetch->neighborsResolved) {
+                    $nextPunches = $prefetch->nextDayPunches;
+                } else {
+                    $nextPunches = PunchEvent::where(function ($q) use ($employee) {
+                        $q->where('employee_id', $employee->id)
+                            ->orWhere('user_id', $employee->user_id);
+                    })
+                        ->where('occurred_at_local', '>=', $nextDayStart)
+                        ->where('occurred_at_local', '<', $nextDayEnd)
+                        ->orderBy('occurred_at_local', 'asc')
                         ->get();
+
+                    if ($nextPunches->isEmpty() && $employee->user_id) {
+                        $nextPunches = TimeEntry::where('user_id', $employee->user_id)
+                            ->where('timestamp', '>=', $nextDayStart)
+                            ->where('timestamp', '<', $nextDayEnd)
+                            ->orderBy('timestamp', 'asc')
+                            ->get();
+                    }
                 }
 
                 if ($nextPunches->isNotEmpty()) {

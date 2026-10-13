@@ -4,6 +4,8 @@ namespace App\Domain\PTRP\Actions;
 
 use App\Domain\Company\Services\SectorScopeService;
 use App\Domain\PTRP\Services\MonthlyAttendanceReviewService;
+use App\Domain\PTRP\Services\MonthlyBatchContext;
+use App\Domain\PTRP\Services\MonthlyJourneyBatchService;
 use App\Enums\AttendanceReviewStatus;
 use App\Models\ClosedPeriod;
 use App\Models\Employee;
@@ -29,6 +31,7 @@ class ReviewMonthlyAttendanceAction
         int $month,
         User $reviewer,
         ?string $reservationNotes = null,
+        ?MonthlyBatchContext $batch = null,
     ): MonthlyAttendanceReview {
         $this->validatePermissions($employee, $reviewer);
 
@@ -41,7 +44,7 @@ class ReviewMonthlyAttendanceAction
         }
 
         // Analisar apuração do colaborador para avaliar ocorrências
-        $reviewData = $this->reviewService->resolveEmployeeReviewData($employee, $year, $month);
+        $reviewData = $this->reviewService->resolveEmployeeReviewData($employee, $year, $month, $batch);
         $hasOccurrences = $reviewData['has_unresolved_occurrences'] ?? false;
 
         $trimmedReservation = trim((string) $reservationNotes);
@@ -110,7 +113,14 @@ class ReviewMonthlyAttendanceAction
             ));
         }
 
-        $employees = Employee::whereIn('id', $employeeIds)->get();
+        $employees = Employee::with(['user', 'sector.establishment', 'workSchedule'])
+            ->whereIn('id', $employeeIds)
+            ->get();
+
+        // Lote mensal compartilhado: uma única apuração para todos os alvos,
+        // reutilizada tanto na triagem quanto nas confirmações individuais.
+        $batch = app(MonthlyJourneyBatchService::class)->forCompetence($employees, $year, $month);
+
         $reviewedCount = 0;
         $skippedIds = [];
 
@@ -118,7 +128,7 @@ class ReviewMonthlyAttendanceAction
             try {
                 $this->validatePermissions($employee, $reviewer);
 
-                $reviewData = $this->reviewService->resolveEmployeeReviewData($employee, $year, $month);
+                $reviewData = $this->reviewService->resolveEmployeeReviewData($employee, $year, $month, $batch);
                 $hasOccurrences = $reviewData['has_unresolved_occurrences'] ?? false;
 
                 // Em lote, somente registros elegíveis sem ocorrências são confirmados automaticamente
@@ -128,7 +138,7 @@ class ReviewMonthlyAttendanceAction
                     continue;
                 }
 
-                $this->reviewEmployee($employee, $year, $month, $reviewer, null);
+                $this->reviewEmployee($employee, $year, $month, $reviewer, null, $batch);
                 $reviewedCount++;
             } catch (\Exception $e) {
                 $skippedIds[] = $employee->id;

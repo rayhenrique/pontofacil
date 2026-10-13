@@ -1,6 +1,12 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.4 (Atual)
+## v2.6.5 (Atual)
+- **Conferência Mensal e Relatórios Bem Mais Rápidos:**
+  - As telas de conferência e relatório agora carregam os dados do mês de uma vez só, em vez de consultar dia por dia para cada servidor. Com 50 servidores, a abertura caiu de cerca de 11 segundos para cerca de 2 segundos.
+  - Listas com páginas de 20 servidores, mantendo os totais gerais sempre visíveis. Filtros por servidor ficam quase instantâneos.
+  - Os números da apuração continuam exatamente os mesmos (horas, diferenças, atrasos, faltas, noturno e tratamentos). Mês fechado segue lendo apenas os registros congelados.
+
+## v2.6.4
 - **Horários e Escalas Organizados em Três Visões:**
   - A tela de escalas agora tem três abas simples: *Horários* (todos os modelos cadastrados, mesmo sem ninguém vinculado), *Servidores* (quem usa cada horário e por quanto tempo) e *Plantões* (grade do mês para 12×36, 24×72 e 6×1).
   - Horários de expediente fixo (administrativo e corrido) aparecem logo após o cadastro e são usados na apuração sem precisar gerar plantões artificiais.

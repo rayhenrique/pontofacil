@@ -4,8 +4,7 @@ namespace App\Domain\Attendance\Services;
 
 use App\Domain\Company\Services\CurrentCompany;
 use App\Domain\Company\Services\SectorScopeService;
-use App\Domain\PTRP\Actions\CalculateDailyJourneyAction;
-use App\Domain\PTRP\Enums\TreatmentEventStatus;
+use App\Domain\PTRP\Services\MonthlyJourneyBatchService;
 use App\Enums\AttendanceReviewStatus;
 use App\Enums\UserRole;
 use App\Models\ClosedPeriod;
@@ -13,17 +12,11 @@ use App\Models\Employee;
 use App\Models\MonthlyAttendanceReportLog;
 use App\Models\MonthlyAttendanceReview;
 use App\Models\Sector;
-use App\Models\ShiftAssignment;
-use App\Models\TreatmentEvent;
 use App\Models\User;
 use Carbon\Carbon;
 
 class MonthlyAttendanceReportService
 {
-    public function __construct(
-        protected CalculateDailyJourneyAction $calculateDailyJourneyAction,
-    ) {}
-
     /**
      * Resolve todos os dados do relatório mensal consolidado de frequência.
      * Na competência fechada, lê ESTRITAMENTE dos snapshots congelados imutáveis.
@@ -102,6 +95,11 @@ class MonthlyAttendanceReportService
             ->get()
             ->keyBy('employee_id');
 
+        // Cadastros atuais em uma única consulta (apenas setor para escopo).
+        $employeesById = Employee::whereIn('id', $snapshots->map(fn ($snap) => $snap->employee_id)->all())
+            ->get(['id', 'sector_id'])
+            ->keyBy('id');
+
         $rows = [];
         $totals = $this->initializeTotals();
 
@@ -114,8 +112,7 @@ class MonthlyAttendanceReportService
 
             // Filtragem por setor ou estabelecimento baseada no snapshot
             $snapEstablishmentId = $empData['establishment_id'] ?? null;
-            $employeeModel = Employee::find($snap->employee_id);
-            $snapSectorId = $employeeModel?->sector_id;
+            $snapSectorId = $employeesById->get($snap->employee_id)?->sector_id;
 
             if ($managedSectorIds !== null && (! $snapSectorId || ! in_array($snapSectorId, $managedSectorIds, true))) {
                 continue;
@@ -262,86 +259,89 @@ class MonthlyAttendanceReportService
             ->get()
             ->keyBy('employee_id');
 
+        // Lote mensal compartilhado com a Conferência, processado em blocos
+        // para limitar o pico de memória sem alterar totais ou linhas.
         $rows = [];
         $totals = $this->initializeTotals();
 
-        foreach ($employees as $emp) {
-            $scheduledMinutes = 0;
-            $workedMinutes = 0;
-            $absenceMinutes = 0;
-            $nightMinutes = 0;
-            $delayMinutes = 0;
-            $positiveMinutes = 0;
-            $negativeMinutes = 0;
+        foreach ($employees->chunk(100) as $chunk) {
+            $batch = app(MonthlyJourneyBatchService::class)->forCompetence($chunk, $year, $month);
 
-            for ($d = 1; $d <= $daysInMonth; $d++) {
-                $dayDate = Carbon::createFromDate($year, $month, $d);
-                $journey = $this->calculateDailyJourneyAction->execute($emp, $dayDate);
+            foreach ($chunk as $emp) {
+                $scheduledMinutes = 0;
+                $workedMinutes = 0;
+                $absenceMinutes = 0;
+                $nightMinutes = 0;
+                $delayMinutes = 0;
+                $positiveMinutes = 0;
+                $negativeMinutes = 0;
 
-                $scheduledMinutes += $journey->scheduledMinutes;
-                $workedMinutes += $journey->workedMinutes;
-                $absenceMinutes += $journey->absenceMinutes;
-                $nightMinutes += $journey->physicalNightMinutes;
-                $delayMinutes += $journey->lateMinutes;
+                for ($d = 1; $d <= $daysInMonth; $d++) {
+                    $dayDate = Carbon::createFromDate($year, $month, $d);
+                    $journey = $batch->journeyFor($emp, $dayDate);
 
-                $dayDiff = $journey->dailyDifferenceMinutes();
-                if ($dayDiff === null) {
-                    $dayDiff = $journey->workedMinutes - $journey->scheduledMinutes;
+                    $scheduledMinutes += $journey->scheduledMinutes;
+                    $workedMinutes += $journey->workedMinutes;
+                    $absenceMinutes += $journey->absenceMinutes;
+                    $nightMinutes += $journey->physicalNightMinutes;
+                    $delayMinutes += $journey->lateMinutes;
+
+                    $dayDiff = $journey->dailyDifferenceMinutes();
+                    if ($dayDiff === null) {
+                        $dayDiff = $journey->workedMinutes - $journey->scheduledMinutes;
+                    }
+
+                    if ($dayDiff > 0) {
+                        $positiveMinutes += $dayDiff;
+                    } elseif ($dayDiff < 0) {
+                        $negativeMinutes += $dayDiff;
+                    }
                 }
 
-                if ($dayDiff > 0) {
-                    $positiveMinutes += $dayDiff;
-                } elseif ($dayDiff < 0) {
-                    $negativeMinutes += $dayDiff;
-                }
+                $diffMinutes = $workedMinutes - $scheduledMinutes;
+
+                // Plantões e tratamentos (contados sobre o lote pré-carregado)
+                $shiftsCount = $batch->shiftsCountInPeriod($emp, $startDate, $endDate);
+                $treatmentsCount = $batch->approvedTreatmentsCountFor($emp);
+
+                $review = $reviews->get($emp->id);
+                $reviewStatus = $review?->status ?? AttendanceReviewStatus::Pending;
+
+                $schedule = $batch->scheduleFor($emp, $endDate) ?? $emp->workSchedule;
+
+                $row = [
+                    'employee_id' => $emp->id,
+                    'name' => $emp->user?->name ?? 'Servidor #'.$emp->id,
+                    'registration_number' => $emp->registration_number ?: '—',
+                    'cpf' => $emp->cpf ?: '—',
+                    'legal_regime' => $emp->legal_regime?->value ?? 'CLT',
+                    'job_title' => $emp->job_title ?: 'Não informado',
+                    'department' => $emp->sector?->name ?? 'Geral',
+                    'establishment_name' => $emp->sector?->establishment?->name ?? 'Sede',
+                    'schedule_name' => $schedule?->name ?? 'Sem escala',
+                    'schedule_modality' => $schedule?->modality?->value ?? 'Semanal',
+                    'scheduled_minutes' => $scheduledMinutes,
+                    'worked_minutes' => $workedMinutes,
+                    'balance_minutes' => $diffMinutes,
+                    'positive_minutes' => $positiveMinutes,
+                    'negative_minutes' => $negativeMinutes,
+                    'absence_minutes' => $absenceMinutes,
+                    'delay_minutes' => $delayMinutes,
+                    'night_minutes' => $nightMinutes,
+                    'shifts_count' => $shiftsCount,
+                    'treatments_count' => $treatmentsCount,
+                    'review_status' => $reviewStatus,
+                    'review_status_label' => $reviewStatus->label(),
+                    'reservation_notes' => $review?->reservation_notes,
+                    'reviewed_by_name' => $review?->reviewer?->name,
+                    'reviewed_at' => $review?->reviewed_at,
+                ];
+
+                $rows[] = $row;
+                $this->accumulateTotals($totals, $row);
             }
 
-            $diffMinutes = $workedMinutes - $scheduledMinutes;
-
-            // Plantões e tratamentos
-            $shiftsCount = ShiftAssignment::where('employee_id', $emp->id)->forPeriod($startDate, $endDate)->count();
-            $treatmentsCount = TreatmentEvent::where(function ($q) use ($emp) {
-                $q->where('employee_id', $emp->id)->orWhere('employment_id', $emp->id);
-            })
-                ->where('status', TreatmentEventStatus::Approved)
-                ->whereBetween('effective_at', [$startDate, $endDate])
-                ->count();
-
-            $review = $reviews->get($emp->id);
-            $reviewStatus = $review?->status ?? AttendanceReviewStatus::Pending;
-
-            $schedule = $emp->getWorkScheduleForDate($endDate) ?? $emp->workSchedule;
-
-            $row = [
-                'employee_id' => $emp->id,
-                'name' => $emp->user?->name ?? 'Servidor #'.$emp->id,
-                'registration_number' => $emp->registration_number ?: '—',
-                'cpf' => $emp->cpf ?: '—',
-                'legal_regime' => $emp->legal_regime?->value ?? 'CLT',
-                'job_title' => $emp->job_title ?: 'Não informado',
-                'department' => $emp->sector?->name ?? 'Geral',
-                'establishment_name' => $emp->sector?->establishment?->name ?? 'Sede',
-                'schedule_name' => $schedule?->name ?? 'Sem escala',
-                'schedule_modality' => $schedule?->modality?->value ?? 'Semanal',
-                'scheduled_minutes' => $scheduledMinutes,
-                'worked_minutes' => $workedMinutes,
-                'balance_minutes' => $diffMinutes,
-                'positive_minutes' => $positiveMinutes,
-                'negative_minutes' => $negativeMinutes,
-                'absence_minutes' => $absenceMinutes,
-                'delay_minutes' => $delayMinutes,
-                'night_minutes' => $nightMinutes,
-                'shifts_count' => $shiftsCount,
-                'treatments_count' => $treatmentsCount,
-                'review_status' => $reviewStatus,
-                'review_status_label' => $reviewStatus->label(),
-                'reservation_notes' => $review?->reservation_notes,
-                'reviewed_by_name' => $review?->reviewer?->name,
-                'reviewed_at' => $review?->reviewed_at,
-            ];
-
-            $rows[] = $row;
-            $this->accumulateTotals($totals, $row);
+            unset($batch);
         }
 
         usort($rows, fn ($a, $b) => strcasecmp($a['name'], $b['name']));

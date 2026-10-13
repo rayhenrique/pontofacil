@@ -8,6 +8,7 @@ use App\Enums\WorkBehavior;
 use App\Models\CalendarEvent;
 use App\Models\Establishment;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Collection;
 
 /**
  * 20.18.8 — Serviço de resolução do calendário laboral.
@@ -29,11 +30,12 @@ class WorkCalendarService
         ?Establishment $establishment,
         int $originalScheduledMinutes = 0,
         array $expectedPeriods = [],
+        ?Collection $prefetchedEvents = null,
     ): ResolvedCalendarDay {
         $dateStr = $date instanceof CarbonInterface ? $date->format('Y-m-d') : $date;
 
         // 20.18.7 — Buscar eventos aplicáveis por hierarquia territorial
-        $events = CalendarEvent::forDate($dateStr, $establishment)
+        $events = $prefetchedEvents ?? CalendarEvent::forDate($dateStr, $establishment)
             ->orderByRaw("CASE scope
                 WHEN 'establishment' THEN 4
                 WHEN 'municipal' THEN 3
