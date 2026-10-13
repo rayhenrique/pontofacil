@@ -1,6 +1,13 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.3 (Atual)
+## v2.6.4 (Atual)
+- **Horários e Escalas Organizados em Três Visões:**
+  - A tela de escalas agora tem três abas simples: *Horários* (todos os modelos cadastrados, mesmo sem ninguém vinculado), *Servidores* (quem usa cada horário e por quanto tempo) e *Plantões* (grade do mês para 12×36, 24×72 e 6×1).
+  - Horários de expediente fixo (administrativo e corrido) aparecem logo após o cadastro e são usados na apuração sem precisar gerar plantões artificiais.
+  - Atribuição individual ou em lote com início e fim de vigência, sem apagar o histórico e sem sobrepor escalas incompatíveis. Mês fechado continua bloqueado.
+  - Plantão 24×72 só pode ser atribuído a quem tem autorização para o regime. Desativar um horário em uso é bloqueado até a troca por outro.
+
+## v2.6.3
 - **Proteção das Escalas, Conferência Mensal e Relatórios:**
   - Cada gestor agora só enxerga e altera os servidores dos seus próprios setores. Tentar usar o código de outro setor ou colaborador é bloqueado com mensagem simples de acesso negado.
   - A abertura da conferência individual só carrega dados de quem o usuário pode conferir. Servidor comum e auditor não conseguem confirmar, fechar ou despachar.
