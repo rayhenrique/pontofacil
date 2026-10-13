@@ -24,14 +24,7 @@ class MonthlyAttendanceReportController extends Controller
             abort(403, 'Acesso não autorizado ao relatório de frequência.');
         }
 
-        $year = (int) ($request->query('year') ?? now()->year);
-        $month = (int) ($request->query('month') ?? now()->month);
-
-        $filters = [
-            'establishment_id' => $request->query('establishment_id'),
-            'sector_id' => $request->query('sector_id'),
-            'employee_id' => $request->query('employee_id'),
-        ];
+        ['year' => $year, 'month' => $month, 'filters' => $filters] = $this->validatedReportInput($request);
 
         $reportData = $this->reportService->getReportData($year, $month, $user, $filters);
         $csvContent = $this->reportService->generateCsv($reportData);
@@ -62,14 +55,7 @@ class MonthlyAttendanceReportController extends Controller
             abort(403, 'Acesso não autorizado ao relatório de frequência.');
         }
 
-        $year = (int) ($request->query('year') ?? now()->year);
-        $month = (int) ($request->query('month') ?? now()->month);
-
-        $filters = [
-            'establishment_id' => $request->query('establishment_id'),
-            'sector_id' => $request->query('sector_id'),
-            'employee_id' => $request->query('employee_id'),
-        ];
+        ['year' => $year, 'month' => $month, 'filters' => $filters] = $this->validatedReportInput($request);
 
         $reportData = $this->reportService->getReportData($year, $month, $user, $filters);
 
@@ -94,6 +80,10 @@ class MonthlyAttendanceReportController extends Controller
         $log = MonthlyAttendanceReportLog::findOrFail($logId);
         $notes = $request->input('notes');
 
+        if ($notes !== null && (! is_string($notes) || mb_strlen($notes) > 1000)) {
+            abort(422, 'Observações de encaminhamento inválidas.');
+        }
+
         $this->reportService->recordDispatchToPayroll($log, $user, $notes);
 
         return response()->json([
@@ -101,5 +91,45 @@ class MonthlyAttendanceReportController extends Controller
             'message' => 'Encaminhamento ao setor de pagamento registrado com sucesso.',
             'dispatched_at' => $log->dispatched_to_payroll_at->format('d/m/Y H:i'),
         ]);
+    }
+
+    /**
+     * Valida competência e filtros das exportações.
+     *
+     * @return array{year: int, month: int, filters: array{establishment_id: ?int, sector_id: ?int, employee_id: ?int}}
+     */
+    protected function validatedReportInput(Request $request): array
+    {
+        $year = $request->query('year', now()->year);
+        $month = $request->query('month', now()->month);
+
+        if (! is_numeric($year) || ! is_numeric($month)) {
+            abort(422, 'Competência inválida.');
+        }
+
+        $year = (int) $year;
+        $month = (int) $month;
+
+        if ($year < 2000 || $year > 2100 || $month < 1 || $month > 12) {
+            abort(422, 'Competência inválida.');
+        }
+
+        $filters = [];
+        foreach (['establishment_id', 'sector_id', 'employee_id'] as $key) {
+            $value = $request->query($key);
+            if ($value === null || $value === '') {
+                $filters[$key] = null;
+
+                continue;
+            }
+
+            if (! is_numeric($value) || (int) $value < 1) {
+                abort(422, 'Filtros inválidos.');
+            }
+
+            $filters[$key] = (int) $value;
+        }
+
+        return ['year' => $year, 'month' => $month, 'filters' => $filters];
     }
 }

@@ -1,6 +1,14 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.5 (Atual)
+## v2.6.6 (Atual)
+- **Conferência Mensal e Relatórios com Integridade Garantida:**
+  - Sem conferência registrada, o sistema mostra "Aguardando conferência" — nunca aprova sozinho nem inventa confirmação.
+  - Mês fechado lê somente os registros congelados. Se faltar histórico de alguém, aparece "Histórico indisponível" em vez de número inventado.
+  - Se a escala ou um tratamento mudar depois da conferência, o sistema pede nova validação antes de fechar o mês.
+  - Dias futuros aparecem como previstos, sem virar falta ou desconto antes da hora. Dias incompletos não entram nos saldos definitivos.
+  - Exportações validadas e protegidas: o CSV não executa fórmulas escondidas em nomes e os arquivos do mês fechado batem com os registros congelados.
+
+## v2.6.5
 - **Conferência Mensal e Relatórios Bem Mais Rápidos:**
   - As telas de conferência e relatório agora carregam os dados do mês de uma vez só, em vez de consultar dia por dia para cada servidor. Com 50 servidores, a abertura caiu de cerca de 11 segundos para cerca de 2 segundos.
   - Listas com páginas de 20 servidores, mantendo os totais gerais sempre visíveis. Filtros por servidor ficam quase instantâneos.

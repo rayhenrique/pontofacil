@@ -200,6 +200,11 @@
                 <strong>Hash Fiscal SHA-256:</strong> {{ $reportData['closed_hash'] }}
             </div>
         @endif
+        @if (! empty($reportData['history_unavailable']))
+            <div class="meta-item" style="grid-column: span 4;">
+                <strong>Atenção:</strong> Histórico indisponível para parte dos servidores — nenhum valor foi apurado ao vivo como definitivo.
+            </div>
+        @endif
     </div>
 
     <table>

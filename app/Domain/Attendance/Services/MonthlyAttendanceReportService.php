@@ -11,9 +11,14 @@ use App\Models\ClosedPeriod;
 use App\Models\Employee;
 use App\Models\MonthlyAttendanceReportLog;
 use App\Models\MonthlyAttendanceReview;
+use App\Models\PunchEvent;
 use App\Models\Sector;
+use App\Models\ShiftAssignment;
+use App\Models\TreatmentEvent;
 use App\Models\User;
+use App\Models\WorkScheduleAssignment;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 
 class MonthlyAttendanceReportService
 {
@@ -80,51 +85,57 @@ class MonthlyAttendanceReportService
         ?array $managedSectorIds,
     ): array {
         $company = CurrentCompany::get();
-        $query = $closedPeriod->currentSnapshots();
 
-        if ($employeeId) {
-            $query->where('employee_id', $employeeId);
-        }
+        // Elenco filtrado pelos mesmos critérios da prévia ao vivo
+        // (escopo, estabelecimento, setor e servidor).
+        $employees = $this->scopedEmployeesQuery($actor, $establishmentId, $sectorId, $employeeId, $managedSectorIds)->get();
+        $employeeIds = $employees->map(fn (Employee $employee) => $employee->id)->all();
 
-        $snapshots = $query->get();
+        $snapshotsByEmployee = $employeeIds
+            ? $closedPeriod->currentSnapshots()
+                ->whereIn('employee_id', $employeeIds)
+                ->get()
+                ->keyBy(fn ($snapshot) => $snapshot->employee_id)
+            : collect();
 
         // Carregar reviews da competência
-        $reviews = MonthlyAttendanceReview::with('reviewer')
-            ->where('year', $year)
-            ->where('month', $month)
-            ->get()
-            ->keyBy('employee_id');
+        $reviews = $employeeIds
+            ? MonthlyAttendanceReview::with('reviewer')
+                ->where('year', $year)
+                ->where('month', $month)
+                ->whereIn('employee_id', $employeeIds)
+                ->get()
+                ->keyBy('employee_id')
+            : collect();
 
-        // Cadastros atuais em uma única consulta (apenas setor para escopo).
-        $employeesById = Employee::whereIn('id', $snapshots->map(fn ($snap) => $snap->employee_id)->all())
-            ->get(['id', 'sector_id'])
-            ->keyBy('id');
+        // Vestígios na competência para distinguir "sem snapshot" de "fora da competência".
+        $tracedEmployeeIds = $this->tracedEmployeeIds($employeeIds, $year, $month);
 
         $rows = [];
         $totals = $this->initializeTotals();
 
-        foreach ($snapshots as $snap) {
+        foreach ($employees as $emp) {
+            $snap = $snapshotsByEmployee->get($emp->id);
+            $review = $reviews->get($emp->id);
+
+            if ($snap === null) {
+                // Sem snapshot congelado: nunca apurar ao vivo como definitivo.
+                if (! isset($tracedEmployeeIds[$emp->id])) {
+                    continue;
+                }
+
+                $unavailableRow = $this->unavailableRow($emp, $review);
+                $rows[] = $unavailableRow;
+                $this->accumulateTotals($totals, $unavailableRow);
+
+                continue;
+            }
+
             $empData = $snap->employee_snapshot ?? [];
             $schedData = $snap->schedule_snapshot ?? [];
             $shiftsData = $snap->shifts_snapshot ?? [];
             $journeys = $snap->journey_snapshot ?? [];
             $treatments = $snap->treatment_snapshot ?? [];
-
-            // Filtragem por setor ou estabelecimento baseada no snapshot
-            $snapEstablishmentId = $empData['establishment_id'] ?? null;
-            $snapSectorId = $employeesById->get($snap->employee_id)?->sector_id;
-
-            if ($managedSectorIds !== null && (! $snapSectorId || ! in_array($snapSectorId, $managedSectorIds, true))) {
-                continue;
-            }
-
-            if ($establishmentId && $snapEstablishmentId != $establishmentId) {
-                continue;
-            }
-
-            if ($sectorId && $snapSectorId != $sectorId) {
-                continue;
-            }
 
             $scheduledMinutes = 0;
             $workedMinutes = 0;
@@ -143,9 +154,11 @@ class MonthlyAttendanceReportService
                 $nightMinutes += (int) ($j['physical_night_minutes'] ?? $j['night_shift_minutes'] ?? $j['nightMinutes'] ?? 0);
                 $delayMinutes += (int) ($j['late_minutes'] ?? $j['delay_minutes'] ?? $j['delayMinutes'] ?? 0);
 
+                // Diferença classificada pelo PTRP; dias pendentes não compõem
+                // os saldos definitivos (espelha o Espelho de Ponto).
                 $dayDiff = array_key_exists('daily_difference_minutes', $j) && $j['daily_difference_minutes'] !== null
                     ? (int) $j['daily_difference_minutes']
-                    : ($worked - $sched);
+                    : null;
 
                 if ($dayDiff > 0) {
                     $positiveMinutes += $dayDiff;
@@ -156,8 +169,7 @@ class MonthlyAttendanceReportService
 
             $diffMinutes = $workedMinutes - $scheduledMinutes;
 
-            $review = $reviews->get($snap->employee_id);
-            $reviewStatus = $review?->status ?? AttendanceReviewStatus::Reviewed;
+            $reviewStatus = $review?->status ?? AttendanceReviewStatus::Pending;
 
             $row = [
                 'employee_id' => $snap->employee_id,
@@ -202,6 +214,7 @@ class MonthlyAttendanceReportService
             'report_type_title' => 'RELATÓRIO MENSAL CONSOLIDADO DE FREQUÊNCIA',
             'report_badge_label' => 'DEFINITIVO / HOMOLOGADO',
             'provisional_notice' => null,
+            'history_unavailable' => $snapshotsByEmployee->isEmpty(),
             'closed_period_id' => $closedPeriod->id,
             'closed_version' => $closedPeriod->snapshot_version,
             'closed_hash' => $closedPeriod->snapshot_hash,
@@ -213,6 +226,142 @@ class MonthlyAttendanceReportService
             'generated_by_name' => $actor->name,
             'totals' => $totals,
             'rows' => $rows,
+        ];
+    }
+
+    /**
+     * Consulta base de servidores com os mesmos filtros de escopo
+     * da prévia ao vivo (gestão, estabelecimento, setor e servidor).
+     */
+    protected function scopedEmployeesQuery(
+        User $actor,
+        ?int $establishmentId,
+        ?int $sectorId,
+        ?int $employeeId,
+        ?array $managedSectorIds,
+    ): Builder {
+        $empQuery = Employee::with(['user', 'sector.establishment', 'workSchedule']);
+
+        if ($actor->role === UserRole::Manager && $managedSectorIds !== null) {
+            $empQuery->whereIn('sector_id', $managedSectorIds);
+        }
+
+        if ($establishmentId) {
+            $empQuery->whereHas('sector', fn ($q) => $q->where('establishment_id', $establishmentId));
+        }
+
+        if ($sectorId) {
+            $empQuery->where('sector_id', $sectorId);
+        }
+
+        if ($employeeId) {
+            $empQuery->where('id', $employeeId);
+        }
+
+        return $empQuery;
+    }
+
+    /**
+     * Identificadores com vestígios na competência (marcações, plantões,
+     * tratamentos ou atribuições), para distinguir ausência de snapshot
+     * de vínculo fora da competência.
+     *
+     * @param  array<int>  $employeeIds
+     * @return array<int, true>
+     */
+    protected function tracedEmployeeIds(array $employeeIds, int $year, int $month): array
+    {
+        if (empty($employeeIds)) {
+            return [];
+        }
+
+        $start = Carbon::createFromDate($year, $month, 1)->startOfDay();
+        $end = $start->copy()->endOfMonth()->endOfDay();
+        $traced = [];
+
+        $punchOwners = PunchEvent::whereIn('employee_id', $employeeIds)
+            ->where('occurred_at_local', '>=', $start)
+            ->where('occurred_at_local', '<=', $end)
+            ->distinct()
+            ->pluck('employee_id')
+            ->all();
+        foreach ($punchOwners as $ownerId) {
+            $traced[$ownerId] = true;
+        }
+
+        $shiftOwners = ShiftAssignment::whereIn('employee_id', $employeeIds)
+            ->where('start_at_local', '<=', $end)
+            ->where('end_at_local', '>=', $start)
+            ->distinct()
+            ->pluck('employee_id')
+            ->all();
+        foreach ($shiftOwners as $ownerId) {
+            $traced[$ownerId] = true;
+        }
+
+        $treatmentOwners = TreatmentEvent::where(function ($query) use ($employeeIds) {
+            $query->whereIn('employee_id', $employeeIds)
+                ->orWhereIn('employment_id', $employeeIds);
+        })
+            ->where('effective_at', '>=', $start)
+            ->where('effective_at', '<=', $end)
+            ->get(['employee_id', 'employment_id']);
+        foreach ($treatmentOwners as $treatment) {
+            foreach (array_unique(array_filter([$treatment->employee_id, $treatment->employment_id])) as $ownerId) {
+                $traced[$ownerId] = true;
+            }
+        }
+
+        $assignmentOwners = WorkScheduleAssignment::whereIn('employee_id', $employeeIds)
+            ->where('effective_from', '<=', $end->format('Y-m-d'))
+            ->where(function ($query) use ($start) {
+                $query->whereNull('effective_until')
+                    ->orWhere('effective_until', '>=', $start->format('Y-m-d'));
+            })
+            ->distinct()
+            ->pluck('employee_id')
+            ->all();
+        foreach ($assignmentOwners as $ownerId) {
+            $traced[$ownerId] = true;
+        }
+
+        return $traced;
+    }
+
+    /**
+     * Linha de indisponibilidade histórica: zeros honestos, sem apuração ao vivo.
+     */
+    protected function unavailableRow(Employee $employee, ?MonthlyAttendanceReview $review): array
+    {
+        $reviewStatus = $review?->status ?? AttendanceReviewStatus::Pending;
+
+        return [
+            'employee_id' => $employee->id,
+            'name' => $employee->user?->name ?? 'Servidor #'.$employee->id,
+            'registration_number' => $employee->registration_number ?: '—',
+            'cpf' => $employee->cpf ?: '—',
+            'legal_regime' => $employee->legal_regime?->value ?? 'CLT',
+            'job_title' => $employee->job_title ?: 'Não informado',
+            'department' => $employee->sector?->name ?? 'Geral',
+            'establishment_name' => $employee->sector?->establishment?->name ?? 'Sede',
+            'schedule_name' => 'Histórico indisponível',
+            'schedule_modality' => '—',
+            'scheduled_minutes' => 0,
+            'worked_minutes' => 0,
+            'balance_minutes' => 0,
+            'positive_minutes' => 0,
+            'negative_minutes' => 0,
+            'absence_minutes' => 0,
+            'delay_minutes' => 0,
+            'night_minutes' => 0,
+            'shifts_count' => 0,
+            'treatments_count' => 0,
+            'review_status' => $reviewStatus,
+            'review_status_label' => 'Histórico indisponível',
+            'reservation_notes' => $review?->reservation_notes,
+            'reviewed_by_name' => $review?->reviewer?->name,
+            'reviewed_at' => $review?->reviewed_at,
+            'history_unavailable' => true,
         ];
     }
 
@@ -233,25 +382,7 @@ class MonthlyAttendanceReportService
         $endDate = $startDate->copy()->endOfMonth();
         $daysInMonth = $endDate->day;
 
-        $empQuery = Employee::with(['user', 'sector.establishment', 'workSchedule']);
-
-        if ($actor->role === UserRole::Manager && $managedSectorIds !== null) {
-            $empQuery->whereIn('sector_id', $managedSectorIds);
-        }
-
-        if ($establishmentId) {
-            $empQuery->whereHas('sector', fn ($q) => $q->where('establishment_id', $establishmentId));
-        }
-
-        if ($sectorId) {
-            $empQuery->where('sector_id', $sectorId);
-        }
-
-        if ($employeeId) {
-            $empQuery->where('id', $employeeId);
-        }
-
-        $employees = $empQuery->get();
+        $employees = $this->scopedEmployeesQuery($actor, $establishmentId, $sectorId, $employeeId, $managedSectorIds)->get();
 
         $reviews = MonthlyAttendanceReview::with('reviewer')
             ->where('year', $year)
@@ -286,10 +417,9 @@ class MonthlyAttendanceReportService
                     $nightMinutes += $journey->physicalNightMinutes;
                     $delayMinutes += $journey->lateMinutes;
 
+                    // Diferença classificada pelo PTRP; dias pendentes ou futuros
+                    // não compõem os saldos definitivos (espelha o Espelho de Ponto).
                     $dayDiff = $journey->dailyDifferenceMinutes();
-                    if ($dayDiff === null) {
-                        $dayDiff = $journey->workedMinutes - $journey->scheduledMinutes;
-                    }
 
                     if ($dayDiff > 0) {
                         $positiveMinutes += $dayDiff;
@@ -354,6 +484,7 @@ class MonthlyAttendanceReportService
             'report_type_title' => 'PRÉVIA PROVISÓRIA DE FREQUÊNCIA MENSAL',
             'report_badge_label' => 'PROVISÓRIO — COMPETÊNCIA EM ABERTO',
             'provisional_notice' => 'ATENÇÃO: Documento preliminar de conferência. Não possui validade como relatório final para fechamento da folha até a homologação e fechamento formal da competência pelo RH.',
+            'history_unavailable' => false,
             'closed_period_id' => null,
             'closed_version' => null,
             'closed_hash' => null,
@@ -535,6 +666,16 @@ class MonthlyAttendanceReportService
     {
         if ($value === null) {
             return '""';
+        }
+
+        // Campos sistêmicos estritos (horas 00:00 e contagens) não oferecem vetor de fórmula.
+        if (preg_match('/^[+-]?\d{2}:\d{2}$/', $value) === 1 || preg_match('/^\d+$/', $value) === 1) {
+            return '"'.$value.'"';
+        }
+
+        // Neutraliza interpretação como fórmula em planilhas (OWASP CSV Injection).
+        if (preg_match('/^[\s]*[=+\-@\t\r]/', $value) === 1) {
+            $value = "'".$value;
         }
 
         $val = str_replace('"', '""', $value);

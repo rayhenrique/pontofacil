@@ -178,6 +178,13 @@ class WorkTimeSettlementSanitizationTest extends TestCase
         $this->manager = app(WorkTimeSettlementManager::class);
     }
 
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
+    }
+
     /**
      * Helper para criar pares de batidas válidas no dia.
      */
@@ -445,6 +452,9 @@ class WorkTimeSettlementSanitizationTest extends TestCase
     {
         // Cria batidas para gerar 120 minutos extras (08:00 às 18:00 = 10h trabalhadas, 8h previstas = 2h extras)
         $this->registerDayPunches($this->employee, Carbon::parse('2026-10-14'), '08:00', '18:00');
+
+        // Congela o "hoje" no fim do mês para apurar dia passado como definitivo.
+        Carbon::setTestNow(Carbon::parse('2026-10-31 12:00:00'));
 
         // Destina 80 min para folha de pagamento a partir da apuração diária
         $s1 = $this->manager->createSettlement([

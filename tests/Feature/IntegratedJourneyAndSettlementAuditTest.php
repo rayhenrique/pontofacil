@@ -105,6 +105,13 @@ class IntegratedJourneyAndSettlementAuditTest extends TestCase
         $this->settlementManager = app(WorkTimeSettlementManager::class);
     }
 
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
+    }
+
     protected function createEmployee(string $name, string $cpf, LegalRegime $regime = LegalRegime::CLT, ?WorkSchedule $schedule = null): Employee
     {
         $user = User::create([
@@ -169,6 +176,9 @@ class IntegratedJourneyAndSettlementAuditTest extends TestCase
         // 2. Registro do ponto (08:00 - 12:00, 13:00 - 18:00 = 9h físicas = 540 min trabalhados)
         $workDate = Carbon::parse('2026-10-15');
         $this->registerStandardPunches($employee, $workDate, ['08:00', '12:00', '13:00', '18:00']);
+
+        // Congela o "hoje" no fim do mês para apurar dia passado como definitivo.
+        Carbon::setTestNow(Carbon::parse('2026-10-31 12:00:00'));
 
         // 3. Apuração PTRP
         $journey = app(CalculateDailyJourneyAction::class)->execute($employee, $workDate);
@@ -394,6 +404,9 @@ class IntegratedJourneyAndSettlementAuditTest extends TestCase
         // 7h27 de trabalho: 08:00 às 12:00 (4h) e 13:00 às 16:27 (3h27) = 7h27 = 447 min
         $workDate = Carbon::parse('2026-10-14');
         $this->registerStandardPunches($employee, $workDate, ['08:00', '12:00', '13:00', '16:27']);
+
+        // Congela o "hoje" no fim do mês para apurar dia passado como definitivo.
+        Carbon::setTestNow(Carbon::parse('2026-10-31 12:00:00'));
 
         $journey = app(CalculateDailyJourneyAction::class)->execute($employee, $workDate);
 

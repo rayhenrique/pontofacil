@@ -56,6 +56,8 @@ class CalculatedJourney
         public ?WorkTimeSettlementSummary $settlementSummary = null,
         public int $toleratedMinutes = 0,
         public int $justifiedMinutes = 0,
+        public bool $isFuture = false,
+        public bool $isInProgress = false,
     ) {}
 
     public static function formatMinutes(int $minutes, bool $withSign = false): string
@@ -97,7 +99,7 @@ class CalculatedJourney
 
     public function dailyDifferenceMinutes(): ?int
     {
-        if (! $this->hasSchedule || $this->isPendingConfiguration || $this->isIncomplete) {
+        if (! $this->hasSchedule || $this->isPendingConfiguration || $this->isIncomplete || $this->isFuture) {
             return null;
         }
 
@@ -115,7 +117,7 @@ class CalculatedJourney
             return 'uncalculable';
         }
 
-        if ($this->isIncomplete) {
+        if ($this->isIncomplete || $this->isFuture) {
             return 'pending';
         }
 
@@ -163,6 +165,10 @@ class CalculatedJourney
             return 'Não foi possível calcular o saldo porque sua escala ainda precisa ser configurada.';
         }
 
+        if ($this->isFuture) {
+            return 'Jornada futura — ainda não apurada.';
+        }
+
         if ($this->isIncomplete) {
             return 'Jornada incompleta: registre as marcações pendentes.';
         }
@@ -196,7 +202,7 @@ class CalculatedJourney
             return 'Não foi possível calcular o saldo porque sua escala ainda precisa ser configurada.';
         }
 
-        if ($this->isIncomplete) {
+        if ($this->isIncomplete || $this->isFuture) {
             return 'Apuração pendente de marcações.';
         }
 
@@ -285,6 +291,8 @@ class CalculatedJourney
             'settlement_summary' => $this->settlementSummary?->toArray(),
             'tolerated_minutes' => $this->toleratedMinutes,
             'justified_minutes' => $this->justifiedMinutes,
+            'is_future' => $this->isFuture,
+            'is_in_progress' => $this->isInProgress,
             'human_work_statement' => $this->humanWorkStatement(),
             'human_difference' => $this->humanDifference(),
             'attention_reason' => $this->attentionReason(),

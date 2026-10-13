@@ -126,6 +126,13 @@ class PtrpScheduleAndNightIntegrationTest extends TestCase
         $this->calculateJourneyAction = app(CalculateDailyJourneyAction::class);
     }
 
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
+    }
+
     /**
      * 1. Jornada administrativa normal: 40h semanais (08h-12h e 14h-18h), 480 min ordinários, 0 extras.
      */
@@ -426,6 +433,9 @@ class PtrpScheduleAndNightIntegrationTest extends TestCase
 
         $this->createPunch('in', '2026-11-15 07:00:00');
         $this->createPunch('out', '2026-11-15 19:00:00');
+
+        // Congela o "hoje" após o feriado para apurar dia passado como definitivo.
+        Carbon::setTestNow(Carbon::parse('2026-11-30 12:00:00', 'America/Maceio'));
 
         $journey = $this->calculateJourneyAction->execute($this->employee, $date);
 

@@ -69,6 +69,13 @@ class TimesheetDailyDifferencesTest extends TestCase
         ]);
     }
 
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
+    }
+
     protected function createPunchesForDay(Carbon $date, array $times): void
     {
         $action = app(RecordPunchEventAction::class);
@@ -257,6 +264,9 @@ class TimesheetDailyDifferencesTest extends TestCase
         // Trabalhou das 22:00 às 23:30 (90 minutos físicos noturnos)
         $this->createPunchesForDay($date, ['22:00', '23:30']);
 
+        // Congela o "hoje" no fim do mês para apurar dia passado como definitivo.
+        Carbon::setTestNow(Carbon::parse('2026-10-31 12:00:00'));
+
         $journey = app(CalculateDailyJourneyAction::class)->execute($this->employee, $date);
 
         $this->assertGreaterThan(0, $journey->nightWorkedMinutes());
@@ -288,6 +298,9 @@ class TimesheetDailyDifferencesTest extends TestCase
         $this->employee = $statutoryEmployee;
         $this->createPunchesForDay($date, ['08:00', '12:00', '14:00', '18:40']);
 
+        // Congela o "hoje" no fim do mês para apurar dia passado como definitivo.
+        Carbon::setTestNow(Carbon::parse('2026-10-31 12:00:00'));
+
         $journey = app(CalculateDailyJourneyAction::class)->execute($statutoryEmployee, $date);
 
         $this->assertEquals(40, $journey->dailyDifferenceMinutes());
@@ -311,6 +324,9 @@ class TimesheetDailyDifferencesTest extends TestCase
 
         $date = Carbon::parse('2026-10-15');
         $this->createPunchesForDay($date, ['08:00', '12:00', '14:00', '18:30']);
+
+        // Congela o "hoje" no fim do mês para apurar dia passado como definitivo.
+        Carbon::setTestNow(Carbon::parse('2026-10-31 12:00:00'));
 
         $service = app(TimesheetJourneyService::class);
         $data = $service->resolveMonthData($this->user, 2026, 10);
@@ -372,6 +388,9 @@ class TimesheetDailyDifferencesTest extends TestCase
     {
         $date = Carbon::parse('2026-10-19');
         $this->createPunchesForDay($date, ['08:00', '12:00', '14:00', '19:00']); // +1 hora
+
+        // Congela o "hoje" no fim do mês para apurar dia passado como definitivo.
+        Carbon::setTestNow(Carbon::parse('2026-10-31 12:00:00'));
 
         $service = app(TimesheetJourneyService::class);
         $data = $service->resolveMonthData($this->user, 2026, 10);
@@ -494,6 +513,9 @@ class TimesheetDailyDifferencesTest extends TestCase
         // Dia 3: 00:00 (480 min trabalhados contra 480 previstos)
         $date3 = Carbon::parse('2026-10-22');
         $this->createPunchesForDay($date3, ['08:00', '12:00', '14:00', '18:00']);
+
+        // Congela o "hoje" no fim do mês para apurar dias passados como definitivos.
+        Carbon::setTestNow(Carbon::parse('2026-10-31 12:00:00'));
 
         $service = app(TimesheetJourneyService::class);
         $data = $service->resolveMonthData($this->user, 2026, 10);

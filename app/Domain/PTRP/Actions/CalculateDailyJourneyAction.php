@@ -51,6 +51,9 @@ class CalculateDailyJourneyAction
         $dayStart = $date->copy()->startOfDay();
         $dayEnd = $date->copy()->addDay()->startOfDay();
 
+        // Jornada futura: prevista, porém ainda não apurada (nunca déficit definitivo).
+        $isFutureDay = $dayStart->gt(Carbon::today());
+
         // 1. Resolver Plantão (ShiftAssignment) e Escala de Trabalho (WorkSchedule)
         if ($prefetch !== null && $prefetch->shiftResolved) {
             $shift = $prefetch->shift;
@@ -254,6 +257,29 @@ class CalculateDailyJourneyAction
 
         // Ordenar cronologicamente
         usort($effectivePunches, fn ($a, $b) => strcmp($a['time'], $b['time']));
+
+        // Jornada em andamento: espelha a determinação de status do Espelho
+        // (hoje com entrada sem saída, ou noite de ontem em janela de 16h).
+        $isInProgressDay = false;
+        $punchCount = count($effectivePunches);
+        if ($punchCount > 0) {
+            $lastPunch = end($effectivePunches);
+            $lastType = $lastPunch['type'] ?? $lastPunch['direction'] ?? null;
+            if ($lastType === 'in' || $lastType === 'clock_in') {
+                if ($date->copy()->startOfDay()->isToday() && $punchCount % 2 !== 0) {
+                    $isInProgressDay = true;
+                } elseif ($date->copy()->startOfDay()->isYesterday() && $punchCount % 2 !== 0) {
+                    $lastEntryTime = Carbon::parse($lastPunch['timestamp'] ?? ($dateStr.' '.$lastPunch['time']));
+                    if ($lastEntryTime->hour >= 18 && now()->diffInHours($lastEntryTime) <= 16) {
+                        $isInProgressDay = true;
+                    }
+                }
+            }
+        }
+
+        if ($isInProgressDay) {
+            $treatmentNotes[] = 'Jornada em andamento — apuração parcial do dia.';
+        }
 
         // 8. Verificar se a primeira batida do dia é a saída de uma jornada noturna iniciada na véspera
         if (! empty($effectivePunches)) {
@@ -469,7 +495,17 @@ class CalculateDailyJourneyAction
 
         $is12x36 = ($shift?->shift_type === ShiftType::Shift12x36) || ($workSchedule?->modality === WorkScheduleModality::TwelveByThirtySix);
 
-        if (! $hasSchedule) {
+        if ($isFutureDay) {
+            // Jornada futura da competência aberta: prevista, mas ainda não apurada.
+            // Nunca classificada como déficit, falta ou extra definitivos.
+            $ordinaryMinutes = 0;
+            $overtimeMinutes = 0;
+            $lateMinutes = 0;
+            $earlyLeaveMinutes = 0;
+            $absenceMinutes = 0;
+            $holidayMinutes = 0;
+            $treatmentNotes[] = 'Jornada futura — ainda não apurada.';
+        } elseif (! $hasSchedule) {
             // Ausência de escala configurada: preservar batidas, mas NÃO inventar horas previstas ou extras
             $ordinaryMinutes = 0;
             $overtimeMinutes = 0;
@@ -689,6 +725,8 @@ class CalculateDailyJourneyAction
             settlementSummary: $settlementSummary,
             toleratedMinutes: $toleratedMinutes ?: ($classificacaoResult->toleratedMinutes ?? 0),
             justifiedMinutes: $classificacaoResult->justifiedMinutes ?? 0,
+            isFuture: $isFutureDay,
+            isInProgress: $isInProgressDay,
         );
     }
 }
