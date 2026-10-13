@@ -16,6 +16,7 @@ class MonthlyAttendanceReview extends Model
         'reviewed_by',
         'reviewed_at',
         'reservation_notes',
+        'fingerprint',
         'has_unresolved_occurrences',
         'occurrences_count',
         'occurrences_summary',

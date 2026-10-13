@@ -1,6 +1,12 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.7 (Atual)
+## v2.6.8 (Atual)
+- **Conferência Acompanha Mudanças na Jornada:**
+  - Ao conferir, o sistema registra uma impressão digital dos dados analisados (marcações, tratamentos, escala, plantões, calendário e regras).
+  - Se chegar marcação nova, tratamento aprovado ou mudança de escala/plantão/calendário depois da conferência, ela aparece como desatualizada e o mês só fecha após nova análise.
+  - Mudanças sem impacto no mês (outra competência ou só renomear) não invalidam nada. Mês fechado continua lendo só os registros congelados.
+
+## v2.6.7
 - **Fechamento Mensal Unificado e Protegido:**
   - O mês só fecha pela Conferência Mensal, depois de todos os servidores conferidos e sem pendências. Não há mais atalho de fechamento pelo Banco de Horas (que agora leva para a conferência).
   - Somente o RH/Administrador fecha. Gestores, servidores e auditores são bloqueados.

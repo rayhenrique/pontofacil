@@ -210,7 +210,7 @@ class AttendanceIntegrityTest extends TestCase
         $this->assertTrue($staleItem['stale']);
         $this->assertTrue($staleItem['has_unresolved_occurrences']);
         $this->assertContains(
-            'Dados alterados após a conferência — necessária nova validação.',
+            'Conferência desatualizada — houve alterações após a última análise.',
             $staleItem['occurrences']
         );
         $this->assertFalse($overview['can_close']);

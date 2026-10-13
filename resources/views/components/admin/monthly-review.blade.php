@@ -770,7 +770,7 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                                             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                                             </svg>
-                                            Conferir
+                                            {{ ! empty($item['stale']) ? 'Revisar novamente' : 'Conferir' }}
                                         </button>
                                     @endif
                                 </div>
@@ -861,7 +861,7 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                             type="button"
                             class="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm"
                         >
-                            Conferir Frequência
+                            {{ ! empty($item['stale']) ? 'Revisar novamente' : 'Conferir Frequência' }}
                         </button>
                     @endif
                 </div>

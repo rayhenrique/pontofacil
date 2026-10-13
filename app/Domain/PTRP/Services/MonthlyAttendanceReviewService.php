@@ -15,10 +15,8 @@ use App\Models\Sector;
 use App\Models\ShiftAssignment;
 use App\Models\TreatmentEvent;
 use App\Models\User;
-use App\Models\WorkScheduleAssignment;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
 
 class MonthlyAttendanceReviewService
 {
@@ -81,7 +79,7 @@ class MonthlyAttendanceReviewService
             pendingTreatmentsCount: $this->pendingTreatmentsCountFor($employee, $year, $month),
             hasShiftsInPeriod: $this->hasShiftsInPeriod($employee, $year, $month),
             review: $review,
-            stale: $review !== null && $this->isReviewStale($employee, $review, $year, $month),
+            stale: $this->isReviewStale($employee, $review, $batch),
         );
     }
 
@@ -213,7 +211,7 @@ class MonthlyAttendanceReviewService
             pendingTreatmentsCount: $this->pendingTreatmentsCountFor($employee, $year, $month),
             hasShiftsInPeriod: $this->hasShiftsInPeriod($employee, $year, $month),
             review: $review,
-            stale: $review !== null && $this->isReviewStale($employee, $review, $year, $month),
+            stale: $this->isReviewStale($employee, $review, $batch),
         );
     }
 
@@ -272,7 +270,7 @@ class MonthlyAttendanceReviewService
 
         // 4. Dados alterados após a conferência registrada
         if ($stale) {
-            $occurrences[] = 'Dados alterados após a conferência — necessária nova validação.';
+            $occurrences[] = 'Conferência desatualizada — houve alterações após a última análise.';
         }
 
         $balanceMinutes = $workedMinutes - $scheduledMinutes;
@@ -315,61 +313,23 @@ class MonthlyAttendanceReviewService
     }
 
     /**
-     * Indica se dados relevantes mudaram após a conferência registrada,
-     * exigindo nova validação antes do fechamento (sem alterar o passado).
+     * Indica se a conferência registrada diverge do conjunto atual de
+     * insumos da apuração, exigindo nova validação antes do fechamento.
      *
-     * Sinais: tratamentos decididos/alterados, atribuições de escala
-     * criadas ou encerradas, e plantões criados/alterados na competência.
-     * Marcações de ponto (ledger imutável com relógio de banco distinto)
-     * não participam do sinal.
+     * Compara o fingerprint registrado na conferência com o fingerprint
+     * atual calculado sobre o lote mensal. Conferências legadas sem
+     * fingerprint seguem validação conservadora: exigem nova análise.
      */
-    public function isReviewStale(Employee $employee, MonthlyAttendanceReview $review, int $year, int $month): bool
-    {
-        if ($review->reviewed_at === null) {
-            return false;
+    public function isReviewStale(
+        Employee $employee,
+        ?MonthlyAttendanceReview $review,
+        MonthlyBatchContext $batch,
+    ): bool {
+        if ($review === null || $review->fingerprint === null) {
+            return $review !== null;
         }
 
-        // Comparação em resolução de segundos (precisão do banco),
-        // evitando falso-positivo por microssegundos da memória.
-        $reviewedAt = $review->reviewed_at->copy()->startOfSecond();
-        $start = Carbon::createFromDate($year, $month, 1)->startOfDay();
-        $end = $start->copy()->endOfMonth()->endOfDay();
-
-        $treatmentChanged = TreatmentEvent::where(function ($query) use ($employee) {
-            $query->where('employee_id', $employee->id)
-                ->orWhere('employment_id', $employee->id);
-        })
-            ->where('effective_at', '>=', $start)
-            ->where('effective_at', '<=', $end)
-            ->where('updated_at', '>', $reviewedAt)
-            ->exists();
-
-        if ($treatmentChanged) {
-            return true;
-        }
-
-        $assignmentChanged = WorkScheduleAssignment::where('employee_id', $employee->id)
-            ->where('effective_from', '<=', $end->format('Y-m-d'))
-            ->where(function ($query) use ($start) {
-                $query->whereNull('effective_until')
-                    ->orWhere('effective_until', '>=', $start->format('Y-m-d'));
-            })
-            ->where(function ($query) use ($reviewedAt) {
-                $query->where('updated_at', '>', $reviewedAt)
-                    ->orWhere('created_at', '>', $reviewedAt);
-            })
-            ->exists();
-
-        if ($assignmentChanged) {
-            return true;
-        }
-
-        $shiftChanged = ShiftAssignment::where('employee_id', $employee->id)
-            ->forPeriod($start, $end)
-            ->where('updated_at', '>', $reviewedAt)
-            ->exists();
-
-        return $shiftChanged;
+        return ! hash_equals($review->fingerprint, $batch->fingerprintFor($employee));
     }
 
     /**
@@ -405,9 +365,6 @@ class MonthlyAttendanceReviewService
         $pendingCounts = [];
         $shiftsExistence = [];
         $snapshotsByEmployee = collect();
-
-        // Conferências desatualizadas por mudanças após o registro (pré-carga global).
-        $staleEmployeeIds = $this->staleEmployeeIds($employeeIds, $reviewsByEmployee, $year, $month);
 
         $reviewedCount = 0;
         $reviewedWithReservationCount = 0;
@@ -466,7 +423,7 @@ class MonthlyAttendanceReviewService
             /** @var Employee $emp */
             foreach ($chunk as $emp) {
                 $review = $reviewsByEmployee->get($emp->id);
-                $stale = $review !== null && isset($staleEmployeeIds[$emp->id]);
+                $stale = ! $isClosed && $this->isReviewStale($emp, $review, $batch);
                 if ($stale) {
                     $staleCount++;
                 }
@@ -544,82 +501,6 @@ class MonthlyAttendanceReviewService
             'blocking_reasons' => $blockingReasons,
             'items' => $items,
         ];
-    }
-
-    /**
-     * Identificadores com mudanças relevantes após a conferência registrada.
-     *
-     * @param  array<int>  $employeeIds
-     * @param  Collection<int, MonthlyAttendanceReview>  $reviewsByEmployee
-     * @return array<int, true>
-     */
-    protected function staleEmployeeIds(array $employeeIds, Collection $reviewsByEmployee, int $year, int $month): array
-    {
-        if (empty($employeeIds)) {
-            return [];
-        }
-
-        $start = Carbon::createFromDate($year, $month, 1)->startOfDay();
-        $end = $start->copy()->endOfMonth()->endOfDay();
-
-        $reviewedAtByEmployee = [];
-        foreach ($reviewsByEmployee as $employeeId => $review) {
-            if ($review->reviewed_at !== null) {
-                // Resolução de segundos (precisão do banco).
-                $reviewedAtByEmployee[$employeeId] = $review->reviewed_at->copy()->startOfSecond();
-            }
-        }
-
-        if (empty($reviewedAtByEmployee)) {
-            return [];
-        }
-
-        $stale = [];
-        $markNewerThanReview = function (int $ownerId, ?Carbon $changedAt) use (&$stale, $reviewedAtByEmployee): void {
-            if ($changedAt === null) {
-                return;
-            }
-            $reviewedAt = $reviewedAtByEmployee[$ownerId] ?? null;
-            if ($reviewedAt !== null && $changedAt->gt($reviewedAt)) {
-                $stale[$ownerId] = true;
-            }
-        };
-
-        $treatmentChanges = TreatmentEvent::where(function ($query) use ($employeeIds) {
-            $query->whereIn('employee_id', $employeeIds)
-                ->orWhereIn('employment_id', $employeeIds);
-        })
-            ->where('effective_at', '>=', $start)
-            ->where('effective_at', '<=', $end)
-            ->get(['employee_id', 'employment_id', 'updated_at']);
-        foreach ($treatmentChanges as $event) {
-            foreach (array_unique(array_filter([$event->employee_id, $event->employment_id])) as $ownerId) {
-                $markNewerThanReview($ownerId, $event->updated_at);
-            }
-        }
-
-        $assignmentChanges = WorkScheduleAssignment::whereIn('employee_id', $employeeIds)
-            ->where('effective_from', '<=', $end->format('Y-m-d'))
-            ->where(function ($query) use ($start) {
-                $query->whereNull('effective_until')
-                    ->orWhere('effective_until', '>=', $start->format('Y-m-d'));
-            })
-            ->get(['employee_id', 'created_at', 'updated_at']);
-        foreach ($assignmentChanges as $assignment) {
-            $changedAt = $assignment->updated_at && $assignment->created_at
-                ? ($assignment->updated_at->gt($assignment->created_at) ? $assignment->updated_at : $assignment->created_at)
-                : ($assignment->updated_at ?? $assignment->created_at);
-            $markNewerThanReview($assignment->employee_id, $changedAt);
-        }
-
-        $shiftChanges = ShiftAssignment::whereIn('employee_id', $employeeIds)
-            ->forPeriod($start, $end)
-            ->get(['employee_id', 'updated_at']);
-        foreach ($shiftChanges as $shift) {
-            $markNewerThanReview($shift->employee_id, $shift->updated_at);
-        }
-
-        return $stale;
     }
 
     /**

@@ -395,6 +395,283 @@ class MonthlyBatchContext
     }
 
     /**
+     * Fingerprint determinístico (SHA-256) dos insumos da apuração mensal
+     * do servidor: competência, vínculo, marcações, tratamentos, escalas,
+     * plantões, calendário e regras efetivamente resolvidas.
+     *
+     * Estável independentemente da ordem de leitura; contém apenas
+     * identificadores, datas e conteúdos normativos — nenhum dado
+     * sensível (nomes, CPF) em texto claro.
+     */
+    public function fingerprintFor(Employee $employee): string
+    {
+        $payload = [
+            'competence' => sprintf('%04d-%02d', $this->year, $this->month),
+            'employee' => [
+                'id' => $employee->id,
+                'user_id' => $employee->user_id,
+                'sector_id' => $employee->sector_id,
+                'legal_regime' => $employee->legal_regime instanceof LegalRegime
+                    ? $employee->legal_regime->value
+                    : $employee->legal_regime,
+            ],
+            'assignments' => [],
+            'schedules' => [],
+            'shifts' => [],
+            'punches' => [],
+            'legacy_entries' => [],
+            'treatments' => [],
+            'calendar_events' => [],
+            'rule_profiles' => [],
+            'settlement_policies' => [],
+        ];
+
+        foreach ($this->assignmentsByEmployee[$employee->id] ?? [] as $assignment) {
+            $payload['assignments'][] = [
+                'id' => $assignment->id,
+                'work_schedule_id' => $assignment->work_schedule_id,
+                'effective_from' => $assignment->effective_from->format('Y-m-d'),
+                'effective_until' => $assignment->effective_until?->format('Y-m-d'),
+            ];
+        }
+        usort($payload['assignments'], fn ($a, $b) => $a['id'] <=> $b['id']);
+
+        $scheduleIds = [];
+        $profileIds = [];
+        $policyKeys = [];
+        for ($d = 1; $d <= $this->daysInMonth; $d++) {
+            $date = Carbon::createFromDate($this->year, $this->month, $d);
+            $schedule = $this->scheduleFor($employee, $date);
+            if ($schedule !== null) {
+                $scheduleIds[$schedule->id] = true;
+            }
+            $profile = $this->ruleProfileFor($employee, $date);
+            if ($profile !== null) {
+                $profileIds[$profile->id] = true;
+            }
+            $policy = $this->settlementPolicyFor($employee, $date);
+            $policyKeys[$this->settlementPolicyKey($policy)] = $policy;
+        }
+
+        foreach (array_keys($scheduleIds) as $scheduleId) {
+            $schedule = $this->schedulesById[$scheduleId] ?? null;
+            if ($schedule === null) {
+                continue;
+            }
+            $payload['schedules'][] = [
+                'id' => $schedule->id,
+                'modality' => $schedule->modality?->value ?? (string) $schedule->modality,
+                'expected_daily_minutes' => (int) $schedule->expected_daily_minutes,
+                'expected_weekly_minutes' => (int) $schedule->expected_weekly_minutes,
+                'tolerance_minutes' => (int) $schedule->tolerance_minutes,
+                'daily_tolerance_minutes' => (int) $schedule->daily_tolerance_minutes,
+                'requires_legal_authorization' => (bool) $schedule->requires_legal_authorization,
+                'allowed_legal_regimes' => $schedule->allowed_legal_regimes ?? [],
+                'schedule_data' => $schedule->schedule_data ?? [],
+                'cycle_data' => $schedule->cycle_data ?? [],
+            ];
+        }
+        usort($payload['schedules'], fn ($a, $b) => $a['id'] <=> $b['id']);
+
+        foreach ($this->allShiftsByEmployee[$employee->id] ?? [] as $shift) {
+            $payload['shifts'][] = [
+                'id' => $shift->id,
+                'work_schedule_id' => $shift->work_schedule_id,
+                'start_at_utc' => $shift->start_at_utc->format('Y-m-d H:i:s'),
+                'end_at_utc' => $shift->end_at_utc->format('Y-m-d H:i:s'),
+                'start_at_local' => $shift->start_at_local->format('Y-m-d H:i:s'),
+                'end_at_local' => $shift->end_at_local->format('Y-m-d H:i:s'),
+                'timezone' => $shift->timezone,
+                'break_minutes' => (int) $shift->break_minutes,
+                'expected_work_minutes' => (int) $shift->expected_work_minutes,
+                'shift_type' => $shift->shift_type?->value ?? (string) $shift->shift_type,
+                'origin' => $shift->origin?->value ?? (string) $shift->origin,
+                'status' => $shift->status?->value ?? (string) $shift->status,
+                'is_day_off' => (bool) $shift->is_day_off,
+                'is_night_shift' => (bool) $shift->is_night_shift,
+                'crosses_midnight' => (bool) $shift->crosses_midnight,
+            ];
+        }
+        usort($payload['shifts'], fn ($a, $b) => $a['id'] <=> $b['id']);
+
+        $punchRows = [];
+        foreach ($this->punchesByEmployeeDate[$employee->id] ?? [] as $collection) {
+            foreach ($collection as $punch) {
+                $punchRows[] = [
+                    'id' => $punch->id,
+                    'employee_id' => $punch->employee_id,
+                    'user_id' => $punch->user_id,
+                    'occurred_at_local' => $punch->occurred_at_local->format('Y-m-d H:i:s'),
+                    'occurred_at_utc' => $punch->occurred_at_utc->format('Y-m-d H:i:s'),
+                    'direction' => $punch->direction,
+                ];
+            }
+        }
+        usort($punchRows, fn ($a, $b) => [$a['occurred_at_local'], $a['id']] <=> [$b['occurred_at_local'], $b['id']]);
+        $payload['punches'] = $punchRows;
+
+        $legacyRows = [];
+        if ($employee->user_id !== null) {
+            foreach ($this->legacyByUserDate[$employee->user_id] ?? [] as $collection) {
+                foreach ($collection as $entry) {
+                    $legacyRows[] = [
+                        'id' => $entry->id,
+                        'timestamp' => Carbon::parse($entry->timestamp)->format('Y-m-d H:i:s'),
+                        'type' => $entry->type,
+                    ];
+                }
+            }
+        }
+        usort($legacyRows, fn ($a, $b) => [$a['timestamp'], $a['id']] <=> [$b['timestamp'], $b['id']]);
+        $payload['legacy_entries'] = $legacyRows;
+
+        $treatmentRows = [];
+        foreach ($this->treatmentsByEmployeeDate[$employee->id] ?? [] as $collection) {
+            foreach ($collection as $treatment) {
+                $treatmentRows[$treatment->id] = [
+                    'id' => $treatment->id,
+                    'employee_id' => $treatment->employee_id,
+                    'employment_id' => $treatment->employment_id,
+                    'reference_punch_id' => $treatment->reference_punch_id,
+                    'type' => $treatment->type?->value ?? (string) $treatment->type,
+                    'status' => $treatment->status?->value ?? (string) $treatment->status,
+                    'effective_at' => $treatment->effective_at->format('Y-m-d H:i:s'),
+                    'new_value_json' => $treatment->new_value_json ?? [],
+                    'reason_text' => $treatment->reason_text,
+                ];
+            }
+        }
+        ksort($treatmentRows);
+        $payload['treatments'] = array_values($treatmentRows);
+
+        $eventIds = [];
+        $establishment = $this->establishmentFor($employee);
+        for ($d = 1; $d <= $this->daysInMonth; $d++) {
+            $dateStr = sprintf('%04d-%02d-%02d', $this->year, $this->month, $d);
+            foreach ($this->calendarEventsFor($establishment, $dateStr) as $event) {
+                $eventIds[$event->id] = $event;
+            }
+        }
+        ksort($eventIds);
+        foreach ($eventIds as $event) {
+            $payload['calendar_events'][] = [
+                'id' => $event->id,
+                'event_date' => $event->event_date->format('Y-m-d'),
+                'type' => $event->type?->value ?? (string) $event->type,
+                'scope' => $event->scope?->value ?? (string) $event->scope,
+                'state' => $event->state,
+                'city' => $event->city,
+                'establishment_id' => $event->establishment_id,
+                'work_behavior' => $event->work_behavior?->value ?? (string) $event->work_behavior,
+                'all_day' => (bool) $event->all_day,
+                'starts_at' => $event->starts_at,
+                'ends_at' => $event->ends_at,
+                'requires_compensation' => (bool) $event->requires_compensation,
+            ];
+        }
+
+        foreach (array_keys($profileIds) as $profileId) {
+            $profile = $this->allRuleProfiles->firstWhere('id', $profileId);
+            if ($profile === null) {
+                continue;
+            }
+            $payload['rule_profiles'][] = [
+                'id' => $profile->id,
+                'code' => $profile->code,
+                'version' => $profile->version,
+                'legal_regime' => $profile->legal_regime instanceof LegalRegime
+                    ? $profile->legal_regime->value
+                    : $profile->legal_regime,
+                'effective_from' => $profile->effective_from->format('Y-m-d'),
+                'effective_until' => $profile->effective_until?->format('Y-m-d'),
+                'approval_status' => $profile->approval_status?->value ?? (string) $profile->approval_status,
+                'configuration' => $profile->configuration ?? [],
+            ];
+        }
+        usort($payload['rule_profiles'], fn ($a, $b) => $a['id'] <=> $b['id']);
+
+        foreach ($policyKeys as $policy) {
+            $payload['settlement_policies'][] = $this->settlementPolicyFingerprint($policy);
+        }
+        usort($payload['settlement_policies'], fn ($a, $b) => json_encode($a) <=> json_encode($b));
+
+        return hash('sha256', json_encode(
+            $this->canonicalize($payload),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        ));
+    }
+
+    /**
+     * Chave de agrupamento de políticas resolvidas (inclui o conteúdo
+     * das políticas avulsas para distinguir regimes e modalidades).
+     */
+    protected function settlementPolicyKey(WorkTimeSettlementPolicy $policy): string
+    {
+        if ($policy->id !== null) {
+            return 'id:'.$policy->id;
+        }
+
+        return 'inline:'.md5(json_encode(
+            $this->canonicalize($this->settlementPolicyFingerprint($policy)),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        ));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function settlementPolicyFingerprint(WorkTimeSettlementPolicy $policy): array
+    {
+        return [
+            'id' => $policy->id,
+            'company_id' => $policy->company_id,
+            'establishment_id' => $policy->establishment_id,
+            'employee_id' => $policy->employee_id,
+            'legal_regime' => $policy->legal_regime instanceof LegalRegime
+                ? $policy->legal_regime->value
+                : $policy->legal_regime,
+            'modality' => $policy->modality?->value ?? (string) $policy->modality,
+            'effective_from' => $policy->effective_from?->format('Y-m-d'),
+            'effective_until' => $policy->effective_until?->format('Y-m-d'),
+            'legal_framework' => $policy->legal_framework,
+            'compensation_terms' => $policy->compensation_terms ?? [],
+            'carry_over_terms' => $policy->carry_over_terms ?? [],
+            'hybrid_rules' => $policy->hybrid_rules ?? [],
+            'approval_status' => $policy->approval_status?->value ?? (string) $policy->approval_status,
+            'status' => $policy->status,
+        ];
+    }
+
+    /**
+     * Ordena chaves recursivamente para serialização canônica estável.
+     *
+     * @param  mixed  $value
+     * @return mixed
+     */
+    protected function canonicalize($value)
+    {
+        if ($value instanceof Collection) {
+            $value = $value->all();
+        }
+
+        if (! is_array($value)) {
+            return $value;
+        }
+
+        if (array_is_list($value)) {
+            return array_map(fn ($item) => $this->canonicalize($item), $value);
+        }
+
+        ksort($value);
+
+        foreach ($value as $key => $item) {
+            $value[$key] = $this->canonicalize($item);
+        }
+
+        return $value;
+    }
+
+    /**
      * Plantão com virada de meia-noite do dia anterior (para apuração noturna).
      */
     protected function prevShiftFor(Employee $employee, string $prevDateStr): ?ShiftAssignment

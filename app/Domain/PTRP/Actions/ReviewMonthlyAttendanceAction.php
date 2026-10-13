@@ -59,7 +59,11 @@ class ReviewMonthlyAttendanceAction
             ? AttendanceReviewStatus::ReviewedWithReservation
             : AttendanceReviewStatus::Reviewed;
 
-        return DB::transaction(function () use ($employee, $year, $month, $reviewer, $finalStatus, $trimmedReservation) {
+        // Fingerprint dos insumos analisados, registrado na conferência.
+        $batch ??= app(MonthlyJourneyBatchService::class)->forCompetence(collect([$employee]), $year, $month);
+        $fingerprint = $batch->fingerprintFor($employee);
+
+        return DB::transaction(function () use ($employee, $year, $month, $reviewer, $finalStatus, $trimmedReservation, $fingerprint) {
             $review = MonthlyAttendanceReview::lockForUpdate()
                 ->where('employee_id', $employee->id)
                 ->where('year', $year)
@@ -78,6 +82,7 @@ class ReviewMonthlyAttendanceAction
             $review->reviewed_at = now();
             $review->status = $finalStatus;
             $review->reservation_notes = ! empty($trimmedReservation) ? $trimmedReservation : null;
+            $review->fingerprint = $fingerprint;
             $review->save();
 
             Log::info('monthly_attendance.reviewed', [
