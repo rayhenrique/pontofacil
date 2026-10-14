@@ -178,16 +178,35 @@ class Employee extends Model
         $targetDate = $date ?? Carbon::today();
         $dateStr = $targetDate->format('Y-m-d');
 
-        $assignment = $this->workScheduleAssignments()
-            ->where('effective_from', '<=', $dateStr)
-            ->where(function ($query) use ($dateStr) {
-                $query->whereNull('effective_until')
-                    ->orWhere('effective_until', '>=', $dateStr);
-            })
-            ->first();
+        if ($this->relationLoaded('workScheduleAssignments')) {
+            $assignment = $this->workScheduleAssignments
+                ->first(function ($assignment) use ($dateStr) {
+                    $effectiveFrom = $assignment->effective_from instanceof CarbonInterface
+                        ? $assignment->effective_from->format('Y-m-d')
+                        : (string) $assignment->effective_from;
 
-        if ($assignment) {
-            return $assignment->workSchedule;
+                    $effectiveUntil = $assignment->effective_until instanceof CarbonInterface
+                        ? $assignment->effective_until->format('Y-m-d')
+                        : ($assignment->effective_until ? (string) $assignment->effective_until : null);
+
+                    return $effectiveFrom <= $dateStr && ($effectiveUntil === null || $effectiveUntil >= $dateStr);
+                });
+
+            if ($assignment) {
+                return $assignment->workSchedule;
+            }
+        } else {
+            $assignment = $this->workScheduleAssignments()
+                ->where('effective_from', '<=', $dateStr)
+                ->where(function ($query) use ($dateStr) {
+                    $query->whereNull('effective_until')
+                        ->orWhere('effective_until', '>=', $dateStr);
+                })
+                ->first();
+
+            if ($assignment) {
+                return $assignment->workSchedule;
+            }
         }
 
         // Fallback transparente para o vínculo legado de escala

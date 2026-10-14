@@ -17,9 +17,11 @@ use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends Component
 {
+    use WithPagination;
     public $employeeId = null;
 
     public $name = '';
@@ -83,8 +85,14 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
     public string $sectorFilter = '';
     public string $regimeFilter = '';
 
+    public function updatedSearch(): void
+    {
+        $this->resetPage();
+    }
+
     public function updatedSectorFilter($value): void
     {
+        $this->resetPage();
         $user = Auth::user();
         if ($user && $user->role === UserRole::Manager && $value !== '') {
             $managedSectorIds = Sector::where('manager_id', $user->id)->pluck('id')->map(fn ($id) => (string) $id)->all();
@@ -94,11 +102,17 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
         }
     }
 
+    public function updatedRegimeFilter(): void
+    {
+        $this->resetPage();
+    }
+
     public function clearFilters(): void
     {
         $this->search = '';
         $this->sectorFilter = '';
         $this->regimeFilter = '';
+        $this->resetPage();
     }
 
     public function openCreateModal()
@@ -436,7 +450,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
         $workSchedules = WorkSchedule::where('active', true)->orderBy('name')->get();
         $legalRegimes = LegalRegime::cases();
 
-        $query = Employee::with(['user', 'sector', 'workScheduleAssignments.workSchedule']);
+        $query = Employee::with(['user', 'sector', 'workScheduleAssignments.workSchedule', 'workSchedule']);
 
         if ($isManager) {
             $managedSectors = Sector::where('manager_id', $user->id)->orderBy('name')->get();
@@ -460,17 +474,21 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
         if (trim($this->search) !== '') {
             $term = trim($this->search);
             $cleanCpf = preg_replace('/\D/', '', $term);
-            $query->where(function ($q) use ($term, $cleanCpf) {
-                $q->whereHas('user', function ($uq) use ($term) {
-                    $uq->where('name', 'like', "%{$term}%")
-                        ->orWhere('email', 'like', "%{$term}%");
+            $likeOp = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+
+            $query->where(function ($q) use ($term, $cleanCpf, $likeOp) {
+                $q->whereHas('user', function ($uq) use ($term, $likeOp) {
+                    $uq->where(function ($subUq) use ($term, $likeOp) {
+                        $subUq->where('name', $likeOp, "%{$term}%")
+                            ->orWhere('email', $likeOp, "%{$term}%");
+                    });
                 })
-                    ->orWhere('job_title', 'like', "%{$term}%")
-                    ->orWhere('registration_number', 'like', "%{$term}%")
-                    ->orWhere('cpf', 'like', "%{$term}%");
+                    ->orWhere('job_title', $likeOp, "%{$term}%")
+                    ->orWhere('registration_number', $likeOp, "%{$term}%")
+                    ->orWhere('cpf', $likeOp, "%{$term}%");
 
                 if ($cleanCpf !== '') {
-                    $q->orWhere('cpf', 'like', "%{$cleanCpf}%");
+                    $q->orWhere('cpf', $likeOp, "%{$cleanCpf}%");
 
                     if (strlen($cleanCpf) === 11) {
                         $formattedCpf = sprintf(
@@ -480,13 +498,13 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                             substr($cleanCpf, 6, 3),
                             substr($cleanCpf, 9, 2)
                         );
-                        $q->orWhere('cpf', 'like', "%{$formattedCpf}%");
+                        $q->orWhere('cpf', $likeOp, "%{$formattedCpf}%");
                     }
                 }
             });
         }
 
-        $employees = $query->orderByDesc('id')->get();
+        $employees = $query->orderByDesc('id')->paginate(15);
 
         return [
             'employees' => $employees,
@@ -544,7 +562,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                         </div>
                         <input id="emp-search"
                                type="text"
-                               wire:model.live.debounce.300ms="search"
+                               wire:model.live.debounce.400ms="search"
                                placeholder="Filtrar por nome, e-mail, cargo ou CPF..."
                                class="block w-full min-h-[44px] pl-9 pr-9 py-2 text-xs sm:text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" />
                         @if($search !== '')
@@ -586,7 +604,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
             @if($hasActiveFilters)
                 <div class="flex items-center justify-between pt-2 border-t border-gray-200 text-xs">
                     <span class="text-gray-600 font-medium">
-                        Filtros ativos: exibindo <strong>{{ $employees->count() }}</strong> resultado(s)
+                        Filtros ativos: exibindo <strong>{{ $employees->total() }}</strong> colaborador(es) encontrado(s)
                     </span>
                     <button type="button" wire:click="clearFilters" class="inline-flex items-center gap-1 font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer min-h-[36px] px-2 py-1 rounded-lg hover:bg-indigo-50 transition">
                         <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
@@ -594,6 +612,10 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                         </svg>
                         Limpar filtros
                     </button>
+                </div>
+            @else
+                <div class="flex items-center justify-between pt-2 border-t border-gray-200 text-xs text-gray-500">
+                    <span>Total cadastrado: <strong>{{ $employees->total() }}</strong> colaborador(es)</span>
                 </div>
             @endif
         </div>
@@ -605,7 +627,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                     $activeSchedule = $employee->getWorkScheduleForDate();
                     $rawCpfTable = preg_replace('/\D/', '', $employee->cpf ?? '');
                     $displayCpf = strlen($rawCpfTable) === 11 
-                        ? preg_replace('/(\d{3})(\d{3})(\d{3})(\d{2})/', '$1.$2.$3-$4', $rawCpfTable) 
+                        ? substr($rawCpfTable, 0, 3) . '.***.***-' . substr($rawCpfTable, 9, 2)
                         : $employee->cpf;
                 @endphp
                 <div wire:key="mobile-emp-{{ $employee->id }}" class="bg-white rounded-xl border border-gray-200/90 p-4 shadow-2xs space-y-3">
@@ -680,6 +702,12 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                     @endif
                 </div>
             @endforelse
+
+            @if($employees->hasPages())
+                <div class="pt-2">
+                    {{ $employees->links() }}
+                </div>
+            @endif
         </div>
 
         {{-- VISÃO DESKTOP: Tabela Tradicional --}}
@@ -731,10 +759,10 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                                 @php
                                     $rawCpfTable = preg_replace('/\D/', '', $employee->cpf ?? '');
                                     $displayCpf = strlen($rawCpfTable) === 11 
-                                        ? preg_replace('/(\d{3})(\d{3})(\d{3})(\d{2})/', '$1.$2.$3-$4', $rawCpfTable) 
+                                        ? substr($rawCpfTable, 0, 3) . '.***.***-' . substr($rawCpfTable, 9, 2) 
                                         : $employee->cpf;
                                 @endphp
-                                <div class="text-xs text-gray-500 font-mono mt-0.5">{{ $displayCpf }}</div>
+                                <div class="text-xs text-gray-400 font-mono mt-0.5">{{ $displayCpf }}</div>
                             </td>
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                                 <button type="button" wire:click="openEditModal({{ $employee->id }})" class="text-indigo-600 hover:text-indigo-900 font-semibold cursor-pointer">Editar</button>
@@ -770,6 +798,12 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                     @endforelse
                 </tbody>
             </table>
+
+            @if($employees->hasPages())
+                <div class="p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+                    {{ $employees->links() }}
+                </div>
+            @endif
         </div>
     </div>
 
