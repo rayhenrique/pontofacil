@@ -14,6 +14,10 @@
   - **Busca Unificada e Filtros Combinados:** Localização rápida de comprovantes eletrônicos por nome do servidor, e-mail, código de autenticidade ou NSR, combinando busca textual com filtros por setor, funcionário, competência e tipo de operação (Entrada/Saída).
   - **Segregação Rigorosa por Perfil:** Servidores visualizam estritamente seus próprios comprovantes; gestores acessam apenas funcionários dos setores autorizados sob sua responsabilidade; administradores e auditores possuem visualização adequada com auditoria.
   - **Proteção e Conformidade:** Exibição responsável de dados pessoais com redução da exposição de CPF na listagem, preservação integral de comprovantes fiscais originais, validação de integridade e link direto para verificação pública.
+- **Refinamento Visual e Redução de Ruído Mobile-First:**
+  - **Bater Ponto Mais Claro:** Relógio tabular destacado, instruções compactas, eliminação de mensagens repetidas e exibição explícita da data na última marcação para não confundir com a jornada do dia atual.
+  - **Relatórios e Conferência Objetivos:** Unificação de advertências provisórias em um aviso único e claro em competências abertas; cabeçalhos e barras de ação compactadas mantendo ações primárias e exportações intactas.
+  - **Configurações com Divulgação Progressiva:** Opções avançadas de cabeçalho de folha de ponto agrupadas em seção retrátil acessível, mantendo o formulário principal limpo e focado no essencial.
 
 ## v2.6.10
 - **Horários e Escalas com Permissões Claras:**

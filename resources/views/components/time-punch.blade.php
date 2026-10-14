@@ -594,9 +594,12 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
 
                 @if($this->latestPunch)
                     <div class="mt-2.5 pt-2 border-t border-gray-100 flex items-center justify-between">
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 flex-wrap">
                             <span class="text-sm sm:text-base font-bold text-gray-900">
                                 {{ $this->latestPunch->direction === 'in' ? 'Entrada' : 'Saída' }} &middot; <span class="font-mono tabular-nums">{{ $this->latestPunch->occurred_at_local->format('H:i') }}</span>
+                            </span>
+                            <span class="text-xs text-gray-500 font-medium">
+                                ({{ $this->latestPunch->occurred_at_local->isToday() ? 'Hoje' : $this->latestPunch->occurred_at_local->format('d/m/Y') }})
                             </span>
                             <span class="text-[11px] text-gray-400 font-mono hidden sm:inline">
                                 (NSR #{{ str_pad($this->latestPunch->nsr, 9, '0', STR_PAD_LEFT) }})
