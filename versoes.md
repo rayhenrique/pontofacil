@@ -10,6 +10,10 @@
   - **Ocultação Automática quando Inativo:** Quando o servidor ou a empresa não utiliza banco de horas na competência consultada, o espelho oculta automaticamente o painel de banco de horas, saldos anteriores/finais, movimentações de crédito/débito e conciliações bancárias.
   - **Resumo Fiel de Jornada:** O resumo das diferenças de jornada permanece completo e transparente, destacando horas trabalhadas, dias de expediente, jornadas concluídas e o saldo líquido apurado entre o previsto e o realizado.
   - **Respeito à Competência Fechada:** Meses já fechados respeitam fielmente a modalidade histórica congelada no momento do fechamento, sem recalcular regras retroativamente.
+- **Central de Comprovantes com Filtros Avançados e Proteção por Perfil:**
+  - **Busca Unificada e Filtros Combinados:** Localização rápida de comprovantes eletrônicos por nome do servidor, e-mail, código de autenticidade ou NSR, combinando busca textual com filtros por setor, funcionário, competência e tipo de operação (Entrada/Saída).
+  - **Segregação Rigorosa por Perfil:** Servidores visualizam estritamente seus próprios comprovantes; gestores acessam apenas funcionários dos setores autorizados sob sua responsabilidade; administradores e auditores possuem visualização adequada com auditoria.
+  - **Proteção e Conformidade:** Exibição responsável de dados pessoais com redução da exposição de CPF na listagem, preservação integral de comprovantes fiscais originais, validação de integridade e link direto para verificação pública.
 
 ## v2.6.10
 - **Horários e Escalas com Permissões Claras:**
