@@ -3,6 +3,7 @@
 namespace App\Domain\PTRP\DTOs;
 
 use App\Domain\PTRP\Enums\TimeBankTransactionType;
+use App\Domain\Settlement\Enums\SettlementModality;
 use App\Models\ClosedPeriod;
 use App\Models\Employee;
 use App\Models\TimeBankAccount;
@@ -202,6 +203,13 @@ class TimeBankMonthlySummary
         $policyMode = $snapshotData['policy_mode'] ?? 'CARRY_OVER';
         $policyName = $snapshotData['settlement_policy']['name'] ?? 'Política Congelada no Snapshot';
 
+        $settlementModality = isset($snapshotData['settlement_policy']['modality'])
+            ? SettlementModality::tryFrom($snapshotData['settlement_policy']['modality'])
+            : null;
+        $operatesTimeBank = $settlementModality
+            ? $settlementModality->operatesTimeBankLedger()
+            : ($policyMode !== 'DISABLED');
+
         return new self(
             previousBalanceMinutes: $balanceBefore,
             monthCreditsMinutes: $monthCredits,
@@ -221,7 +229,7 @@ class TimeBankMonthlySummary
             postClosingSettlements: $postClosingSettlements,
             policyMode: $policyMode,
             policyName: $policyName,
-            operatesTimeBank: $policyMode !== 'DISABLED',
+            operatesTimeBank: $operatesTimeBank,
             destinationDescription: 'Saldo histórico auditado do snapshot imutável.',
         );
     }

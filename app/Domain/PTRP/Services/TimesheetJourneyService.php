@@ -310,7 +310,7 @@ class TimesheetJourneyService
 
         $operatesTimeBank = ($timeBankSummary && $timeBankSummary->operatesTimeBank);
 
-        $reconciliationResult = $timeBankSummary
+        $reconciliationResult = ($timeBankSummary && $operatesTimeBank)
             ? $this->reconciliationService->reconcile($employee, $year, $month, $timeBankSummary, $daysCalculated, $closedPeriod)
             : null;
 
@@ -547,7 +547,7 @@ class TimesheetJourneyService
         $settlementService = app(WorkTimeSettlementService::class);
         $settlementPolicy = $settlementService->resolvePolicy($employee, $periodEnd);
         $modality = $settlementPolicy->modality;
-        $operatesTimeBank = $modality->operatesTimeBankLedger() || ($policy && $policy->enabled);
+        $operatesTimeBank = $settlementPolicy->operatesTimeBank();
 
         $timeBankSummary = null;
         $reconciliationResult = null;
