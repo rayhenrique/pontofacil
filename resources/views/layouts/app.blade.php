@@ -7,6 +7,9 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @livewireStyles
         <style>
+            [x-cloak] {
+                display: none !important;
+            }
             @media print {
                 .no-print, header, nav, aside, footer, [role="dialog"], button.no-print {
                     display: none !important;
@@ -25,14 +28,32 @@
             }
         </style>
     </head>
+    @php
+        $isAdvancedRouteActive = request()->routeIs([
+            'admin.sectors*',
+            'admin.calendar*',
+            'admin.time-bank*',
+            'admin.settlement-policies*',
+            'admin.adjustment*',
+            'admin.fiscalizacao*',
+            'admin.audit*',
+            'admin.users*',
+            'admin.settings*',
+            'admin.export-afd*',
+        ]);
+    @endphp
     <body class="h-full font-sans antialiased text-gray-900 bg-gray-100 overflow-x-hidden" 
           x-data="{ 
               mobileMenuOpen: false,
               sidebarCollapsed: localStorage.getItem('pf_sidebar_collapsed') === 'true',
-              advancedOpen: false,
+              advancedOpen: {!! $isAdvancedRouteActive ? 'true' : "localStorage.getItem('pf_advanced_menu_open') === 'true'" !!},
               toggleSidebar() {
                   this.sidebarCollapsed = !this.sidebarCollapsed;
                   localStorage.setItem('pf_sidebar_collapsed', this.sidebarCollapsed);
+              },
+              toggleAdvanced() {
+                  this.advancedOpen = !this.advancedOpen;
+                  localStorage.setItem('pf_advanced_menu_open', this.advancedOpen);
               }
           }">
         @auth
@@ -127,12 +148,26 @@
                                 @if($isAdmin)
                                     <!-- CONFIGURAÇÕES & APOIO (ÁREA SECUNDÁRIA EXPANSÍVEL) -->
                                     <div class="pt-3 mt-3 border-t border-indigo-800/80">
-                                        <button @click="advancedOpen = !advancedOpen" type="button" class="w-full flex items-center justify-between px-3 py-2 text-[11px] font-bold text-indigo-300 uppercase tracking-wider hover:text-white transition">
-                                            <span>Configurações & Apoio</span>
-                                            <svg class="h-4 w-4 transform transition-transform" :class="advancedOpen ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+                                        <button @click="toggleAdvanced()" 
+                                                id="advanced-menu-mobile-btn"
+                                                type="button" 
+                                                aria-controls="advanced-menu-mobile"
+                                                aria-expanded="{{ $isAdvancedRouteActive ? 'true' : 'false' }}"
+                                                :aria-expanded="advancedOpen ? 'true' : 'false'"
+                                                class="w-full min-h-[44px] flex items-center justify-between px-3 py-2 text-[11px] font-bold uppercase tracking-wider transition rounded-lg {{ $isAdvancedRouteActive ? 'text-indigo-200 bg-indigo-950/40' : 'text-indigo-300 hover:text-white' }}">
+                                            <span class="flex items-center gap-2 truncate">
+                                                @if($isAdvancedRouteActive)
+                                                    <span class="h-1.5 w-1.5 rounded-full bg-indigo-400 shrink-0" aria-hidden="true"></span>
+                                                @endif
+                                                <span>Configurações & Apoio</span>
+                                            </span>
+                                            <svg class="h-4 w-4 transform transition-transform shrink-0" :class="advancedOpen ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
                                         </button>
                                         
-                                        <div x-show="advancedOpen" class="space-y-1 mt-1 pl-1">
+                                        <div id="advanced-menu-mobile" 
+                                             x-show="advancedOpen" 
+                                             x-cloak 
+                                             class="space-y-1 mt-1 pl-1">
                                             <a href="{{ route('admin.sectors') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.sectors*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:bg-indigo-800/60 hover:text-white' }}">
                                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                                                 Setores
@@ -141,7 +176,7 @@
                                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                                                 Calendário Laboral
                                             </a>
-                                            <a href="{{ route('admin.time-bank') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.time-bank*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:bg-indigo-800/60 hover:text-white' }}">
+                                            <a href="{{ route('admin.time-bank') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.time-bank*') || request()->routeIs('admin.settlement-policies*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:bg-indigo-800/60 hover:text-white' }}">
                                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                                 Banco de Horas
                                             </a>
@@ -306,12 +341,28 @@
                                 @if($isAdmin)
                                     <!-- CONFIGURAÇÕES & APOIO (ÁREA SECUNDÁRIA EXPANSÍVEL) -->
                                     <div class="pt-3 mt-3 border-t border-indigo-800/80">
-                                        <button @click="advancedOpen = !advancedOpen" type="button" :class="sidebarCollapsed ? 'justify-center px-1' : 'justify-between px-3'" class="w-full min-h-[44px] flex items-center py-1.5 text-[11px] font-bold text-indigo-300 uppercase tracking-wider hover:text-white transition cursor-pointer">
-                                            <span x-show="!sidebarCollapsed">Configurações & Apoio</span>
-                                            <svg class="h-4 w-4 transform transition-transform" :class="advancedOpen ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+                                        <button @click="toggleAdvanced()" 
+                                                id="advanced-menu-desktop-btn"
+                                                type="button" 
+                                                aria-controls="advanced-menu-desktop"
+                                                aria-expanded="{{ $isAdvancedRouteActive ? 'true' : 'false' }}"
+                                                :aria-expanded="advancedOpen ? 'true' : 'false'"
+                                                :title="sidebarCollapsed ? 'Configurações & Apoio' : ''"
+                                                :class="sidebarCollapsed ? 'justify-center px-1' : 'justify-between px-3'" 
+                                                class="w-full min-h-[44px] flex items-center py-1.5 text-[11px] font-bold uppercase tracking-wider transition cursor-pointer rounded-lg {{ $isAdvancedRouteActive ? 'text-indigo-200 bg-indigo-950/40' : 'text-indigo-300 hover:text-white' }}">
+                                            <span x-show="!sidebarCollapsed" class="flex items-center gap-2 truncate">
+                                                @if($isAdvancedRouteActive)
+                                                    <span class="h-1.5 w-1.5 rounded-full bg-indigo-400 shrink-0" aria-hidden="true"></span>
+                                                @endif
+                                                <span>Configurações & Apoio</span>
+                                            </span>
+                                            <svg class="h-4 w-4 transform transition-transform shrink-0" :class="advancedOpen ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
                                         </button>
                                         
-                                        <div x-show="advancedOpen || sidebarCollapsed" class="space-y-1 mt-1">
+                                        <div id="advanced-menu-desktop" 
+                                             x-show="advancedOpen" 
+                                             x-cloak 
+                                             class="space-y-1 mt-1">
                                             <a href="{{ route('admin.sectors') }}" :title="sidebarCollapsed ? 'Setores' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[40px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.sectors*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:text-white hover:bg-indigo-800/60' }}">
                                                 <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                                                 <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Setores</span>
@@ -320,7 +371,7 @@
                                                 <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                                                 <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Calendário</span>
                                             </a>
-                                            <a href="{{ route('admin.time-bank') }}" :title="sidebarCollapsed ? 'Banco de Horas' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[40px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.time-bank*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:text-white hover:bg-indigo-800/60' }}">
+                                            <a href="{{ route('admin.time-bank') }}" :title="sidebarCollapsed ? 'Banco de Horas' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[40px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.time-bank*') || request()->routeIs('admin.settlement-policies*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:text-white hover:bg-indigo-800/60' }}">
                                                 <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                                 <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Banco de Horas</span>
                                             </a>
