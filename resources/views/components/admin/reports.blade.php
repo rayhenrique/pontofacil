@@ -180,14 +180,14 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
         $rows = $reportData['rows'];
 
         // Carregar estabelecimentos e setores conforme permissão
-        $establishments = \App\Models\Establishment::orderBy('name')->get();
-        $sectorsQuery = \App\Models\Sector::query();
+        $establishments = Establishment::orderBy('name')->get();
+        $sectorsQuery = Sector::query();
         if ($user->role === UserRole::Manager) {
             $sectorsQuery->where('manager_id', $user->id);
         }
         $sectors = $sectorsQuery->orderBy('name')->get();
 
-        $employeesQuery = \App\Models\Employee::with('user');
+        $employeesQuery = Employee::with('user');
         if ($user->role === UserRole::Manager) {
             $managedIds = $sectors->pluck('id');
             $employeesQuery->whereIn('sector_id', $managedIds);
@@ -195,7 +195,7 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
         $employees = $employeesQuery->get()->sortBy('user.name');
 
         // Logs de emissão da competência (restritos ao escopo do usuário)
-        $recentLogsQuery = \App\Models\MonthlyAttendanceReportLog::with(['generator', 'dispatcher'])
+        $recentLogsQuery = MonthlyAttendanceReportLog::with(['generator', 'dispatcher'])
             ->where('year', $year)
             ->where('month', $month);
 
@@ -211,12 +211,12 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
 
         $recentLogs = $recentLogsQuery->orderBy('id', 'desc')->take(5)->get();
 
-        $recentLogs = $recentLogs->filter(function ($log) use ($user) {
+        $recentLogs = $recentLogs->filter(function (MonthlyAttendanceReportLog $log) use ($user) {
             if ($user->role !== UserRole::Manager) {
                 return true;
             }
 
-            return app(\App\Domain\Company\Services\SectorScopeService::class)->canAccessReportLog($user, $log);
+            return app(SectorScopeService::class)->canAccessReportLog($user, $log);
         })->values();
 
         $downloadParams = [
@@ -265,7 +265,7 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
                 </button>
                 <div class="px-3 py-0.5 text-center">
                     <span class="text-sm font-bold text-gray-900 dark:text-white capitalize">
-                        {{ \Carbon\Carbon::createFromDate($year, $month, 1)->translatedFormat('F / Y') }}
+                        {{ Carbon::createFromDate($year, $month, 1)->translatedFormat('F / Y') }}
                     </span>
                 </div>
                 <button wire:click="nextMonth" type="button" class="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition min-h-[44px] min-w-[44px] inline-flex items-center justify-center" title="Próximo mês" aria-label="Próximo mês">
@@ -335,7 +335,7 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
                 <div>
                     <strong class="text-sm font-bold block">Relatório Oficial Definitivo da Competência {{ sprintf('%02d/%04d', $month, $year) }}</strong>
                     <span>
-                        Apuração congelada em snapshots imutáveis em {{ \Carbon\Carbon::parse($reportData['closed_at'])->format('d/m/Y H:i') }} por {{ $reportData['closed_by_name'] }}.
+                        Apuração congelada em snapshots imutáveis em {{ Carbon::parse($reportData['closed_at'])->format('d/m/Y H:i') }} por {{ $reportData['closed_by_name'] }}.
                         Versão: <strong>V{{ $reportData['closed_version'] }}</strong>.
                     </span>
                     <div class="font-mono text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5 truncate max-w-2xl">
@@ -521,7 +521,7 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
                         $totalPages = max(1, (int) ceil($totalRows / $this->perPage));
                         $currentPage = min(max(1, $this->page), $totalPages);
                         $pagedRows = array_slice($rows, ($currentPage - 1) * $this->perPage, $this->perPage);
-                        $reportEmployeesMap = \App\Models\Employee::whereIn('id', collect($pagedRows)->pluck('employee_id')->all())
+                        $reportEmployeesMap = Employee::whereIn('id', collect($pagedRows)->pluck('employee_id')->all())
                             ->get(['id', 'user_id'])
                             ->keyBy('id');
                     @endphp
