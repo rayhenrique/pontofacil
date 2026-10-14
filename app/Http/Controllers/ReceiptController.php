@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Company\Services\CurrentCompany;
+use App\Domain\Company\Services\SectorScopeService;
 use App\Domain\Compliance\AFD\AfdGenerator_2026_07_31;
 use App\Domain\Compliance\Receipt\ReceiptPdfGenerator;
 use App\Enums\UserRole;
@@ -27,9 +28,18 @@ class ReceiptController extends Controller
             'punchEvent.employee',
         ])->where('verification_code', $code)->firstOrFail();
 
-        // Se autenticado e for colaborador, restringe aos próprios comprovantes
-        if (Auth::check() && Auth::user()->role === UserRole::Employee) {
-            abort_if($receipt->punchEvent->user_id !== Auth::id(), 403, 'Acesso não autorizado ao comprovante.');
+        // Restrição de acesso por perfil
+        if (Auth::check()) {
+            $authUser = Auth::user();
+            if ($authUser->role === UserRole::Employee) {
+                abort_if($receipt->punchEvent->user_id !== $authUser->id, 403, 'Acesso não autorizado ao comprovante.');
+            } elseif ($authUser->role === UserRole::Manager) {
+                $scopeService = app(SectorScopeService::class);
+                $employee = $receipt->punchEvent->employee;
+                $canAccess = ($receipt->punchEvent->user_id === $authUser->id)
+                    || ($employee && $scopeService->canManageEmployee($authUser, $employee));
+                abort_unless($canAccess, 403, 'Acesso não autorizado ao comprovante.');
+            }
         }
 
         $pdfBinary = $generator->generate($receipt);
@@ -55,8 +65,17 @@ class ReceiptController extends Controller
             'punchEvent.employee',
         ])->where('verification_code', $code)->firstOrFail();
 
-        if (Auth::check() && Auth::user()->role === UserRole::Employee) {
-            abort_if($receipt->punchEvent->user_id !== Auth::id(), 403, 'Acesso não autorizado ao comprovante.');
+        if (Auth::check()) {
+            $authUser = Auth::user();
+            if ($authUser->role === UserRole::Employee) {
+                abort_if($receipt->punchEvent->user_id !== $authUser->id, 403, 'Acesso não autorizado ao comprovante.');
+            } elseif ($authUser->role === UserRole::Manager) {
+                $scopeService = app(SectorScopeService::class);
+                $employee = $receipt->punchEvent->employee;
+                $canAccess = ($receipt->punchEvent->user_id === $authUser->id)
+                    || ($employee && $scopeService->canManageEmployee($authUser, $employee));
+                abort_unless($canAccess, 403, 'Acesso não autorizado ao comprovante.');
+            }
         }
 
         return view('receipts.print', compact('receipt'));
