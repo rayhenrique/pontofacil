@@ -885,7 +885,7 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                         <a
                             href="{{ route('timesheet', ['userId' => $userId, 'month' => $month, 'year' => $year]) }}"
                             target="_blank"
-                            class="px-3 py-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg"
+                            class="px-3.5 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl min-h-[44px] inline-flex items-center justify-center transition"
                         >
                             Ver Espelho
                         </a>
@@ -895,9 +895,9 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                         <button
                             wire:click="openReviewModal({{ $item['employee_id'] }})"
                             type="button"
-                            class="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm"
+                            class="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs min-h-[44px] inline-flex items-center justify-center transition cursor-pointer"
                         >
-                            {{ ! empty($item['stale']) ? 'Revisar novamente' : 'Conferir Frequência' }}
+                            {{ ! empty($item['stale']) ? 'Revisar novamente' : 'Conferir' }}
                         </button>
                     @endif
                 </div>

@@ -231,143 +231,127 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
     @endphp
 
     <!-- Cabeçalho Principal e Ações de Exportação -->
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-        <div class="space-y-1">
-            <div class="flex items-center gap-3">
-                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Relatório Mensal Consolidado de Frequência</h1>
-                @if ($isClosed)
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
-                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                        </svg>
-                        Fechamento Oficial (Snapshots Congelados)
-                    </span>
-                @else
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
-                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                        Prévia Provisória (Competência em Aberto)
-                    </span>
-                @endif
+    <div class="bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-4">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+            <div>
+                <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Relatório Mensal Consolidado de Frequência</h1>
+                <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                    Apuração física de jornadas para folha de pagamento. Sem lançamentos financeiros ou cálculos monetários.
+                </p>
             </div>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
-                Documento administrativo de apuração física de jornadas para encaminhamento ao setor responsável pelo pagamento. Sem lançamentos financeiros ou cálculos monetários.
-            </p>
-        </div>
 
-        <!-- Seletor de Competência & Botões de Exportação -->
-        <div class="flex flex-wrap items-center gap-2.5">
-            <!-- Navegador de Mês -->
-            <div class="flex items-center bg-gray-50 dark:bg-gray-700/60 rounded-xl p-1 border border-gray-200 dark:border-gray-600">
-                <button wire:click="previousMonth" type="button" class="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition min-h-[44px] min-w-[44px] inline-flex items-center justify-center" title="Mês anterior" aria-label="Mês anterior">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
-                </button>
-                <div class="px-3 py-0.5 text-center">
-                    <span class="text-sm font-bold text-gray-900 dark:text-white capitalize">
-                        {{ Carbon::createFromDate($year, $month, 1)->translatedFormat('F / Y') }}
-                    </span>
+            <!-- Seletor de Competência & Botões de Exportação -->
+            <div class="flex flex-wrap items-center gap-2">
+                <!-- Navegador de Mês -->
+                <div class="flex items-center bg-gray-50 dark:bg-gray-700/60 rounded-xl p-1 border border-gray-200 dark:border-gray-600">
+                    <button wire:click="previousMonth" type="button" class="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition min-h-[44px] min-w-[44px] inline-flex items-center justify-center cursor-pointer" title="Mês anterior" aria-label="Mês anterior">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+                    </button>
+                    <div class="px-3 py-0.5 text-center">
+                        <span class="text-xs sm:text-sm font-bold text-gray-900 dark:text-white capitalize">
+                            {{ Carbon::createFromDate($year, $month, 1)->translatedFormat('F / Y') }}
+                        </span>
+                    </div>
+                    <button wire:click="nextMonth" type="button" class="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition min-h-[44px] min-w-[44px] inline-flex items-center justify-center cursor-pointer" title="Próximo mês" aria-label="Próximo mês">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                    </button>
                 </div>
-                <button wire:click="nextMonth" type="button" class="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition min-h-[44px] min-w-[44px] inline-flex items-center justify-center" title="Próximo mês" aria-label="Próximo mês">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+
+                <!-- Exportar CSV UTF-8 -->
+                <a
+                    href="{{ route('admin.reports.csv', $downloadParams) }}"
+                    class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 shadow-2xs transition min-h-[44px]"
+                    title="Download do arquivo CSV estruturado em UTF-8"
+                >
+                    <svg class="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Exportar CSV
+                </a>
+
+                <!-- Imprimir / Salvar PDF -->
+                <a
+                    href="{{ route('admin.reports.pdf', $downloadParams) }}"
+                    target="_blank"
+                    class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700 shadow-2xs transition min-h-[44px]"
+                    title="Visualizar documento formatado para impressão ou PDF"
+                >
+                    <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                    Imprimir / PDF
+                </a>
+
+                <!-- Atalho para Conferência Mensal -->
+                <a
+                    href="{{ route('admin.monthly-review', ['year' => $year, 'month' => $month, 'sectorId' => $sectorId]) }}"
+                    class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 dark:bg-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 shadow-2xs transition min-h-[44px]"
+                    title="Ir para a conferência mensal desta competência"
+                >
+                    <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Conferência
+                </a>
+
+                <!-- Botão Encaminhar ao Pagamento -->
+                <button
+                    wire:click="openDispatchModal"
+                    type="button"
+                    class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-xs transition min-h-[44px] cursor-pointer"
+                    title="Registrar formalmente o encaminhamento ao setor de folha/pagamento"
+                >
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                    </svg>
+                    Registrar Encaminhamento
                 </button>
             </div>
-
-            <!-- Exportar CSV UTF-8 -->
-            <a
-                href="{{ route('admin.reports.csv', $downloadParams) }}"
-                class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 shadow-2xs transition min-h-[44px]"
-                title="Download do arquivo CSV estruturado em UTF-8 para integração com a folha"
-            >
-                <svg class="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Exportar CSV
-            </a>
-
-            <!-- Imprimir / Salvar PDF -->
-            <a
-                href="{{ route('admin.reports.pdf', $downloadParams) }}"
-                target="_blank"
-                class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700 shadow-2xs transition min-h-[44px]"
-                title="Visualizar documento formatado para impressão ou PDF A4 Paisagem"
-            >
-                <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                </svg>
-                Imprimir / PDF
-            </a>
-
-            <!-- Atalho para Conferência Mensal -->
-            <a
-                href="{{ route('admin.monthly-review', ['year' => $year, 'month' => $month, 'sectorId' => $sectorId]) }}"
-                class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 dark:bg-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 shadow-2xs transition min-h-[44px]"
-                title="Ir para a tela de conferência mensal desta competência"
-            >
-                <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Conferência do Mês
-            </a>
-
-            <!-- Botão Encaminhar ao Pagamento -->
-            <button
-                wire:click="openDispatchModal"
-                type="button"
-                class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-xs transition min-h-[44px]"
-                title="Registrar formalmente o encaminhamento ao setor de folha/pagamento"
-            >
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                </svg>
-                Registrar Encaminhamento
-            </button>
         </div>
-    </div>
 
-    <!-- Banner Informativo: Fechado vs Provisório -->
-    @if ($isClosed)
-        <div class="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded-2xl p-4 text-xs text-emerald-900 dark:text-emerald-200 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs">
-            <div class="flex items-start gap-3">
-                <svg class="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div>
-                    <strong class="text-sm font-bold block">Relatório Oficial Definitivo da Competência {{ sprintf('%02d/%04d', $month, $year) }}</strong>
-                    <span>
-                        Apuração congelada em snapshots imutáveis em {{ Carbon::parse($reportData['closed_at'])->format('d/m/Y H:i') }} por {{ $reportData['closed_by_name'] }}.
-                        Versão: <strong>V{{ $reportData['closed_version'] }}</strong>.
-                    </span>
-                    <div class="font-mono text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5 truncate max-w-2xl">
-                        Hash SHA-256: {{ $reportData['closed_hash'] }}
+        <!-- Aviso Único de Situação da Competência (Sem repetição provisória) -->
+        @if ($isClosed)
+            <div class="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded-xl p-3 text-xs text-emerald-900 dark:text-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
+                <div class="flex items-start gap-2.5">
+                    <svg class="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                        <strong class="font-bold">Relatório Oficial Definitivo ({{ sprintf('%02d/%04d', $month, $year) }})</strong>
+                        <span class="text-emerald-800 dark:text-emerald-300 ml-1">
+                            Snapshots congelados em {{ Carbon::parse($reportData['closed_at'])->format('d/m/Y H:i') }} por {{ $reportData['closed_by_name'] }} (V{{ $reportData['closed_version'] }}).
+                        </span>
+                        <span class="font-mono text-[10px] text-emerald-700 dark:text-emerald-400 block truncate max-w-xl">
+                            SHA-256: {{ $reportData['closed_hash'] }}
+                        </span>
                     </div>
                 </div>
-            </div>
-            <div class="shrink-0 text-right">
-                <a href="{{ route('admin.monthly-review', ['year' => $year, 'month' => $month]) }}" class="font-semibold underline hover:text-emerald-950">
-                    Ver Conferência Mensal
-                </a>
-            </div>
-        </div>
-    @else
-        <div class="bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded-2xl p-4 text-xs text-amber-900 dark:text-amber-200 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs">
-            <div class="flex items-start gap-3">
-                <svg class="w-5 h-5 text-amber-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <div>
-                    <strong class="text-sm font-bold block">Prévia Provisória — Competência em Aberto</strong>
-                    <span>{{ $reportData['provisional_notice'] }}</span>
+                <div class="shrink-0 text-right">
+                    <a href="{{ route('admin.monthly-review', ['year' => $year, 'month' => $month]) }}" class="font-semibold underline hover:text-emerald-950 text-[11px]">
+                        Ver Conferência
+                    </a>
                 </div>
             </div>
-            <div class="shrink-0 text-right">
-                <a href="{{ route('admin.monthly-review', ['year' => $year, 'month' => $month]) }}" class="inline-flex items-center gap-1 font-bold text-indigo-700 dark:text-indigo-300 underline">
-                    Ir para Conferência e Fechamento
-                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
-                </a>
+        @else
+            <div class="bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded-xl p-3 text-xs text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
+                <div class="flex items-start gap-2.5">
+                    <svg class="w-4 h-4 text-amber-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div>
+                        <strong class="font-bold">Prévia Provisória — Competência em Aberto:</strong>
+                        <span class="text-amber-800 dark:text-amber-300 ml-1">{{ $reportData['provisional_notice'] }}</span>
+                    </div>
+                </div>
+                <div class="shrink-0 text-right">
+                    <a href="{{ route('admin.monthly-review', ['year' => $year, 'month' => $month]) }}" class="inline-flex items-center gap-1 font-bold text-indigo-700 dark:text-indigo-300 underline text-[11px]">
+                        Conferir e Fechar
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                    </a>
+                </div>
             </div>
-        </div>
-    @endif
+        @endif
+    </div>
 
     <!-- Barra de Filtros Operacionais -->
     <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">

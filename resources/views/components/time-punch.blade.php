@@ -620,8 +620,8 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                         </div>
                     </div>
                 @else
-                    <p class="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
-                        Você ainda não possui marcações neste período.
+                    <p class="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-100">
+                        Nenhum registro anterior encontrado.
                     </p>
                 @endif
             </div>
@@ -658,9 +658,9 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                                 </svg>
                             </div>
-                            <p class="text-xs sm:text-sm font-bold text-gray-800">Você ainda não possui marcações neste período.</p>
-                            <p class="text-[11px] text-gray-500 mt-1 max-w-xs mx-auto">
-                                Nenhuma marcação registrada hoje. Ao confirmar a leitura do QR Code, seus registros diários e comprovantes serão exibidos aqui.
+                            <p class="text-xs sm:text-sm font-bold text-gray-800">Nenhuma marcação registrada hoje.</p>
+                            <p class="text-[11px] text-gray-500 mt-0.5 max-w-xs mx-auto">
+                                Suas batidas confirmadas aparecerão listadas aqui com acesso aos comprovantes.
                             </p>
                         </div>
                     @else

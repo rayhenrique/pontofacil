@@ -459,21 +459,35 @@ new #[Layout('layouts.app')] #[Title('Configurações')] class extends Component
                         </div>
                     </div>
 
-                    <!-- Campos do Cabeçalho da Folha de Ponto -->
-                    <div class="pt-3 border-t border-slate-100">
-                        <span class="text-xs font-bold text-slate-800 uppercase tracking-wider block mb-2">Cabeçalho da Folha de Ponto Oficial</span>
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <div>
-                                <label class="block text-[11px] font-semibold text-gray-600 uppercase mb-0.5">Órgão / Entidade Principal</label>
-                                <input type="text" wire:model="company_header_entity" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg" placeholder="PREFEITURA MUNICIPAL...">
-                            </div>
-                            <div>
-                                <label class="block text-[11px] font-semibold text-gray-600 uppercase mb-0.5">Sub-Entidade / Secretaria</label>
-                                <input type="text" wire:model="company_header_sub_entity" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg" placeholder="SECRETARIA DE SAÚDE...">
-                            </div>
-                            <div>
-                                <label class="block text-[11px] font-semibold text-gray-600 uppercase mb-0.5">Linha Superior (Estado/UF)</label>
-                                <input type="text" wire:model="company_header_state" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg" placeholder="ESTADO DE ALAGOAS">
+                    <!-- Agrupamento Progressivo: Cabeçalho Oficial da Folha de Ponto -->
+                    <div x-data="{ showHeaderSettings: false }" class="pt-3 border-t border-slate-100">
+                        <button type="button"
+                                @click="showHeaderSettings = !showHeaderSettings"
+                                class="flex items-center justify-between w-full py-1 text-left text-xs font-bold text-slate-700 hover:text-indigo-600 transition cursor-pointer min-h-[36px]">
+                            <span class="flex items-center gap-1.5 uppercase tracking-wider">
+                                <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" />
+                                </svg>
+                                Opções Avançadas: Cabeçalho da Folha de Ponto
+                            </span>
+                            <span class="text-xs text-indigo-600 font-semibold" x-text="showHeaderSettings ? 'Ocultar ▲' : 'Personalizar ▼'"></span>
+                        </button>
+                        
+                        <div x-show="showHeaderSettings" x-collapse x-cloak class="mt-2.5 pt-2 space-y-3">
+                            <p class="text-[11px] text-gray-500">Personalize os nomes de órgão, secretaria e estado exibidos no cabeçalho impresso dos relatórios e espelho de ponto.</p>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-gray-600 uppercase mb-0.5">Órgão / Entidade Principal</label>
+                                    <input type="text" wire:model="company_header_entity" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" placeholder="PREFEITURA MUNICIPAL...">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-gray-600 uppercase mb-0.5">Sub-Entidade / Secretaria</label>
+                                    <input type="text" wire:model="company_header_sub_entity" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" placeholder="SECRETARIA DE SAÚDE...">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-gray-600 uppercase mb-0.5">Linha Superior (Estado/UF)</label>
+                                    <input type="text" wire:model="company_header_state" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" placeholder="ESTADO DE ALAGOAS">
+                                </div>
                             </div>
                         </div>
                     </div>
