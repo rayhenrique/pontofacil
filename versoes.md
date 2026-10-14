@@ -6,6 +6,10 @@
   - **Visualização Otimizada para Celular (320px+):** Em smartphones e telas menores, as listagens administrativas passam a se organizar em cartões verticais objetivos, eliminando barras de rolagem horizontais desconfortáveis e oferecendo botões de toque com tamanho mínimo confortável (44px) para dedos.
   - **Navegação Histórica sem Barreiras:** O seletor de anos na Folha de Ponto e na Central de Comprovantes agora permite consultar livremente o histórico de até 8 anos fiscais anteriores, sem travas artificiais de 2 anos.
   - **Identidade Visual e Acessibilidade:** Ajustes no contraste e padronização visual das marcações institucionais de QR Code e níveis de acesso de acordo com as normas de acessibilidade (WCAG AA) e design do sistema.
+- **Espelho de Ponto sem Banco de Horas:**
+  - **Ocultação Automática quando Inativo:** Quando o servidor ou a empresa não utiliza banco de horas na competência consultada, o espelho oculta automaticamente o painel de banco de horas, saldos anteriores/finais, movimentações de crédito/débito e conciliações bancárias.
+  - **Resumo Fiel de Jornada:** O resumo das diferenças de jornada permanece completo e transparente, destacando horas trabalhadas, dias de expediente, jornadas concluídas e o saldo líquido apurado entre o previsto e o realizado.
+  - **Respeito à Competência Fechada:** Meses já fechados respeitam fielmente a modalidade histórica congelada no momento do fechamento, sem recalcular regras retroativamente.
 
 ## v2.6.10
 - **Horários e Escalas com Permissões Claras:**
