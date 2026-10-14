@@ -31,6 +31,12 @@ new class extends Component
         $this->resetPage();
     }
 
+    public function clearSearch(): void
+    {
+        $this->search = '';
+        $this->resetPage();
+    }
+
     public function render()
     {
         $user = Auth::user();
@@ -41,18 +47,27 @@ new class extends Component
             'punchEvent.employee',
         ]);
 
-        // Restrição de acesso por papel
+        // Restrição de acesso por papel com reforço de autorização
         if ($user->role === UserRole::Employee) {
-            $query->whereHas('punchEvent', fn($q) => $q->where('user_id', $user->id));
+            $query->whereHas('punchEvent', fn ($q) => $q->where('user_id', $user->id));
+        } elseif ($user->role === UserRole::Manager) {
+            $managedSectorIds = \App\Models\Sector::where('manager_id', $user->id)->pluck('id');
+            $allowedUserIds = \App\Models\Employee::whereIn('sector_id', $managedSectorIds)->pluck('user_id')->push($user->id);
+
+            if ($this->selectedUserId && $allowedUserIds->contains($this->selectedUserId)) {
+                $query->whereHas('punchEvent', fn ($q) => $q->where('user_id', $this->selectedUserId));
+            } else {
+                $query->whereHas('punchEvent', fn ($q) => $q->whereIn('user_id', $allowedUserIds));
+            }
         } elseif ($this->selectedUserId) {
-            $query->whereHas('punchEvent', fn($q) => $q->where('user_id', $this->selectedUserId));
+            $query->whereHas('punchEvent', fn ($q) => $q->where('user_id', $this->selectedUserId));
         }
 
         // Filtro por mês/ano
         if ($this->selectedMonth && $this->selectedYear) {
             $query->whereHas('punchEvent', function ($q) {
                 $q->whereYear('occurred_at_local', $this->selectedYear)
-                  ->whereMonth('occurred_at_local', $this->selectedMonth);
+                    ->whereMonth('occurred_at_local', $this->selectedMonth);
             });
         }
 
@@ -61,7 +76,7 @@ new class extends Component
             $term = trim($this->search);
             $query->where(function ($q) use ($term) {
                 $q->where('verification_code', 'like', "%{$term}%")
-                  ->orWhereHas('punchEvent', fn($sub) => $sub->where('nsr', 'like', "%{$term}%"));
+                    ->orWhereHas('punchEvent', fn ($sub) => $sub->where('nsr', 'like', "%{$term}%"));
             });
         }
 
@@ -74,6 +89,10 @@ new class extends Component
         $colleagues = [];
         if ($user->role === UserRole::Admin) {
             $colleagues = User::where('role', UserRole::Employee)->orderBy('name')->get();
+        } elseif ($user->role === UserRole::Manager) {
+            $managedSectorIds = \App\Models\Sector::where('manager_id', $user->id)->pluck('id');
+            $allowedUserIds = \App\Models\Employee::whereIn('sector_id', $managedSectorIds)->pluck('user_id');
+            $colleagues = User::whereIn('id', $allowedUserIds)->orderBy('name')->get();
         }
 
         return view('components.receipts-center', [
@@ -122,38 +141,49 @@ new class extends Component
 
     <!-- Filtros e Barra de Pesquisa -->
     <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center gap-3">
-        <div class="flex-1 min-w-[240px]">
+        <div class="flex-1 min-w-[240px] relative">
             <input 
                 wire:model.live.debounce.300ms="search"
                 type="text" 
                 placeholder="Filtrar por Código (PF-...) ou NSR (#000000001)..." 
-                class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 outline-none"
+                class="w-full min-h-[44px] px-3.5 pr-9 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 outline-none"
             />
+            @if($search !== '')
+                <button type="button"
+                        wire:click="clearSearch"
+                        class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer min-h-[44px] min-w-[44px] justify-center"
+                        aria-label="Limpar busca">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            @endif
         </div>
 
-        <div class="flex items-center gap-2">
-            <select wire:model.live="selectedMonth" class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 bg-white">
-                <option value="01">Janeiro</option>
-                <option value="02">Fevereiro</option>
-                <option value="03">Março</option>
-                <option value="04">Abril</option>
-                <option value="05">Maio</option>
-                <option value="06">Junho</option>
-                <option value="07">Julho</option>
-                <option value="08">Agosto</option>
-                <option value="09">Setembro</option>
-                <option value="10">Outubro</option>
-                <option value="11">Novembro</option>
-                <option value="12">Dezembro</option>
+        <div class="flex flex-wrap items-center gap-2">
+            <select wire:model.live="selectedMonth" class="min-h-[44px] px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 bg-white focus:ring-2 focus:ring-indigo-500">
+                <option value="01">01 - Janeiro</option>
+                <option value="02">02 - Fevereiro</option>
+                <option value="03">03 - Março</option>
+                <option value="04">04 - Abril</option>
+                <option value="05">05 - Maio</option>
+                <option value="06">06 - Junho</option>
+                <option value="07">07 - Julho</option>
+                <option value="08">08 - Agosto</option>
+                <option value="09">09 - Setembro</option>
+                <option value="10">10 - Outubro</option>
+                <option value="11">11 - Novembro</option>
+                <option value="12">12 - Dezembro</option>
             </select>
 
-            <select wire:model.live="selectedYear" class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 bg-white">
-                <option value="2026">2026</option>
-                <option value="2025">2025</option>
+            <select wire:model.live="selectedYear" class="min-h-[44px] px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 bg-white focus:ring-2 focus:ring-indigo-500">
+                @for($y = now()->year - 8; $y <= now()->year + 1; $y++)
+                    <option value="{{ $y }}">{{ $y }}</option>
+                @endfor
             </select>
 
             @if(count($colleagues) > 0)
-                <select wire:model.live="selectedUserId" class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 bg-white max-w-[180px]">
+                <select wire:model.live="selectedUserId" class="min-h-[44px] px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 bg-white max-w-[200px] focus:ring-2 focus:ring-indigo-500">
                     <option value="">Todos os Servidores</option>
                     @foreach($colleagues as $c)
                         <option value="{{ $c->id }}">{{ $c->name }}</option>

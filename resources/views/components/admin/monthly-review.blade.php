@@ -95,6 +95,16 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
         $this->page = 1;
     }
 
+    public function clearFilters(): void
+    {
+        $this->sectorId = '';
+        $this->search = '';
+        $this->statusFilter = 'all';
+        $this->page = 1;
+        $this->selectedIds = [];
+        $this->selectAll = false;
+    }
+
     public function previousPage(): void
     {
         $this->page = max(1, $this->page - 1);
@@ -578,13 +588,13 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
     @endif
 
     <!-- Barra de Filtros Compactos e Ações em Lote -->
-    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-3">
+    <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-2xs space-y-3">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div class="flex flex-wrap items-center gap-3 flex-1">
                 <!-- Filtro Setor -->
                 <select
                     wire:model.live="sectorId"
-                    class="rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500"
+                    class="rounded-xl border border-gray-300 bg-white text-xs sm:text-sm py-2 px-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[44px]"
                 >
                     <option value="">Todos os Setores Autorizados</option>
                     @foreach ($availableSectors as $sec)
@@ -595,7 +605,7 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                 <!-- Filtro Status -->
                 <select
                     wire:model.live="statusFilter"
-                    class="rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500"
+                    class="rounded-xl border border-gray-300 bg-white text-xs sm:text-sm py-2 px-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[44px]"
                 >
                     <option value="all">Todos os Status</option>
                     <option value="pending">Aguardando conferência</option>
@@ -610,11 +620,21 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                         type="text"
                         wire:model.live.debounce.300ms="search"
                         placeholder="Buscar por servidor, CPF ou matrícula..."
-                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm py-2 pl-9 pr-3 focus:ring-indigo-500 focus:border-indigo-500"
+                        class="w-full rounded-xl border border-gray-300 bg-white text-xs sm:text-sm py-2 pl-9 pr-9 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[44px]"
                     />
-                    <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg class="w-4 h-4 text-gray-400 absolute left-3 top-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
+                    @if(! empty($search))
+                        <button type="button"
+                                wire:click="$set('search', '')"
+                                class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                                aria-label="Limpar busca">
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    @endif
                 </div>
             </div>
 
@@ -626,9 +646,9 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                         type="button"
                         @disabled(empty($selectedIds))
                         @class([
-                            'inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition',
-                            'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800' => ! empty($selectedIds),
-                            'bg-gray-100 text-gray-400 border border-gray-200 dark:bg-gray-800 dark:border-gray-700 cursor-not-allowed' => empty($selectedIds),
+                            'inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition min-h-[44px]',
+                            'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200' => ! empty($selectedIds),
+                            'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed' => empty($selectedIds),
                         ])
                     >
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -639,7 +659,18 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                 </div>
             @endif
         </div>
-        <div wire:loading class="pt-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400" aria-live="polite">
+
+        @if($sectorId !== '' || $statusFilter !== 'all' || ! empty($search))
+            <div class="flex items-center justify-between pt-2 border-t border-gray-100 text-xs">
+                <span class="text-gray-600 font-medium">Filtros ativos: exibindo <strong>{{ $totalFiltered }}</strong> de {{ count($overview['items']) }} servidores</span>
+                <button type="button" wire:click="clearFilters" class="inline-flex items-center gap-1 font-semibold text-indigo-600 hover:text-indigo-800 min-h-[36px] px-2 py-1 rounded-lg hover:bg-indigo-50 transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                    Limpar filtros
+                </button>
+            </div>
+        @endif
+
+        <div wire:loading class="pt-2 text-xs font-semibold text-indigo-600" aria-live="polite">
             Atualizando conferência…
         </div>
     </div>
@@ -778,8 +809,13 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ $isClosed ? 7 : 8 }}" class="py-8 text-center text-gray-500 dark:text-gray-400">
-                                Nenhum colaborador localizado com os filtros aplicados.
+                            <td colspan="{{ $isClosed ? 7 : 8 }}" class="py-10 text-center text-gray-500">
+                                <p class="font-semibold text-gray-800">Nenhum colaborador localizado com os filtros aplicados.</p>
+                                @if($sectorId !== '' || $statusFilter !== 'all' || ! empty($search))
+                                    <button type="button" wire:click="clearFilters" class="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 underline">
+                                        Limpar filtros para ver todos
+                                    </button>
+                                @endif
                             </td>
                         </tr>
                     @endforelse
@@ -867,8 +903,13 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                 </div>
             </div>
         @empty
-            <div class="bg-white dark:bg-gray-800 p-8 rounded-xl text-center text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
-                Nenhum colaborador localizado com os filtros aplicados.
+            <div class="bg-white p-8 rounded-xl text-center text-gray-500 border border-gray-200">
+                <p class="font-semibold text-gray-800">Nenhum colaborador localizado com os filtros aplicados.</p>
+                @if($sectorId !== '' || $statusFilter !== 'all' || ! empty($search))
+                    <button type="button" wire:click="clearFilters" class="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 underline">
+                        Limpar filtros para ver todos
+                    </button>
+                @endif
             </div>
         @endforelse
     </div>

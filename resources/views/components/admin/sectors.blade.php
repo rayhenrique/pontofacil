@@ -131,11 +131,30 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
         ]);
     }
 
+    public string $search = '';
+
+    public function clearSearch(): void
+    {
+        $this->search = '';
+    }
+
     public function with()
     {
+        $query = Sector::with('manager')->orderBy('name');
+        if (! empty(trim($this->search))) {
+            $term = '%' . trim($this->search) . '%';
+            $query->where(function ($q) use ($term) {
+                $q->where('name', 'like', $term)
+                    ->orWhere('description', 'like', $term)
+                    ->orWhereHas('manager', function ($mq) use ($term) {
+                        $mq->where('name', 'like', $term);
+                    });
+            });
+        }
+
         return [
-            'sectors' => Sector::with('manager')->orderBy('name')->get(),
-            'users' => User::orderBy('name')->get()
+            'sectors' => $query->get(),
+            'users' => User::orderBy('name')->get(),
         ];
     }
 };
@@ -160,7 +179,124 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
             </div>
         @endif
 
-        <div class="overflow-x-auto -mx-4 sm:mx-0 border border-gray-200 rounded-xl shadow-xs mt-4">
+        <!-- Barra de Busca -->
+        <div class="mt-4 mb-4">
+            <div class="relative max-w-md">
+                <input
+                    type="text"
+                    wire:model.live.debounce.300ms="search"
+                    placeholder="Buscar setor por nome, descrição ou responsável..."
+                    class="w-full pl-9 pr-9 py-2 text-sm border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500"
+                    aria-label="Buscar setor por nome, descrição ou responsável"
+                />
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                </div>
+                @if(! empty($search))
+                    <button
+                        wire:click="clearSearch"
+                        type="button"
+                        class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 min-h-[44px] min-w-[44px] justify-center"
+                        title="Limpar busca"
+                        aria-label="Limpar busca"
+                    >
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                @endif
+            </div>
+            <div wire:loading wire:target="search" class="pt-1.5 text-xs text-indigo-600 font-semibold" aria-live="polite">
+                Filtrando setores…
+            </div>
+        </div>
+
+        <!-- Visualização Mobile (Cards Verticais - sm:hidden) -->
+        <div class="sm:hidden space-y-3 mt-4">
+            @forelse($sectors as $sector)
+                <div wire:key="mobile-sector-{{ $sector->id }}" class="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-3">
+                    <div class="flex items-start justify-between gap-2">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono text-xs text-gray-400">#{{ $sector->id }}</span>
+                                <h3 class="font-bold text-gray-900 text-sm">{{ $sector->name }}</h3>
+                            </div>
+                            @if($sector->description)
+                                <p class="text-xs text-gray-500 mt-0.5">{{ $sector->description }}</p>
+                            @endif
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap gap-1.5 items-center">
+                        @if($sector->hasCustomQrCode())
+                            <button wire:click="openQrModal({{ $sector->id }})" title="Clique para exibir ou imprimir o QR Code exclusivo" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition min-h-[36px]">
+                                <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" />
+                                </svg>
+                                QR Setor
+                            </button>
+                        @endif
+
+                        @if($sector->hasCustomLocation())
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                <svg class="w-3.5 h-3.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                                </svg>
+                                GPS Setor ({{ $sector->allowed_radius_meters ? $sector->allowed_radius_meters . 'm' : 'Padrão' }})
+                            </span>
+                        @endif
+
+                        @if(!$sector->hasCustomQrCode() && !$sector->hasCustomLocation())
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                                Matriz (Padrão Global)
+                            </span>
+                        @endif
+                    </div>
+
+                    <div class="text-xs text-gray-600 flex items-center gap-2">
+                        <span class="font-medium text-gray-500">Responsável:</span>
+                        @if($sector->manager)
+                            <span class="font-semibold text-gray-800">{{ $sector->manager->name }} ({{ $sector->manager->role->label() }})</span>
+                        @else
+                            <span class="text-gray-400 italic">Não definido</span>
+                        @endif
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 pt-2 border-t border-gray-200">
+                        @if($sector->hasCustomQrCode())
+                            <button wire:click="openQrModal({{ $sector->id }})" type="button" class="inline-flex items-center justify-center px-3 py-2 text-xs font-semibold text-indigo-700 bg-white border border-gray-300 rounded-lg shadow-2xs hover:bg-gray-50 min-h-[44px]">
+                                Ver QR
+                            </button>
+                        @endif
+                        <button wire:click="openEditModal({{ $sector->id }})" type="button" class="inline-flex items-center justify-center px-3 py-2 text-xs font-semibold text-indigo-700 bg-white border border-gray-300 rounded-lg shadow-2xs hover:bg-gray-50 min-h-[44px]">
+                            Editar
+                        </button>
+                        <button type="button" @click="confirmDeleteSector({{ $sector->id }}, '{{ addslashes($sector->name) }}')" class="inline-flex items-center justify-center px-3 py-2 text-xs font-semibold text-red-700 bg-white border border-red-200 rounded-lg shadow-2xs hover:bg-red-50 min-h-[44px]">
+                            Excluir
+                        </button>
+                    </div>
+                </div>
+            @empty
+                <div class="p-8 text-center text-sm text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                    <p class="font-medium text-gray-700">Nenhum setor localizado.</p>
+                    @if(! empty($search))
+                        <button wire:click="clearSearch" type="button" class="mt-2 text-xs font-semibold text-indigo-600 hover:underline min-h-[44px] inline-flex items-center">
+                            Limpar busca para ver todos
+                        </button>
+                    @else
+                        <button wire:click="openCreateModal" class="mt-2 text-indigo-600 hover:text-indigo-900 font-semibold min-h-[44px] inline-flex items-center">
+                            Clique aqui para adicionar o primeiro setor.
+                        </button>
+                    @endif
+                </div>
+            @endforelse
+        </div>
+
+        <!-- Tabela Desktop (hidden sm:block) -->
+        <div class="hidden sm:block overflow-x-auto -mx-4 sm:mx-0 border border-gray-200 rounded-xl shadow-xs mt-4">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
@@ -173,7 +309,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
                     @forelse($sectors as $sector)
-                        <tr wire:key="{{ $sector->id }}" class="hover:bg-gray-50 transition">
+                        <tr wire:key="desktop-sector-{{ $sector->id }}" class="hover:bg-gray-50 transition">
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{{ $sector->id }}</td>
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
                                 <div class="text-sm font-bold text-gray-900">{{ $sector->name }}</div>
@@ -184,8 +320,8 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
                                 <div class="flex flex-wrap gap-1.5 items-center">
                                     @if($sector->hasCustomQrCode())
-                                        <button wire:click="openQrModal({{ $sector->id }})" title="Clique para exibir ou imprimir o QR Code exclusivo" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 transition">
-                                            <svg class="w-3.5 h-3.5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                        <button wire:click="openQrModal({{ $sector->id }})" title="Clique para exibir ou imprimir o QR Code exclusivo" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition min-h-[32px]">
+                                            <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" />
                                             </svg>
                                             QR Setor
@@ -198,7 +334,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
                                             </svg>
-                                            GPS Setor ({{ $sector->allowed_radius_meters ? $sector->allowed_radius_meters . 'm' : 'Padrao' }})
+                                            GPS Setor ({{ $sector->allowed_radius_meters ? $sector->allowed_radius_meters . 'm' : 'Padrão' }})
                                         </span>
                                     @endif
 
@@ -223,17 +359,27 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
                             </td>
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 @if($sector->hasCustomQrCode())
-                                    <button wire:click="openQrModal({{ $sector->id }})" class="text-purple-600 hover:text-purple-900 font-medium mr-3">Ver QR</button>
+                                    <button wire:click="openQrModal({{ $sector->id }})" class="text-indigo-600 hover:text-indigo-900 font-medium mr-3 min-h-[44px] inline-flex items-center">Ver QR</button>
                                 @endif
-                                <button wire:click="openEditModal({{ $sector->id }})" class="text-indigo-600 hover:text-indigo-900 font-medium mr-3">Editar</button>
-                                <button type="button" @click="confirmDeleteSector({{ $sector->id }}, '{{ addslashes($sector->name) }}')" class="text-red-600 hover:text-red-900 font-medium">Excluir</button>
+                                <button wire:click="openEditModal({{ $sector->id }})" class="text-indigo-600 hover:text-indigo-900 font-medium mr-3 min-h-[44px] inline-flex items-center">Editar</button>
+                                <button type="button" @click="confirmDeleteSector({{ $sector->id }}, '{{ addslashes($sector->name) }}')" class="text-red-600 hover:text-red-900 font-medium min-h-[44px] inline-flex items-center">Excluir</button>
                             </td>
                         </tr>
                     @empty
                         <tr>
                             <td colspan="5" class="px-4 sm:px-6 py-12 text-center text-sm text-gray-500">
-                                Nenhum setor cadastrado.<br>
-                                <button wire:click="openCreateModal" class="mt-2 text-indigo-600 hover:text-indigo-900 font-semibold">Clique aqui para adicionar o primeiro setor.</button>
+                                <div class="flex flex-col items-center justify-center space-y-2">
+                                    <p class="font-medium text-gray-700">Nenhum setor localizado.</p>
+                                    @if(! empty($search))
+                                        <button wire:click="clearSearch" type="button" class="text-xs font-semibold text-indigo-600 hover:underline min-h-[44px] inline-flex items-center">
+                                            Limpar busca para ver todos
+                                        </button>
+                                    @else
+                                        <button wire:click="openCreateModal" class="mt-2 text-indigo-600 hover:text-indigo-900 font-semibold min-h-[44px] inline-flex items-center">
+                                            Clique aqui para adicionar o primeiro setor.
+                                        </button>
+                                    @endif
+                                </div>
                             </td>
                         </tr>
                     @endforelse
@@ -302,7 +448,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
                                             QR Code Próprio do Setor <span class="text-gray-400 font-normal lowercase">(opcional)</span>
                                         </label>
                                         @if($qr_code_hash)
-                                            <span class="text-[11px] text-purple-700 font-semibold bg-purple-50 px-2 py-0.5 rounded border border-purple-200">QR Code Ativo</span>
+                                            <span class="text-[11px] text-indigo-700 font-semibold bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">QR Code Ativo</span>
                                         @else
                                             <span class="text-[11px] text-gray-500 italic">Usando QR Code global da empresa</span>
                                         @endif

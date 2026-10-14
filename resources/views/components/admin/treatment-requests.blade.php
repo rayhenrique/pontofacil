@@ -24,6 +24,14 @@ new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] c
     public $rejectEventId = '';
     public $rejectionReason = '';
 
+    public function clearFilters(): void
+    {
+        $this->statusFilter = 'pending';
+        $this->typeFilter = 'all';
+        $this->sectorId = '';
+        $this->employeeId = '';
+    }
+
     public function approve(string $id)
     {
         $event = TreatmentEvent::findOrFail($id);
@@ -165,6 +173,8 @@ new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] c
         }
         $pendingCount = $pendingCountQuery->count();
 
+        $hasActiveFilters = ($this->statusFilter !== 'pending' || $this->typeFilter !== 'all' || $this->sectorId !== '' || $this->employeeId !== '');
+
         return [
             'isAdmin' => $isAdmin,
             'isManager' => $isManager,
@@ -172,6 +182,7 @@ new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] c
             'employees' => $employees,
             'events' => $events,
             'pendingCount' => $pendingCount,
+            'hasActiveFilters' => $hasActiveFilters,
         ];
     }
 };
@@ -189,8 +200,8 @@ new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] c
                     <div class="flex items-center gap-2">
                         <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Solicitações de Tratamento de Ponto (PTRP)</h2>
                         @if($isAdmin)
-                            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                                Coordenação de RH (Poder Total)
+                            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                Coordenação de RH (Gestão Global)
                             </span>
                         @elseif($isManager)
                             <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
@@ -212,7 +223,7 @@ new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] c
         <div class="flex items-center gap-2">
             @if($pendingCount > 0)
                 <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold shadow-xs">
-                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                    <span class="w-2 h-2 rounded-full bg-amber-500"></span>
                     <span>{{ $pendingCount }} {{ $pendingCount === 1 ? 'pendência aguardando análise' : 'pendências aguardando análise' }}</span>
                 </div>
             @else
@@ -241,7 +252,7 @@ new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] c
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
                 <label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">Status</label>
-                <select wire:model.live="statusFilter" class="w-full px-3 py-2 text-xs font-medium border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500">
+                <select wire:model.live="statusFilter" class="w-full min-h-[44px] px-3 py-2 text-xs font-medium border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500">
                     <option value="pending">Apenas Pendentes</option>
                     <option value="approved">Aprovadas</option>
                     <option value="rejected">Recusadas / Rejeitadas</option>
@@ -251,7 +262,7 @@ new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] c
 
             <div>
                 <label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">Tipo de Evento</label>
-                <select wire:model.live="typeFilter" class="w-full px-3 py-2 text-xs font-medium border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500">
+                <select wire:model.live="typeFilter" class="w-full min-h-[44px] px-3 py-2 text-xs font-medium border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500">
                     <option value="all">Todos os Tipos</option>
                     <option value="manual_punch_added">Inclusão de Batida Manual (Esquecimento)</option>
                     <option value="punch_disregarded">Desconsideração de Marcação</option>
@@ -261,7 +272,7 @@ new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] c
 
             <div>
                 <label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">Setor</label>
-                <select wire:model.live="sectorId" class="w-full px-3 py-2 text-xs font-medium border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500">
+                <select wire:model.live="sectorId" class="w-full min-h-[44px] px-3 py-2 text-xs font-medium border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500">
                     <option value="">{{ $isAdmin ? 'Todos os Setores (Visão Global)' : 'Todos os Meus Setores' }}</option>
                     @foreach($sectors as $sec)
                         <option value="{{ $sec->id }}">{{ $sec->name }}</option>
@@ -271,7 +282,7 @@ new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] c
 
             <div>
                 <label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">Colaborador</label>
-                <select wire:model.live="employeeId" class="w-full px-3 py-2 text-xs font-medium border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500">
+                <select wire:model.live="employeeId" class="w-full min-h-[44px] px-3 py-2 text-xs font-medium border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500">
                     <option value="">Todos os Colaboradores</option>
                     @foreach($employees as $emp)
                         <option value="{{ $emp->id }}">
@@ -282,6 +293,16 @@ new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] c
                 </select>
             </div>
         </div>
+
+        @if($hasActiveFilters)
+            <div class="flex items-center justify-between pt-2 border-t border-gray-100 text-xs">
+                <span class="text-gray-600 font-medium">Filtros específicos aplicados na listagem</span>
+                <button type="button" wire:click="clearFilters" class="inline-flex items-center gap-1 font-semibold text-indigo-600 hover:text-indigo-800 min-h-[36px] px-2 py-1 rounded-lg hover:bg-indigo-50 transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                    Restaurar padrão (pendentes)
+                </button>
+            </div>
+        @endif
     </div>
 
     <!-- Tabela de Solicitações -->
@@ -443,10 +464,10 @@ new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] c
     <!-- Modal de Rejeição Formal -->
     @if($showRejectModal)
         <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
-                <div class="flex items-center justify-between border-b pb-3">
+            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+                <div class="flex items-center justify-between border-b border-gray-100 pb-3">
                     <h3 class="text-base font-bold text-rose-700">Recusar Solicitação de Tratamento</h3>
-                    <button wire:click="$set('showRejectModal', false)" class="text-gray-400 hover:text-gray-600">✕</button>
+                    <button wire:click="$set('showRejectModal', false)" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-600 cursor-pointer" aria-label="Fechar modal">✕</button>
                 </div>
 
                 <form wire:submit="confirmReject" class="space-y-4 text-xs">

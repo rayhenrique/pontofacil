@@ -110,10 +110,26 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Usuários')] class extends Compo
         ]);
     }
 
+    public string $search = '';
+
+    public function clearSearch(): void
+    {
+        $this->search = '';
+    }
+
     public function with()
     {
+        $query = User::orderBy('name');
+        if (! empty(trim($this->search))) {
+            $term = '%' . trim($this->search) . '%';
+            $query->where(function ($q) use ($term) {
+                $q->where('name', 'like', $term)
+                    ->orWhere('email', 'like', $term);
+            });
+        }
+
         return [
-            'users' => User::orderBy('name')->get()
+            'users' => $query->get(),
         ];
     }
 };
@@ -144,7 +160,109 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Usuários')] class extends Compo
             </div>
         @endif
 
-        <div class="overflow-x-auto -mx-4 sm:mx-0 border border-gray-200 rounded-xl shadow-xs mt-4">
+        <!-- Barra de Busca -->
+        <div class="mt-4 mb-4">
+            <div class="relative max-w-md">
+                <input
+                    type="text"
+                    wire:model.live.debounce.300ms="search"
+                    placeholder="Buscar por nome ou e-mail..."
+                    class="w-full pl-9 pr-9 py-2 text-sm border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500"
+                    aria-label="Buscar usuário por nome ou e-mail"
+                />
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                </div>
+                @if(! empty($search))
+                    <button
+                        wire:click="clearSearch"
+                        type="button"
+                        class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 min-h-[44px] min-w-[44px] justify-center"
+                        title="Limpar busca"
+                        aria-label="Limpar busca"
+                    >
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                @endif
+            </div>
+            <div wire:loading wire:target="search" class="pt-1.5 text-xs text-indigo-600 font-semibold" aria-live="polite">
+                Filtrando usuários…
+            </div>
+        </div>
+
+        <!-- Visualização Mobile (Cards Verticais - sm:hidden) -->
+        <div class="sm:hidden space-y-3 mt-4">
+            @forelse($users as $user)
+                <div wire:key="mobile-user-{{ $user->id }}" class="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-3">
+                    <div class="flex items-start justify-between gap-2">
+                        <div>
+                            <div class="font-bold text-gray-900 text-sm">
+                                {{ $user->name }}
+                                @if(auth()->id() == $user->id)
+                                    <span class="ml-1 text-[11px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full font-semibold border border-indigo-200">(Você)</span>
+                                @endif
+                            </div>
+                            <div class="text-xs text-gray-500 mt-0.5">{{ $user->email }}</div>
+                        </div>
+                        <div>
+                            @if($user->role === App\Enums\UserRole::Admin)
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                    Administrador
+                                </span>
+                            @elseif($user->role === App\Enums\UserRole::Manager)
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                    Gestor
+                                </span>
+                            @else
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+                                    Colaborador
+                                </span>
+                            @endif
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 pt-2 border-t border-gray-200">
+                        <button
+                            wire:click="openEditModal({{ $user->id }})"
+                            type="button"
+                            class="inline-flex items-center justify-center px-3 py-2 text-xs font-semibold text-indigo-700 bg-white border border-gray-300 rounded-lg shadow-2xs hover:bg-gray-50 min-h-[44px]"
+                        >
+                            Editar
+                        </button>
+                        <button
+                            type="button"
+                            @click="window.showModalConfirm({
+                                title: 'Excluir Usuário',
+                                message: 'Tem certeza que deseja remover o usuário {{ addslashes($user->name) }} permanentemente? Ele perderá imediatamente o acesso ao sistema.',
+                                confirmText: 'Sim, Excluir',
+                                cancelText: 'Cancelar',
+                                isDanger: true,
+                                onConfirm: () => $wire.delete({{ $user->id }})
+                            })"
+                            class="inline-flex items-center justify-center px-3 py-2 text-xs font-semibold text-red-700 bg-white border border-red-200 rounded-lg shadow-2xs hover:bg-red-50 min-h-[44px]"
+                        >
+                            Excluir
+                        </button>
+                    </div>
+                </div>
+            @empty
+                <div class="p-8 text-center text-sm text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                    <p class="font-medium text-gray-700">Nenhum usuário localizado.</p>
+                    @if(! empty($search))
+                        <button wire:click="clearSearch" type="button" class="mt-2 text-xs font-semibold text-indigo-600 hover:underline min-h-[44px] inline-flex items-center">
+                            Limpar busca para ver todos
+                        </button>
+                    @endif
+                </div>
+            @endforelse
+        </div>
+
+        <!-- Tabela Desktop (hidden sm:block) -->
+        <div class="hidden sm:block overflow-x-auto -mx-4 sm:mx-0 border border-gray-200 rounded-xl shadow-xs mt-4">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
@@ -156,31 +274,31 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Usuários')] class extends Compo
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
                     @forelse($users as $user)
-                        <tr wire:key="{{ $user->id }}" class="hover:bg-gray-50 transition">
+                        <tr wire:key="desktop-user-{{ $user->id }}" class="hover:bg-gray-50 transition">
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
                                 {{ $user->name }}
                                 @if(auth()->id() == $user->id)
-                                    <span class="ml-2 text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full font-medium">(Você)</span>
+                                    <span class="ml-2 text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full font-medium border border-indigo-200">(Você)</span>
                                 @endif
                             </td>
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ $user->email }}</td>
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 @if($user->role === App\Enums\UserRole::Admin)
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
                                         Administrador
                                     </span>
                                 @elseif($user->role === App\Enums\UserRole::Manager)
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
                                         Gestor
                                     </span>
                                 @else
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
                                         Colaborador
                                     </span>
                                 @endif
                             </td>
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <button wire:click="openEditModal({{ $user->id }})" class="text-indigo-600 hover:text-indigo-900 font-medium mr-3">Editar</button>
+                                <button wire:click="openEditModal({{ $user->id }})" class="text-indigo-600 hover:text-indigo-900 font-medium mr-3 min-h-[44px] inline-flex items-center">Editar</button>
                                 <button type="button" @click="window.showModalConfirm({
                                     title: 'Excluir Usuário',
                                     message: 'Tem certeza que deseja remover o usuário {{ addslashes($user->name) }} permanentemente? Ele perderá imediatamente o acesso ao sistema.',
@@ -188,13 +306,20 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Usuários')] class extends Compo
                                     cancelText: 'Cancelar',
                                     isDanger: true,
                                     onConfirm: () => $wire.delete({{ $user->id }})
-                                })" class="text-red-600 hover:text-red-900 font-medium">Excluir</button>
+                                })" class="text-red-600 hover:text-red-900 font-medium min-h-[44px] inline-flex items-center">Excluir</button>
                             </td>
                         </tr>
                     @empty
                         <tr>
                             <td colspan="4" class="px-4 sm:px-6 py-12 text-center text-sm text-gray-500">
-                                Nenhum usuário encontrado.
+                                <div class="flex flex-col items-center justify-center space-y-2">
+                                    <p class="font-medium text-gray-700">Nenhum usuário encontrado.</p>
+                                    @if(! empty($search))
+                                        <button wire:click="clearSearch" type="button" class="text-xs font-semibold text-indigo-600 hover:underline min-h-[44px] inline-flex items-center">
+                                            Limpar busca para ver todos
+                                        </button>
+                                    @endif
+                                </div>
                             </td>
                         </tr>
                     @endforelse

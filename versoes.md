@@ -1,6 +1,13 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.10 (Atual)
+## v2.6.11 (Atual)
+- **Usabilidade, Filtros Rápidos e Navegação no Celular:**
+  - **Filtros e Busca Instantânea:** As telas de Colaboradores, Usuários, Setores, Conferência Mensal e Relatórios agora contam com busca instantânea (por nome, e-mail, cargo, matrícula e CPF com ou sem pontuação) com proteção contra travamentos ao digitar e botão de 1 clique para limpar todos os filtros aplicados.
+  - **Visualização Otimizada para Celular (320px+):** Em smartphones e telas menores, as listagens administrativas passam a se organizar em cartões verticais objetivos, eliminando barras de rolagem horizontais desconfortáveis e oferecendo botões de toque com tamanho mínimo confortável (44px) para dedos.
+  - **Navegação Histórica sem Barreiras:** O seletor de anos na Folha de Ponto e na Central de Comprovantes agora permite consultar livremente o histórico de até 8 anos fiscais anteriores, sem travas artificiais de 2 anos.
+  - **Identidade Visual e Acessibilidade:** Ajustes no contraste e padronização visual das marcações institucionais de QR Code e níveis de acesso de acordo com as normas de acessibilidade (WCAG AA) e design do sistema.
+
+## v2.6.10
 - **Horários e Escalas com Permissões Claras:**
   - Modelos de jornada (criar, alterar, desativar) são cuidados só pelo RH/Administrador. Gestor usa os modelos aprovados com sua equipe e cuida dos plantões do seu setor.
   - Plantões 12×36 e 24×72 valem só com norma configurada para o regime. Sem norma, o sistema explica o motivo e recusa a atribuição — sem travar o ponto.

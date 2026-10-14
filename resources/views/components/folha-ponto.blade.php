@@ -1009,7 +1009,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                     </select>
 
                     <select wire:model.live="year" class="block w-full px-2 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white min-h-[44px]">
-                        @for($y = now()->year - 2; $y <= now()->year + 1; $y++)
+                        @for($y = now()->year - 8; $y <= now()->year + 1; $y++)
                             <option value="{{ $y }}">{{ $y }}</option>
                         @endfor
                     </select>

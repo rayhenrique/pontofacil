@@ -79,6 +79,28 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
 
     public $showModal = false;
 
+    public string $search = '';
+    public string $sectorFilter = '';
+    public string $regimeFilter = '';
+
+    public function updatedSectorFilter($value): void
+    {
+        $user = Auth::user();
+        if ($user && $user->role === UserRole::Manager && $value !== '') {
+            $managedSectorIds = Sector::where('manager_id', $user->id)->pluck('id')->map(fn ($id) => (string) $id)->all();
+            if (! in_array((string) $value, $managedSectorIds, true)) {
+                $this->sectorFilter = '';
+            }
+        }
+    }
+
+    public function clearFilters(): void
+    {
+        $this->search = '';
+        $this->sectorFilter = '';
+        $this->regimeFilter = '';
+    }
+
     public function openCreateModal()
     {
         $this->reset([
@@ -414,30 +436,66 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
         $workSchedules = WorkSchedule::where('active', true)->orderBy('name')->get();
         $legalRegimes = LegalRegime::cases();
 
+        $query = Employee::with(['user', 'sector', 'workScheduleAssignments.workSchedule']);
+
         if ($isManager) {
             $managedSectors = Sector::where('manager_id', $user->id)->orderBy('name')->get();
             $managedSectorIds = $managedSectors->pluck('id')->toArray();
+            $query->whereIn('sector_id', $managedSectorIds);
 
-            return [
-                'employees' => Employee::with(['user', 'sector', 'workScheduleAssignments.workSchedule'])
-                    ->whereIn('sector_id', $managedSectorIds)
-                    ->orderByDesc('id')
-                    ->get(),
-                'sectors' => $managedSectors,
-                'workSchedules' => $workSchedules,
-                'legalRegimes' => $legalRegimes,
-                'isManager' => true,
-                'managedSectorsCount' => $managedSectors->count(),
-            ];
+            if ($this->sectorFilter !== '' && in_array((int) $this->sectorFilter, $managedSectorIds, true)) {
+                $query->where('sector_id', (int) $this->sectorFilter);
+            }
+        } else {
+            $managedSectors = Sector::orderBy('name')->get();
+            if ($this->sectorFilter !== '') {
+                $query->where('sector_id', (int) $this->sectorFilter);
+            }
         }
 
+        if ($this->regimeFilter !== '') {
+            $query->where('legal_regime', $this->regimeFilter);
+        }
+
+        if (trim($this->search) !== '') {
+            $term = trim($this->search);
+            $cleanCpf = preg_replace('/\D/', '', $term);
+            $query->where(function ($q) use ($term, $cleanCpf) {
+                $q->whereHas('user', function ($uq) use ($term) {
+                    $uq->where('name', 'like', "%{$term}%")
+                        ->orWhere('email', 'like', "%{$term}%");
+                })
+                    ->orWhere('job_title', 'like', "%{$term}%")
+                    ->orWhere('registration_number', 'like', "%{$term}%")
+                    ->orWhere('cpf', 'like', "%{$term}%");
+
+                if ($cleanCpf !== '') {
+                    $q->orWhere('cpf', 'like', "%{$cleanCpf}%");
+
+                    if (strlen($cleanCpf) === 11) {
+                        $formattedCpf = sprintf(
+                            '%s.%s.%s-%s',
+                            substr($cleanCpf, 0, 3),
+                            substr($cleanCpf, 3, 3),
+                            substr($cleanCpf, 6, 3),
+                            substr($cleanCpf, 9, 2)
+                        );
+                        $q->orWhere('cpf', 'like', "%{$formattedCpf}%");
+                    }
+                }
+            });
+        }
+
+        $employees = $query->orderByDesc('id')->get();
+
         return [
-            'employees' => Employee::with(['user', 'sector', 'workScheduleAssignments.workSchedule'])->orderByDesc('id')->get(),
-            'sectors' => Sector::orderBy('name')->get(),
+            'employees' => $employees,
+            'sectors' => $managedSectors,
             'workSchedules' => $workSchedules,
             'legalRegimes' => $legalRegimes,
-            'isManager' => false,
-            'managedSectorsCount' => null,
+            'isManager' => $isManager,
+            'managedSectorsCount' => $isManager ? $managedSectors->count() : null,
+            'hasActiveFilters' => $this->search !== '' || $this->sectorFilter !== '' || $this->regimeFilter !== '',
         ];
     }
 };
@@ -472,7 +530,160 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
             </div>
         @endif
 
-        <div class="overflow-x-auto -mx-4 sm:mx-0 border border-gray-200 rounded-xl shadow-xs mt-4">
+        {{-- Barra de Filtros Operacionais e Busca --}}
+        <div class="mt-4 p-3 sm:p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 items-end">
+                {{-- Busca com debounce --}}
+                <div class="sm:col-span-2 lg:col-span-2">
+                    <label for="emp-search" class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Buscar Colaborador</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                            </svg>
+                        </div>
+                        <input id="emp-search"
+                               type="text"
+                               wire:model.live.debounce.300ms="search"
+                               placeholder="Filtrar por nome, e-mail, cargo ou CPF..."
+                               class="block w-full min-h-[44px] pl-9 pr-9 py-2 text-xs sm:text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" />
+                        @if($search !== '')
+                            <button type="button"
+                                    wire:click="$set('search', '')"
+                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                                    aria-label="Limpar busca">
+                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        @endif
+                    </div>
+                </div>
+
+                {{-- Filtro de Setor --}}
+                <div>
+                    <label for="emp-sector" class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Setor / Lotação</label>
+                    <select id="emp-sector" wire:model.live="sectorFilter" class="block w-full min-h-[44px] px-3 py-2 text-xs sm:text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white">
+                        <option value="">Todos os Setores</option>
+                        @foreach($sectors as $sec)
+                            <option value="{{ $sec->id }}">{{ $sec->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                {{-- Filtro de Regime --}}
+                <div>
+                    <label for="emp-regime" class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Regime Jurídico</label>
+                    <select id="emp-regime" wire:model.live="regimeFilter" class="block w-full min-h-[44px] px-3 py-2 text-xs sm:text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white">
+                        <option value="">Todos os Regimes</option>
+                        @foreach($legalRegimes as $reg)
+                            <option value="{{ $reg->value }}">{{ $reg->label() }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+
+            @if($hasActiveFilters)
+                <div class="flex items-center justify-between pt-2 border-t border-gray-200 text-xs">
+                    <span class="text-gray-600 font-medium">
+                        Filtros ativos: exibindo <strong>{{ $employees->count() }}</strong> resultado(s)
+                    </span>
+                    <button type="button" wire:click="clearFilters" class="inline-flex items-center gap-1 font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer min-h-[36px] px-2 py-1 rounded-lg hover:bg-indigo-50 transition">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                        Limpar filtros
+                    </button>
+                </div>
+            @endif
+        </div>
+
+        {{-- VISÃO MOBILE: Cartões Individuais (DESIGN.md 14.2 & 30.6) --}}
+        <div class="sm:hidden space-y-3 mt-4">
+            @forelse($employees as $employee)
+                @php
+                    $activeSchedule = $employee->getWorkScheduleForDate();
+                    $rawCpfTable = preg_replace('/\D/', '', $employee->cpf ?? '');
+                    $displayCpf = strlen($rawCpfTable) === 11 
+                        ? preg_replace('/(\d{3})(\d{3})(\d{3})(\d{2})/', '$1.$2.$3-$4', $rawCpfTable) 
+                        : $employee->cpf;
+                @endphp
+                <div wire:key="mobile-emp-{{ $employee->id }}" class="bg-white rounded-xl border border-gray-200/90 p-4 shadow-2xs space-y-3">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="min-w-0 flex-1">
+                            <h3 class="text-sm font-bold text-gray-900 truncate">{{ $employee->user->name ?? 'N/A' }}</h3>
+                            <p class="text-xs text-gray-500 truncate">{{ $employee->user->email ?? 'N/A' }}</p>
+                        </div>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium shrink-0 {{ $employee->legal_regime === LegalRegime::CLT ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-slate-100 text-slate-700 border border-slate-200' }}">
+                            {{ $employee->legal_regime?->label() ?? 'Legado' }}
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-gray-100">
+                        <div>
+                            <span class="text-[10px] uppercase font-bold text-gray-400 block">Cargo / Vínculo</span>
+                            <span class="font-semibold text-gray-800 block truncate">{{ $employee->job_title ?? 'Servidor Público' }}</span>
+                            <span class="text-gray-400 text-[11px]">{{ $employee->contract_type ?? 'Efetivo' }}</span>
+                        </div>
+                        <div>
+                            <span class="text-[10px] uppercase font-bold text-gray-400 block">Setor</span>
+                            @if($employee->sector)
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-indigo-100 text-indigo-800 truncate max-w-full">
+                                    {{ $employee->sector->name }}
+                                </span>
+                            @else
+                                <span class="text-gray-400 italic">Sem setor</span>
+                            @endif
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between text-xs pt-1 border-t border-gray-100 text-slate-600">
+                        <div class="flex items-center gap-1 truncate">
+                            <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <span class="truncate font-medium">{{ $activeSchedule?->name ?? 'Sem escala' }}</span>
+                        </div>
+                        <span class="font-mono text-indigo-600 font-semibold shrink-0">{{ $employee->getWorkloadDescription() }}</span>
+                    </div>
+
+                    <div class="flex items-center justify-between text-xs pt-2 border-t border-gray-100">
+                        <span class="font-mono text-gray-500 text-[11px]">CPF: {{ $displayCpf }}</span>
+                        <div class="flex items-center gap-2">
+                            <button type="button" wire:click="openEditModal({{ $employee->id }})" class="min-h-[44px] px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition cursor-pointer">
+                                Editar
+                            </button>
+                            <button type="button" @click="window.showModalConfirm({
+                                title: 'Excluir Funcionário',
+                                message: 'Tem certeza que deseja excluir o colaborador {{ addslashes($employee->user->name ?? 'Colaborador') }}? Esta ação apagará o funcionário e o acesso de usuário dele permanentemente.',
+                                confirmText: 'Sim, Excluir',
+                                cancelText: 'Cancelar',
+                                isDanger: true,
+                                onConfirm: () => $wire.delete({{ $employee->id }})
+                            })" class="min-h-[44px] px-3 py-1.5 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition cursor-pointer">
+                                Excluir
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            @empty
+                <div class="bg-white rounded-xl border border-gray-200 p-6 text-center text-sm text-gray-500">
+                    @if($hasActiveFilters)
+                        <p class="font-semibold text-gray-800">Nenhum colaborador encontrado com os filtros aplicados.</p>
+                        <p class="text-xs text-gray-500 mt-1">Tente ajustar a busca ou limpar os filtros para ver todos.</p>
+                        <button type="button" wire:click="clearFilters" class="mt-3 inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-semibold hover:bg-indigo-100">
+                            Limpar filtros
+                        </button>
+                    @else
+                        <p>Nenhum funcionário cadastrado{{ $isManager ? ' nos seus setores' : '' }}.</p>
+                        @if(!$isManager || $managedSectorsCount > 0)
+                            <button wire:click="openCreateModal" class="mt-2 text-indigo-600 hover:text-indigo-900 font-semibold">Clique aqui para adicionar o primeiro.</button>
+                        @endif
+                    @endif
+                </div>
+            @endforelse
+        </div>
+
+        {{-- VISÃO DESKTOP: Tabela Tradicional --}}
+        <div class="hidden sm:block overflow-x-auto -mx-4 sm:mx-0 border border-gray-200 rounded-xl shadow-xs mt-4">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
@@ -485,7 +696,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
                     @forelse($employees as $employee)
-                        <tr wire:key="{{ $employee->id }}" class="hover:bg-gray-50 transition">
+                        <tr wire:key="table-emp-{{ $employee->id }}" class="hover:bg-gray-50 transition">
                             <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
                                 <div class="text-sm font-bold text-gray-900">{{ $employee->user->name ?? 'N/A' }}</div>
                                 <div class="text-xs text-gray-500">{{ $employee->user->email ?? 'N/A' }}</div>
@@ -540,9 +751,19 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                     @empty
                         <tr>
                             <td colspan="5" class="px-4 sm:px-6 py-12 text-center text-sm text-gray-500">
-                                Nenhum funcionário cadastrado{{ $isManager ? ' nos seus setores' : '' }}.<br>
-                                @if(!$isManager || $managedSectorsCount > 0)
-                                    <button wire:click="openCreateModal" class="mt-2 text-indigo-600 hover:text-indigo-900 font-semibold">Clique aqui para adicionar o primeiro.</button>
+                                @if($hasActiveFilters)
+                                    <div class="space-y-2">
+                                        <p class="font-semibold text-gray-800">Nenhum colaborador encontrado com os filtros aplicados.</p>
+                                        <p class="text-xs text-gray-500">Tente ajustar a busca ou limpar os filtros para ver todos.</p>
+                                        <button type="button" wire:click="clearFilters" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-semibold hover:bg-indigo-100 transition cursor-pointer">
+                                            Limpar filtros
+                                        </button>
+                                    </div>
+                                @else
+                                    Nenhum funcionário cadastrado{{ $isManager ? ' nos seus setores' : '' }}.<br>
+                                    @if(!$isManager || $managedSectorsCount > 0)
+                                        <button wire:click="openCreateModal" class="mt-2 text-indigo-600 hover:text-indigo-900 font-semibold">Clique aqui para adicionar o primeiro.</button>
+                                    @endif
                                 @endif
                             </td>
                         </tr>

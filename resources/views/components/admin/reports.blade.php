@@ -73,6 +73,14 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
         $this->page = 1;
     }
 
+    public function clearFilters(): void
+    {
+        $this->establishmentId = '';
+        $this->sectorId = '';
+        $this->employeeId = '';
+        $this->page = 1;
+    }
+
     public function previousPage(): void
     {
         $this->page = max(1, $this->page - 1);
@@ -218,6 +226,8 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
             'sector_id' => $sectorId ?: null,
             'employee_id' => $employeeId ?: null,
         ];
+
+        $hasActiveFilters = ! empty($establishmentId) || ! empty($sectorId) || ! empty($employeeId);
     @endphp
 
     <!-- Cabeçalho Principal e Ações de Exportação -->
@@ -250,7 +260,7 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
         <div class="flex flex-wrap items-center gap-2.5">
             <!-- Navegador de Mês -->
             <div class="flex items-center bg-gray-50 dark:bg-gray-700/60 rounded-xl p-1 border border-gray-200 dark:border-gray-600">
-                <button wire:click="previousMonth" type="button" class="p-1.5 rounded-lg hover:bg-white dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition" title="Mês anterior">
+                <button wire:click="previousMonth" type="button" class="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition min-h-[44px] min-w-[44px] inline-flex items-center justify-center" title="Mês anterior" aria-label="Mês anterior">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
                 </button>
                 <div class="px-3 py-0.5 text-center">
@@ -258,7 +268,7 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
                         {{ \Carbon\Carbon::createFromDate($year, $month, 1)->translatedFormat('F / Y') }}
                     </span>
                 </div>
-                <button wire:click="nextMonth" type="button" class="p-1.5 rounded-lg hover:bg-white dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition" title="Próximo mês">
+                <button wire:click="nextMonth" type="button" class="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition min-h-[44px] min-w-[44px] inline-flex items-center justify-center" title="Próximo mês" aria-label="Próximo mês">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
                 </button>
             </div>
@@ -266,7 +276,7 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
             <!-- Exportar CSV UTF-8 -->
             <a
                 href="{{ route('admin.reports.csv', $downloadParams) }}"
-                class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 shadow-2xs transition"
+                class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 shadow-2xs transition min-h-[44px]"
                 title="Download do arquivo CSV estruturado em UTF-8 para integração com a folha"
             >
                 <svg class="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -279,7 +289,7 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
             <a
                 href="{{ route('admin.reports.pdf', $downloadParams) }}"
                 target="_blank"
-                class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700 shadow-2xs transition"
+                class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700 shadow-2xs transition min-h-[44px]"
                 title="Visualizar documento formatado para impressão ou PDF A4 Paisagem"
             >
                 <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -291,7 +301,7 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
             <!-- Atalho para Conferência Mensal -->
             <a
                 href="{{ route('admin.monthly-review', ['year' => $year, 'month' => $month, 'sectorId' => $sectorId]) }}"
-                class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 dark:bg-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 shadow-2xs transition"
+                class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 dark:bg-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 shadow-2xs transition min-h-[44px]"
                 title="Ir para a tela de conferência mensal desta competência"
             >
                 <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -304,7 +314,7 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
             <button
                 wire:click="openDispatchModal"
                 type="button"
-                class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-xs transition"
+                class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-xs transition min-h-[44px]"
                 title="Registrar formalmente o encaminhamento ao setor de folha/pagamento"
             >
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -395,19 +405,45 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
                 </select>
             </div>
 
-            <!-- Atalho Folha Individual -->
-            <div class="flex items-end">
+            <!-- Ações / Limpar Filtros -->
+            <div class="flex items-end gap-2">
+                @if ($hasActiveFilters)
+                    <button
+                        wire:click="clearFilters"
+                        type="button"
+                        class="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-semibold transition min-h-[44px] shrink-0"
+                        title="Limpar todos os filtros aplicados"
+                    >
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        Limpar
+                    </button>
+                @endif
                 <a
                     href="{{ route('folha-ponto') }}"
-                    class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-xl text-xs font-semibold transition"
+                    class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-xl text-xs font-semibold transition min-h-[44px]"
                 >
                     <svg class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
-                    Folha Individual (Espelho A4)
+                    Folha Individual
                 </a>
             </div>
         </div>
+        @if ($hasActiveFilters)
+            <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between text-xs text-indigo-900 dark:text-indigo-300">
+                <span class="inline-flex items-center gap-1.5 font-medium">
+                    <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                    </svg>
+                    Filtros ativos no relatório consolidado.
+                </span>
+                <button wire:click="clearFilters" type="button" class="font-semibold text-indigo-700 dark:text-indigo-300 hover:underline min-h-[44px] inline-flex items-center">
+                    Redefinir filtros
+                </button>
+            </div>
+        @endif
         <div wire:loading class="pt-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400" aria-live="polite">
             Atualizando relatório…
         </div>
@@ -574,8 +610,22 @@ new #[Layout('layouts.app')] #[Title('Relatório Mensal Consolidado de Frequênc
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="11" class="py-10 text-center text-gray-500 dark:text-gray-400 text-sm">
-                                Nenhum registro de servidor localizado para os filtros informados nesta competência.
+                            <td colspan="11" class="py-12 text-center text-gray-500 dark:text-gray-400 text-sm">
+                                <div class="flex flex-col items-center justify-center space-y-2">
+                                    <svg class="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <p class="font-medium text-gray-700 dark:text-gray-300">Nenhum registro de servidor localizado para os filtros informados nesta competência.</p>
+                                    @if ($hasActiveFilters)
+                                        <button
+                                            wire:click="clearFilters"
+                                            type="button"
+                                            class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition min-h-[44px]"
+                                        >
+                                            Limpar filtros para ver todos os servidores
+                                        </button>
+                                    @endif
+                                </div>
                             </td>
                         </tr>
                     @endforelse
