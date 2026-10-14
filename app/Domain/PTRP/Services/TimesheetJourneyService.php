@@ -132,6 +132,11 @@ class TimesheetJourneyService
         $uncalculableDaysCount = 0;
         $hasHistoricalUnavailable = false;
 
+        $treatmentSnapshot = $snapshot->treatment_snapshot ?? [];
+        $scheduleSnapshot = $snapshot->schedule_snapshot ?? [];
+        $snapshotTreatmentsByDate = collect($treatmentSnapshot)
+            ->groupBy(fn ($t) => substr($t['effective_at'] ?? '', 0, 10));
+
         // Recupera batidas brutas para compor a exibição de evidências e coordenadas
         $rawPunchesByDate = $this->loadRawEntriesGroupedByDate($targetUser, $employee, $year, $month);
 
@@ -239,6 +244,15 @@ class TimesheetJourneyService
                     $attReason = null;
                 }
 
+                $dayTreatments = collect($snapshotTreatmentsByDate->get($date, []))->map(fn ($t) => (object) [
+                    'id' => $t['id'] ?? null,
+                    'type' => is_string($t['type'] ?? null) ? TreatmentEventType::tryFrom($t['type']) ?? $t['type'] : $t['type'],
+                    'status' => TreatmentEventStatus::Approved,
+                    'effective_at' => isset($t['effective_at']) ? Carbon::parse($t['effective_at']) : null,
+                    'reason_text' => $t['reason_text'] ?? null,
+                    'reference_punch_id' => $t['reference_punch_id'] ?? null,
+                ]);
+
                 $daysCalculated[$date] = [
                     'minutes' => $workedMinutes,
                     'hours' => $hours,
@@ -260,7 +274,8 @@ class TimesheetJourneyService
                     'is_pending_configuration' => $isPendingConfig,
                     'is_day_off' => ((int) ($scheduledMinutes ?? 0)) === 0 && $hasSchedule,
                     'shift_code' => $j['shift_code'] ?? null,
-                    'treatments' => collect([]),
+                    'treatments' => $dayTreatments,
+                    'effective_punches' => $effectivePunches,
                     'difference_minutes' => $diffMinutes,
                     'difference_state' => $diffState,
                     'formatted_difference' => $formattedDiff,
@@ -277,7 +292,44 @@ class TimesheetJourneyService
                     'attention_reason' => $attReason,
                 ];
 
-                $groupedEntries[$date] = $rawPunchesByDate[$date] ?? $this->formatEffectivePunchesAsEntries($effectivePunches, $date);
+                $entries = collect([]);
+                $effectivePunchIds = collect($effectivePunches)->pluck('id')->filter()->all();
+
+                if (isset($rawPunchesByDate[$date])) {
+                    foreach ($rawPunchesByDate[$date] as $raw) {
+                        $clone = clone $raw;
+                        $isEffective = in_array($clone->id, $effectivePunchIds, true)
+                            || collect($effectivePunches)->contains(fn ($p) => ($p['nsr'] ?? null) && (int) $p['nsr'] === (int) $clone->nsr);
+                        $clone->is_disregarded = ! $isEffective;
+                        $entries->push($clone);
+                    }
+                }
+
+                foreach ($effectivePunches as $p) {
+                    if (($p['source'] ?? '') === 'ptrp_manual') {
+                        $pTime = isset($p['timestamp']) ? Carbon::parse($p['timestamp']) : Carbon::parse($date.' '.($p['time'] ?? '00:00'));
+                        $dir = $p['type'] ?? ($p['direction'] ?? 'in');
+                        $entries->push((object) [
+                            'id' => (string) ($p['id'] ?? uniqid()),
+                            'type' => $dir,
+                            'timestamp' => $pTime,
+                            'is_manual' => true,
+                            'latitude' => null,
+                            'longitude' => null,
+                            'has_valid_location' => false,
+                            'nsr' => null,
+                            'receipt' => null,
+                            'is_disregarded' => false,
+                            'reason' => $p['reason'] ?? null,
+                        ]);
+                    }
+                }
+
+                if ($entries->isEmpty() && ! empty($effectivePunches)) {
+                    $entries = $this->formatEffectivePunchesAsEntries($effectivePunches, $date);
+                }
+
+                $groupedEntries[$date] = $entries->sortBy('timestamp')->values();
             }
         }
 
@@ -355,6 +407,9 @@ class TimesheetJourneyService
             'differencesSummary' => $differencesSummary,
             'monthlyDifferencesSummary' => $differencesSummary,
             'operatesTimeBank' => $operatesTimeBank,
+            'scheduleSnapshot' => $scheduleSnapshot,
+            'treatmentSnapshot' => $treatmentSnapshot,
+            'employeeSnapshot' => $snapshot->employee_snapshot ?? [],
         ];
     }
 
@@ -521,17 +576,52 @@ class TimesheetJourneyService
                 'human_worked' => CalculatedJourney::formatHumanHoursMinutes($workedMinutes),
                 'human_scheduled' => CalculatedJourney::formatHumanHoursMinutes($calculated->scheduledMinutes),
                 'attention_reason' => $calculated->attentionReason() ?? ($hasPendingTreatment ? 'Tratamento pendente de análise' : null),
+                'effective_punches' => $calculated->effectivePunches,
             ];
 
-            $entries = $rawPunchesByDate[$dateStr] ?? collect([]);
-            foreach ($entries as $entry) {
-                $punchTreatment = $treatmentsByPunchId->get($entry->id)?->first();
-                $entry->treatment = $punchTreatment;
-                $entry->is_disregarded = ($punchTreatment && $punchTreatment->type === TreatmentEventType::PunchDisregarded && $punchTreatment->status === TreatmentEventStatus::Approved);
-                $entry->has_pending_disregard = ($punchTreatment && $punchTreatment->type === TreatmentEventType::PunchDisregarded && $punchTreatment->status === TreatmentEventStatus::Pending);
-                $entry->has_rejected_disregard = ($punchTreatment && $punchTreatment->type === TreatmentEventType::PunchDisregarded && $punchTreatment->status === TreatmentEventStatus::Rejected);
+            $entries = collect([]);
+            if (isset($rawPunchesByDate[$dateStr])) {
+                foreach ($rawPunchesByDate[$dateStr] as $rawEntry) {
+                    $entry = clone $rawEntry;
+                    $punchTreatment = $treatmentsByPunchId->get($entry->id)?->first();
+                    $entry->treatment = $punchTreatment;
+                    $entry->is_disregarded = ($punchTreatment && $punchTreatment->type === TreatmentEventType::PunchDisregarded && $punchTreatment->status === TreatmentEventStatus::Approved);
+                    $entry->has_pending_disregard = ($punchTreatment && $punchTreatment->type === TreatmentEventType::PunchDisregarded && $punchTreatment->status === TreatmentEventStatus::Pending);
+                    $entry->has_rejected_disregard = ($punchTreatment && $punchTreatment->type === TreatmentEventType::PunchDisregarded && $punchTreatment->status === TreatmentEventStatus::Rejected);
+                    $entries->push($entry);
+                }
             }
-            $groupedEntries[$dateStr] = $entries;
+
+            // Inserções manuais aprovadas pelo RH
+            $approvedManuals = $dayTreatments
+                ->where('type', TreatmentEventType::ManualPunchAdded)
+                ->where('status', TreatmentEventStatus::Approved);
+
+            foreach ($approvedManuals as $manual) {
+                $dir = $manual->new_value_json['direction'] ?? null;
+                if (! $dir) {
+                    $priorEntry = $entries->filter(fn ($e) => Carbon::parse($e->timestamp)->lte(Carbon::parse($manual->effective_at)))->sortBy('timestamp')->last();
+                    $dir = ($priorEntry && (($priorEntry->type ?? '') === 'in')) ? 'out' : 'in';
+                }
+                $entries->push((object) [
+                    'id' => (string) $manual->id,
+                    'type' => $dir,
+                    'timestamp' => $manual->effective_at,
+                    'is_manual' => true,
+                    'latitude' => null,
+                    'longitude' => null,
+                    'has_valid_location' => false,
+                    'nsr' => null, // Nunca criar NSR fictício
+                    'receipt' => null,
+                    'treatment' => $manual,
+                    'is_disregarded' => false,
+                    'has_pending_disregard' => false,
+                    'has_rejected_disregard' => false,
+                    'reason' => $manual->reason_text,
+                ]);
+            }
+
+            $groupedEntries[$dateStr] = $entries->sortBy('timestamp')->values();
         }
 
         $monthHours = intdiv($totalWorkedMinutes, 60);
@@ -663,6 +753,7 @@ class TimesheetJourneyService
             'differencesSummary' => $differencesSummary,
             'monthlyDifferencesSummary' => $differencesSummary,
             'operatesTimeBank' => $operatesTimeBank,
+            'allTreatments' => $allMonthTreatments,
         ];
     }
 

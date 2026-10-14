@@ -18,6 +18,13 @@
   - **Bater Ponto Mais Claro:** Relógio tabular destacado, instruções compactas, eliminação de mensagens repetidas e exibição explícita da data na última marcação para não confundir com a jornada do dia atual.
   - **Relatórios e Conferência Objetivos:** Unificação de advertências provisórias em um aviso único e claro em competências abertas; cabeçalhos e barras de ação compactadas mantendo ações primárias e exportações intactas.
   - **Configurações com Divulgação Progressiva:** Opções avançadas de cabeçalho de folha de ponto agrupadas em seção retrátil acessível, mantendo o formulário principal limpo e focado no essencial.
+- **Sincronização da Folha de Ponto com Tratamentos do PTRP:**
+  - **Reflexo Imediato de Ajustes Aprovados:** Ajustes manuais de batidas e justificativas de ausência deferidos pelo RH passam a refletir imediatamente na tabela e no resumo da Folha de Ponto em competências abertas, dispensando o fechamento do mês para atualizar os dados do colaborador.
+  - **Diferenciação Clara das Ocorrências:** Distinção visual e legal transparente entre marcações eletrônicas originais do REP (`Registro eletrônico`), inserções manuais autorizadas (`Ajuste aprovado`), marcações desconsideradas com preservação do histórico, ausências legalmente amparadas (`JUSTIFICADA`), solicitações aguardando análise e pedidos indeferidos pelo RH.
+  - **Integridade de Registros e NSR:** Batidas manuais aprovadas preenchem as colunas de entrada/saída e participam dos totais trabalhados sem jamais criar números de NSR fictícios nem se passar por registros eletrônicos originais.
+  - **Quadro de Tratamentos e Ajustes no Padrão Portaria 671/2021 MTP:** Inclusão de anexo/quadro discriminado de ocorrências e tratamentos auditados com data, tipo de ajuste, referência de horário, situação e justificativa/motivo registrado, mantendo a folha perfeitamente ajustada para impressão em página A4.
+  - **Fidelidade à Competência Fechada:** Em meses fechados, a Folha de Ponto utiliza exclusivamente os dados congelados do snapshot imutável, garantindo que alterações cadastrais ou tratamentos posteriores não modifiquem o histórico formal arquivado.
+  - **Escala Real no Cabeçalho:** O cabeçalho exibe a escala ou modalidade de plantão efetivamente atribuída ao colaborador, apresentando "Escala não configurada" quando não houver definição e nunca atribuindo "Padrão Administrativo" de forma enganosa.
 
 ## v2.6.10
 - **Horários e Escalas com Permissões Claras:**

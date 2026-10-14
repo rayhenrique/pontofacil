@@ -2,6 +2,8 @@
 
 use App\Domain\Calendar\Services\WorkCalendarService;
 use App\Domain\Company\Services\CurrentCompany;
+use App\Domain\PTRP\Enums\TreatmentEventStatus;
+use App\Domain\PTRP\Enums\TreatmentEventType;
 use App\Domain\PTRP\Services\TimesheetJourneyService;
 use App\Enums\UserRole;
 use App\Enums\WorkScheduleModality;
@@ -10,6 +12,7 @@ use App\Models\Employee;
 use App\Models\Sector;
 use App\Models\ShiftAssignment;
 use App\Models\SystemSetting;
+use App\Models\TreatmentEvent;
 use App\Models\User;
 use App\Models\WorkSchedule;
 use Carbon\Carbon;
@@ -399,6 +402,88 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
             workSchedule: $workSchedule
         ) : [];
 
+        // Resolução rigorosa do Nome da Escala (Item 9)
+        $scheduleName = null;
+        if ($isClosedPeriod) {
+            $schedSnap = $monthJourneyData['scheduleSnapshot'] ?? null;
+            if ($schedSnap && ! empty($schedSnap['name'])) {
+                $scheduleName = $schedSnap['name'];
+            }
+        } else {
+            if ($workSchedule && $workSchedule->isAuthorizedForRegime($employee?->legal_regime)) {
+                $scheduleName = $workSchedule->name;
+            } elseif ($activeModel === 'shifts' && ! empty($shiftsRows)) {
+                $firstShift = ShiftAssignment::where('employee_id', $employee?->id)
+                    ->whereBetween('start_at_local', [$periodStart, $periodEnd])
+                    ->first();
+                $scheduleName = $firstShift?->workSchedule?->name 
+                    ?? ($firstShift?->shift_type?->label() ? 'Plantão '.$firstShift->shift_type->label() : 'Escala de Plantões');
+            }
+        }
+
+        if (empty($scheduleName)) {
+            $scheduleName = 'Escala não configurada';
+        }
+
+        // Tratamentos e Justificativas da competência para o Quadro de Tratamentos (Item 11)
+        $monthTreatmentsList = collect([]);
+        if ($employee) {
+            if ($isClosedPeriod) {
+                $rawTreatments = $monthJourneyData['treatmentSnapshot'] ?? [];
+                $monthTreatmentsList = collect($rawTreatments)->map(function ($t) {
+                    $eff = isset($t['effective_at']) ? Carbon::parse($t['effective_at']) : null;
+                    $typeEnum = is_string($t['type'] ?? null) ? TreatmentEventType::tryFrom($t['type']) : ($t['type'] ?? null);
+                    $typeLabel = $typeEnum?->label() ?? ($t['type'] ?? 'Ajuste de Ponto');
+                    $timeOrRef = $eff ? $eff->format('H:i') : 'Competência';
+                    if (! empty($t['reference_punch_id'])) {
+                        $timeOrRef = 'Marcação ref.';
+                    } elseif ($typeEnum === TreatmentEventType::AbsenceJustified) {
+                        $timeOrRef = 'Dia integral';
+                    }
+
+                    return [
+                        'date' => $eff ? $eff->format('d/m/Y') : '--/--/----',
+                        'type_label' => $typeLabel,
+                        'time_or_ref' => $timeOrRef,
+                        'status_label' => 'Aprovado (Snapshot)',
+                        'reason' => $t['reason_text'] ?? 'Conforme análise do RH',
+                    ];
+                });
+            } else {
+                $treatments = TreatmentEvent::where(function ($q) use ($employee) {
+                    $q->where('employee_id', $employee->id)
+                        ->orWhere('employment_id', $employee->id);
+                })
+                    ->whereBetween('effective_at', [$periodStart, $periodEnd])
+                    ->orderBy('effective_at')
+                    ->get();
+
+                $monthTreatmentsList = $treatments->map(function ($t) {
+                    $typeLabel = $t->type?->label() ?? 'Ajuste de Ponto';
+                    $timeOrRef = $t->effective_at ? $t->effective_at->format('H:i') : 'Competência';
+                    if ($t->reference_punch_id) {
+                        $timeOrRef = 'Marcação ref.';
+                    } elseif ($t->type === TreatmentEventType::AbsenceJustified) {
+                        $timeOrRef = 'Dia integral';
+                    }
+
+                    $reason = $t->reason_text ?? '';
+                    if ($t->rejection_reason) {
+                        $reason = $reason ? "{$reason} [Recusa: {$t->rejection_reason}]" : "Recusa: {$t->rejection_reason}";
+                    }
+                    $reason = $reason ?: 'Solicitação de ajuste';
+
+                    return [
+                        'date' => $t->effective_at ? $t->effective_at->format('d/m/Y') : '--/--/----',
+                        'type_label' => $typeLabel,
+                        'time_or_ref' => $timeOrRef,
+                        'status_label' => $t->status?->label() ?? 'Pendente',
+                        'reason' => $reason,
+                    ];
+                });
+            }
+        }
+
         return [
             'isMissingEmployee' => (bool) ($monthJourneyData['isMissingEmployee'] ?? false),
             'selectedUser' => $selectedUser,
@@ -415,6 +500,8 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
             'detectedModel' => $detectedModel,
             'activeModel' => $activeModel,
             'workSchedule' => $workSchedule,
+            'scheduleName' => $scheduleName,
+            'monthTreatmentsList' => $monthTreatmentsList,
             'isPendingConfigOverall' => $isPendingConfigOverall,
             'totalWorkedMinutes' => $totalWorkedMinutes,
             'totalWorkedFormatted' => $totalWorkedFormatted,
@@ -468,8 +555,14 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
 
             // Apuração PTRP para a data
             $dayCalc = $daysCalculated[$dateKey] ?? null;
+            $dayTreatments = $dayCalc['treatments'] ?? collect([]);
             $rawEntries = $groupedEntries[$dateKey] ?? collect([]);
-            $hasEntries = $rawEntries->isNotEmpty();
+            $disregardedEntries = $rawEntries->filter(fn ($entry) => ! empty($entry->is_disregarded));
+            $effectiveEntries = $rawEntries
+                ->reject(fn ($entry) => ! empty($entry->is_disregarded))
+                ->sortBy('timestamp')
+                ->values();
+            $hasEffectiveEntries = $effectiveEntries->isNotEmpty();
 
             // Plantão agendado para a data
             $shift = ShiftAssignment::where('employee_id', $employee->id)
@@ -483,13 +576,14 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                 $isDayOff = $shift->is_day_off;
             } elseif ($dayCalc) {
                 $isDayOff = (bool) ($dayCalc['is_day_off'] ?? false);
-            } elseif ($workSchedule) {
+            } elseif ($workSchedule && $workSchedule->isAuthorizedForRegime($employee->legal_regime)) {
                 $schedDay = $workSchedule->getScheduleForDay($dayOfWeek);
                 $isDayOff = ($schedDay['is_day_off'] ?? ($isSat || $isSun));
             } else {
                 $isDayOff = ($isSat || $isSun);
             }
 
+            $hasScheduleForDate = ($shift !== null) || ($workSchedule && $workSchedule->isAuthorizedForRegime($employee->legal_regime)) || ($dayCalc && ! empty($dayCalc['has_schedule']));
             $isWorkShift = $shift ? $shift->isWorkShift() : (! $isDayOff);
 
             $row = [
@@ -501,7 +595,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                 'isHoliday' => $isHoliday,
                 'isDayOff' => $isDayOff,
                 'isWorkShift' => $isWorkShift,
-                'hasEntries' => $hasEntries,
+                'hasEntries' => $hasEffectiveEntries,
                 'entr1' => '',
                 'rubrica1' => '',
                 'saida1' => '',
@@ -540,37 +634,52 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
             }
 
             // 2. Cenário: Modo Batidas do Sistema com Marcações Efetivas
-            if ($hasEntries) {
-                $rubricaText = $this->includeRubrica ? 'Registro eletrônico' : '';
-                $effectiveEntries = $rawEntries
-                    ->reject(fn ($entry) => ! empty($entry->is_disregarded))
-                    ->sortBy('timestamp')
-                    ->values();
-
+            if ($hasEffectiveEntries) {
                 // Pareamento pela direção real da marcação (nunca pela posição no array)
                 $pairs = [];
                 foreach ($effectiveEntries as $entry) {
                     $time = Carbon::parse($entry->timestamp)->format('H:i');
+                    $isManual = ! empty($entry->is_manual);
                     $lastIndex = count($pairs) - 1;
 
-                    if (($entry->type ?? 'in') === 'out') {
+                    $entryDir = $entry->type ?? null;
+                    if (! in_array($entryDir, ['in', 'out'], true)) {
+                        $entryDir = ($lastIndex >= 0 && $pairs[$lastIndex]['in'] !== null && $pairs[$lastIndex]['out'] === null) ? 'out' : 'in';
+                    }
+
+                    if ($entryDir === 'out') {
                         if ($lastIndex >= 0 && $pairs[$lastIndex]['in'] !== null && $pairs[$lastIndex]['out'] === null) {
                             $pairs[$lastIndex]['out'] = $time;
+                            $pairs[$lastIndex]['out_manual'] = $isManual;
                         } else {
-                            $pairs[] = ['in' => null, 'out' => $time];
+                            $pairs[] = [
+                                'in' => null,
+                                'in_manual' => false,
+                                'out' => $time,
+                                'out_manual' => $isManual,
+                            ];
                         }
                     } else {
-                        $pairs[] = ['in' => $time, 'out' => null];
+                        $pairs[] = [
+                            'in' => $time,
+                            'in_manual' => $isManual,
+                            'out' => null,
+                            'out_manual' => false,
+                        ];
                     }
                 }
 
                 $slots = [['entr1', 'rubrica1', 'saida1', 'rubrica2'], ['entr2', 'rubrica3', 'saida2', 'rubrica4']];
                 foreach (array_slice($pairs, 0, 2) as $index => $pair) {
                     [$inKey, $inRubricaKey, $outKey, $outRubricaKey] = $slots[$index];
-                    $row[$inKey] = $pair['in'] ?? '';
-                    $row[$inRubricaKey] = $pair['in'] !== null ? $rubricaText : '';
-                    $row[$outKey] = $pair['out'] ?? '';
-                    $row[$outRubricaKey] = $pair['out'] !== null ? $rubricaText : '';
+                    if ($pair['in'] !== null) {
+                        $row[$inKey] = $pair['in'];
+                        $row[$inRubricaKey] = $this->includeRubrica ? ($pair['in_manual'] ? 'Ajuste aprovado' : 'Registro eletrônico') : '';
+                    }
+                    if ($pair['out'] !== null) {
+                        $row[$outKey] = $pair['out'];
+                        $row[$outRubricaKey] = $this->includeRubrica ? ($pair['out_manual'] ? 'Ajuste aprovado' : 'Registro eletrônico') : '';
+                    }
                 }
 
                 $observations = [];
@@ -596,6 +705,20 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                     $observations[] = 'Batidas extras: '.implode(', ', $extras);
                 }
 
+                if ($disregardedEntries->isNotEmpty()) {
+                    $observations[] = 'Marcação desconsiderada pelo RH';
+                }
+
+                $hasPendingTr = $dayTreatments->contains(fn ($t) => ($t->status === TreatmentEventStatus::Pending) || ($t->status?->value ?? '') === 'pending');
+                if ($hasPendingTr) {
+                    $observations[] = 'Ajuste aguardando análise';
+                }
+
+                $hasRejectedTr = $dayTreatments->contains(fn ($t) => ($t->status === TreatmentEventStatus::Rejected) || ($t->status?->value ?? '') === 'rejected');
+                if ($hasRejectedTr) {
+                    $observations[] = 'Ajuste rejeitado';
+                }
+
                 $row['observation'] = implode(' | ', $observations);
 
                 // Anexar notas de tratamentos aprovados
@@ -613,7 +736,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                 continue;
             }
 
-            // 3. Cenário: Modo Batidas do Sistema sem Marcações no Dia
+            // 3. Cenário: Modo Batidas do Sistema sem Marcações Efetivas no Dia
             if ($isHoliday) {
                 $row['rubrica1'] = 'FERIADO';
                 $row['rubrica2'] = 'FERIADO';
@@ -628,11 +751,51 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                 $row['rubrica4'] = $label;
                 $row['observation'] = $isSun ? 'Descanso Semanal Remunerado' : 'Folga da escala';
             } else {
-                // Dia de trabalho previsto sem registro
-                if ($currentDate->isPast() && ! $currentDate->isToday()) {
+                // Dia de trabalho previsto sem registro efetivo
+                $justified = $dayTreatments->first(fn ($t) => ($t->type === TreatmentEventType::AbsenceJustified || ($t->type?->value ?? '') === 'absence_justified') && (($t->status === TreatmentEventStatus::Approved) || ($t->status?->value ?? '') === 'approved'));
+                $pending = $dayTreatments->first(fn ($t) => ($t->status === TreatmentEventStatus::Pending) || ($t->status?->value ?? '') === 'pending');
+                $rejected = $dayTreatments->first(fn ($t) => ($t->status === TreatmentEventStatus::Rejected) || ($t->status?->value ?? '') === 'rejected');
+
+                if ($justified) {
+                    $row['entr1'] = '--:--';
+                    $row['saida1'] = '--:--';
+                    $row['rubrica1'] = 'JUSTIFICADA';
+                    $row['rubrica2'] = 'JUSTIFICADA';
+                    $row['observation'] = 'Ausência justificada' . ($justified->reason_text ? ": {$justified->reason_text}" : '');
+                } elseif ($disregardedEntries->isNotEmpty()) {
+                    $row['entr1'] = '--:--';
+                    $row['saida1'] = '--:--';
+                    $row['observation'] = 'Marcação desconsiderada pelo RH';
+                    if ($pending) {
+                        $row['observation'] .= ' | Ajuste aguardando análise';
+                    }
+                } elseif ($pending) {
+                    $row['entr1'] = '--:--';
+                    $row['saida1'] = '--:--';
+                    $row['observation'] = 'Ajuste aguardando análise';
+                } elseif ($rejected) {
+                    $row['entr1'] = '--:--';
+                    $row['saida1'] = '--:--';
+                    $row['observation'] = 'Sem registro / Ajuste rejeitado';
+                } elseif (! $hasScheduleForDate) {
+                    $row['entr1'] = '--:--';
+                    $row['saida1'] = '--:--';
+                    $row['observation'] = 'Escala não configurada';
+                } elseif ($currentDate->isPast() && ! $currentDate->isToday()) {
                     $row['entr1'] = '--:--';
                     $row['saida1'] = '--:--';
                     $row['observation'] = 'Sem registro / Ausência';
+                } elseif ($currentDate->isToday()) {
+                    $row['observation'] = 'Aguardando registro';
+                } else {
+                    $row['observation'] = 'Jornada prevista';
+                }
+
+                if ($dayCalc && ! empty($dayCalc['notes'])) {
+                    $noteStr = implode('; ', $dayCalc['notes']);
+                    if ($row['observation'] && ! str_contains($row['observation'], $noteStr)) {
+                        $row['observation'] .= " | {$noteStr}";
+                    }
                 }
             }
 
@@ -668,6 +831,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
             $holidayName = $calendarDay->appliedEvents[0]['name'] ?? ($isHoliday ? 'Feriado' : null);
 
             $dayCalc = $daysCalculated[$dateKey] ?? null;
+            $dayTreatments = $dayCalc['treatments'] ?? collect([]);
             $rawEntries = $groupedEntries[$dateKey] ?? collect([]);
             
             // Se a primeira batida deste dia foi consumida como término do turno noturno anterior:
@@ -679,7 +843,8 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                 }
             }
 
-            $hasEntries = $rawEntries->isNotEmpty();
+            $effectiveEntries = $rawEntries->reject(fn ($e) => ! empty($e->is_disregarded))->values();
+            $hasEntries = $effectiveEntries->isNotEmpty();
 
             $shift = ShiftAssignment::where('employee_id', $employee->id)
                 ->active()
@@ -721,7 +886,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
             }
 
             if ($hasEntries) {
-                $sorted = $rawEntries->sortBy('timestamp')->values();
+                $sorted = $effectiveEntries->sortBy('timestamp')->values();
                 $first = $sorted->first();
                 $last = $sorted->count() > 1 ? $sorted->last() : null;
                 $crosses = false;
@@ -731,8 +896,9 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                     $nextDate = $currentDate->copy()->addDay();
                     $nextDateKey = $nextDate->format('Y-m-d');
                     $nextEntries = $groupedEntries[$nextDateKey] ?? collect([]);
-                    if ($nextEntries->isNotEmpty()) {
-                        $nextSorted = $nextEntries->sortBy('timestamp')->values();
+                    $nextEffective = $nextEntries->reject(fn ($e) => ! empty($e->is_disregarded))->values();
+                    if ($nextEffective->isNotEmpty()) {
+                        $nextSorted = $nextEffective->sortBy('timestamp')->values();
                         $nextFirst = $nextSorted->first();
                         if (Carbon::parse($nextFirst->timestamp)->hour <= 12) {
                             $last = $nextFirst;
@@ -772,12 +938,24 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                     }
                 }
 
-                $row['rubrica'] = $this->includeRubrica ? 'Registro eletrônico' : '';
+                $hasManual = $effectiveEntries->contains(fn ($e) => ! empty($e->is_manual));
+                $row['rubrica'] = $this->includeRubrica ? ($hasManual ? 'Ajuste aprovado' : 'Registro eletrônico') : '';
                 $rows[] = $row;
                 continue;
             }
 
-            if ($isHoliday) {
+            $justified = $dayTreatments->first(fn ($t) => ($t->type === TreatmentEventType::AbsenceJustified || ($t->type?->value ?? '') === 'absence_justified') && (($t->status === TreatmentEventStatus::Approved) || ($t->status?->value ?? '') === 'approved'));
+            $pending = $dayTreatments->first(fn ($t) => ($t->status === TreatmentEventStatus::Pending) || ($t->status?->value ?? '') === 'pending');
+            $hasDisregarded = $rawEntries->contains(fn ($entry) => ! empty($entry->is_disregarded));
+
+            if ($justified) {
+                $row['statusLabel'] = 'JUSTIFICADA';
+                $row['observation'] = 'Ausência justificada' . ($justified->reason_text ? ": {$justified->reason_text}" : '');
+            } elseif ($hasDisregarded) {
+                $row['observation'] = 'Marcação desconsiderada pelo RH';
+            } elseif ($pending) {
+                $row['observation'] = 'Ajuste aguardando análise';
+            } elseif ($isHoliday) {
                 $row['statusLabel'] = 'FERIADO';
                 $row['observation'] = $holidayName ?? 'Feriado previsto';
             } elseif ($isDayOff) {
@@ -814,6 +992,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
             foreach ($shiftAssignments as $shift) {
                 $dateKey = $shift->start_at_local->format('Y-m-d');
                 $dayCalc = $daysCalculated[$dateKey] ?? null;
+                $dayTreatments = $dayCalc['treatments'] ?? collect([]);
 
                 if ($shift->is_day_off) {
                     $rows[] = [
@@ -855,10 +1034,19 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                     continue;
                 }
 
+                $justified = $dayTreatments->first(fn ($t) => ($t->type === TreatmentEventType::AbsenceJustified || ($t->type?->value ?? '') === 'absence_justified') && (($t->status === TreatmentEventStatus::Approved) || ($t->status?->value ?? '') === 'approved'));
+                $pending = $dayTreatments->first(fn ($t) => ($t->status === TreatmentEventStatus::Pending) || ($t->status?->value ?? '') === 'pending');
+
                 $statusLabel = 'Concluído';
                 $statusBadge = 'bg-emerald-50 text-emerald-800';
                 if ($wm === 0) {
-                    if ($shift->start_at_local->isPast()) {
+                    if ($justified) {
+                        $statusLabel = 'Justificado';
+                        $statusBadge = 'bg-indigo-50 text-indigo-800';
+                    } elseif ($pending) {
+                        $statusLabel = 'Ajuste pendente';
+                        $statusBadge = 'bg-amber-50 text-amber-800';
+                    } elseif ($shift->start_at_local->isPast()) {
                         $statusLabel = 'Falta / Sem registro';
                         $statusBadge = 'bg-rose-50 text-rose-800';
                     } else {
@@ -871,9 +1059,15 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                 }
 
                 $obs = $shift->shift_type?->label() ?? 'Plantão 12×36';
+                if ($justified) {
+                    $obs .= ' | Ausência justificada' . ($justified->reason_text ? ": {$justified->reason_text}" : '');
+                }
                 if ($dayCalc && ! empty($dayCalc['notes'])) {
                     $obs .= ' | ' . implode('; ', $dayCalc['notes']);
                 }
+
+                $shiftEntries = $groupedEntries[$dateKey] ?? collect([]);
+                $hasManual = $shiftEntries->contains(fn ($e) => ! empty($e->is_manual));
 
                 $rows[] = [
                     'startDate' => $shift->start_at_local->format('d/m/Y'),
@@ -887,7 +1081,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                     'statusLabel' => $statusLabel,
                     'statusBadge' => $statusBadge,
                     'observation' => $obs,
-                    'rubrica' => $wm > 0 && $this->includeRubrica ? 'Registro eletrônico' : '--',
+                    'rubrica' => $wm > 0 && $this->includeRubrica ? ($hasManual ? 'Ajuste aprovado' : 'Registro eletrônico') : '--',
                 ];
             }
 
@@ -901,9 +1095,10 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
             $dateKey = $currentDate->format('Y-m-d');
             $dayCalc = $daysCalculated[$dateKey] ?? null;
             $rawEntries = $groupedEntries[$dateKey] ?? collect([]);
+            $effectiveEntries = $rawEntries->reject(fn ($e) => ! empty($e->is_disregarded))->values();
 
-            if ($rawEntries->isNotEmpty()) {
-                $sorted = $rawEntries->sortBy('timestamp')->values();
+            if ($effectiveEntries->isNotEmpty()) {
+                $sorted = $effectiveEntries->sortBy('timestamp')->values();
                 $first = $sorted->first();
                 $last = $sorted->count() > 1 ? $sorted->last() : null;
 
@@ -914,6 +1109,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                 $wm = (int) ($dayCalc['minutes'] ?? 0);
                 $nm = (int) ($dayCalc['night_minutes'] ?? 0);
                 $nlm = (int) ($dayCalc['night_equivalent_minutes'] ?? 0);
+                $hasManual = $effectiveEntries->contains(fn ($e) => ! empty($e->is_manual));
 
                 $rows[] = [
                     'startDate' => $currentDate->format('d/m/Y'),
@@ -927,7 +1123,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                     'statusLabel' => $dayCalc['status_label'] ?? 'Concluído',
                     'statusBadge' => 'bg-emerald-50 text-emerald-800',
                     'observation' => 'Plantão Registrado',
-                    'rubrica' => $this->includeRubrica ? 'Registro eletrônico' : '',
+                    'rubrica' => $this->includeRubrica ? ($hasManual ? 'Ajuste aprovado' : 'Registro eletrônico') : '',
                 ];
             }
         }
@@ -1273,7 +1469,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                     @elseif($fillMode === 'blank' || $activeModel === 'blank')
                         [FORMULÁRIO OFICIAL] Pronto para preenchimento manuscrito e arquivamento
                     @else
-                        [COMPETÊNCIA ABERTA] Dados provisórios sujeitos a apuração e fechamento
+                        [COMPETÊNCIA ABERTA — DOCUMENTO PROVISÓRIO] Dados sujeitos a apuração e fechamento
                     @endif
                     @if($isEditedForPreview)
                         — [PRÉVIA EDITADA] Campos cadastrais ajustados apenas para esta visualização
@@ -1312,7 +1508,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                         <strong>Local:</strong> {{ $location ?: (optional(optional($selectedUser->employee)->sector)->name ?? 'Geral') }}
                     </div>
                     <div class="w-56 truncate text-right">
-                        <strong>Escala:</strong> {{ $workSchedule?->name ?? 'Padrão Administrativo' }}
+                        <strong>Escala:</strong> {{ $scheduleName }}
                     </div>
                 </div>
             </div>
@@ -1559,8 +1755,53 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                 </div>
             @endif
 
+            <!-- QUADRO DE TRATAMENTOS E JUSTIFICATIVAS DE PONTO (Item 11) -->
+            @if(isset($monthTreatmentsList) && $monthTreatmentsList->isNotEmpty())
+                <div class="mt-4 mb-3 page-break-avoid border border-black p-2 text-[10px] bg-slate-50/30 print:bg-transparent">
+                    <div class="font-bold text-[10px] uppercase mb-1 border-b border-black pb-0.5 flex justify-between items-center">
+                        <span>Quadro de Tratamentos, Ajustes e Justificativas de Ponto (Portaria 671/2021 MTP)</span>
+                        <span class="text-[9px] font-normal text-gray-600 print:text-black">Auditado via PTRP</span>
+                    </div>
+                    <table class="w-full border-collapse border border-black text-left text-[9px] leading-tight">
+                        <thead>
+                            <tr class="bg-slate-100 print:bg-transparent font-bold text-center">
+                                <th class="border border-black px-1.5 py-1 w-[70px]">DATA</th>
+                                <th class="border border-black px-1.5 py-1 w-[160px] text-left">TIPO DE AJUSTE</th>
+                                <th class="border border-black px-1.5 py-1 w-[90px]">REF. / HORÁRIO</th>
+                                <th class="border border-black px-1.5 py-1 w-[80px]">SITUAÇÃO</th>
+                                <th class="border border-black px-1.5 py-1 text-left">MOTIVO / JUSTIFICATIVA REGISTRADA</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($monthTreatmentsList as $tr)
+                                <tr>
+                                    <td class="border border-black px-1.5 py-1 font-mono text-center">{{ $tr['date'] }}</td>
+                                    <td class="border border-black px-1.5 py-1 font-semibold">{{ $tr['type_label'] }}</td>
+                                    <td class="border border-black px-1.5 py-1 font-mono text-center">{{ $tr['time_or_ref'] }}</td>
+                                    <td class="border border-black px-1.5 py-1 font-semibold text-center">{{ $tr['status_label'] }}</td>
+                                    <td class="border border-black px-1.5 py-1">{{ $tr['reason'] }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+
+            <!-- LEGENDA NORMATIVA DE AUDITORIA (PTRP) -->
+            <div class="flex items-center justify-between text-[8px] text-gray-600 print:text-black mb-3 px-1">
+                <div>
+                    <strong>Legenda:</strong> 
+                    <span>[Registro eletrônico] Marcação original do REP</span> · 
+                    <span>[Ajuste aprovado] Batida manual aprovada pelo RH</span> · 
+                    <span>[JUSTIFICADA] Ausência legalmente amparada</span>
+                </div>
+                <div>
+                    Portaria 671/2021 MTP — PTRP
+                </div>
+            </div>
+
             <!-- BLOCO DE ASSINATURAS FÍSICAS (Item 9) -->
-            <div class="mt-8 page-break-avoid text-black">
+            <div class="mt-6 page-break-avoid text-black">
                 <!-- Linha 1: Servidor, Coordenador, Responsável pelo Setor -->
                 <div class="grid grid-cols-3 gap-6 text-center text-[10px]">
                     <div>

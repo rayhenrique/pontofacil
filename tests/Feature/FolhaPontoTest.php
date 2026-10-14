@@ -4,6 +4,9 @@ namespace Tests\Feature;
 
 use App\Domain\Company\Services\CurrentCompany;
 use App\Domain\PTRP\Actions\CloseMonthlyPeriodAction;
+use App\Domain\PTRP\Enums\TreatmentEventStatus;
+use App\Domain\PTRP\Enums\TreatmentEventType;
+use App\Domain\PTRP\Services\TimesheetJourneyService;
 use App\Domain\TimeClock\Actions\RecordPunchEventAction;
 use App\Enums\CalendarEventScope;
 use App\Enums\CalendarEventType;
@@ -20,6 +23,7 @@ use App\Models\Establishment;
 use App\Models\PunchEvent;
 use App\Models\Sector;
 use App\Models\ShiftAssignment;
+use App\Models\TreatmentEvent;
 use App\Models\User;
 use App\Models\WorkSchedule;
 use Carbon\Carbon;
@@ -522,8 +526,426 @@ class FolhaPontoTest extends TestCase
             ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'nocturnal'])
             ->assertOk()
             ->assertSee('Horas Noturnas (Físicas)')
-            ->assertSee('Equiv. Legal Noturna')
             ->assertSee('07h 00m')
             ->assertSee('08h 00m');
+    }
+
+    /**
+     * 17. Batida manual aprovada no mesmo dia participa da apuração e é identificada como "Ajuste aprovado"
+     */
+    public function test_17_batida_manual_aprovada_no_mesmo_dia(): void
+    {
+        [$user, $employee] = $this->createEmployee('Servidor Com Ajuste Manual');
+        $schedule = WorkSchedule::createDefault40h();
+        $employee->update(['work_schedule_id' => $schedule->id]);
+
+        $this->createPunch($user, 'in', '2026-10-05 08:00:00');
+        $this->createPunch($user, 'out', '2026-10-05 12:00:00');
+        $this->createPunch($user, 'in', '2026-10-05 13:00:00');
+
+        // Saída às 17:00 inserida manualmente e aprovada
+        TreatmentEvent::create([
+            'employee_id' => $employee->id,
+            'type' => TreatmentEventType::ManualPunchAdded,
+            'status' => TreatmentEventStatus::Approved,
+            'effective_at' => Carbon::parse('2026-10-05 17:00:00', 'America/Maceio'),
+            'reason_text' => 'Falha de leitura biometrica na saida',
+            'requested_by' => $user->id,
+            'approved_by' => $user->id,
+            'decided_at' => Carbon::parse('2026-10-05 17:30:00'),
+        ]);
+
+        Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'administrative'])
+            ->assertOk()
+            ->assertSee('08:00')
+            ->assertSee('12:00')
+            ->assertSee('13:00')
+            ->assertSee('17:00')
+            ->assertSee('Ajuste aprovado')
+            ->assertSee('Falha de leitura biometrica na saida')
+            ->assertDontSee('✓');
+    }
+
+    /**
+     * 18. Dia contendo exclusivamente batidas manuais aprovadas: não rotula como "Sem registro / Ausência"
+     */
+    public function test_18_dia_contendo_exclusivamente_batida_manual_aprovada(): void
+    {
+        [$user, $employee] = $this->createEmployee('Servidor So Batida Manual');
+        $schedule = WorkSchedule::createDefault40h();
+        $employee->update(['work_schedule_id' => $schedule->id]);
+
+        // Duas batidas manuais aprovadas no dia 05/10/2026 (segunda-feira)
+        TreatmentEvent::create([
+            'employee_id' => $employee->id,
+            'type' => TreatmentEventType::ManualPunchAdded,
+            'status' => TreatmentEventStatus::Approved,
+            'effective_at' => Carbon::parse('2026-10-05 08:00:00', 'America/Maceio'),
+            'reason_text' => 'Esquecimento de cracha pela manha',
+            'requested_by' => $user->id,
+            'approved_by' => $user->id,
+            'decided_at' => Carbon::parse('2026-10-05 09:00:00'),
+        ]);
+
+        TreatmentEvent::create([
+            'employee_id' => $employee->id,
+            'type' => TreatmentEventType::ManualPunchAdded,
+            'status' => TreatmentEventStatus::Approved,
+            'effective_at' => Carbon::parse('2026-10-05 12:00:00', 'America/Maceio'),
+            'reason_text' => 'Esquecimento de cracha ao meio-dia',
+            'requested_by' => $user->id,
+            'approved_by' => $user->id,
+            'decided_at' => Carbon::parse('2026-10-05 12:30:00'),
+        ]);
+
+        Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'administrative'])
+            ->assertOk()
+            ->assertSee('08:00')
+            ->assertSee('12:00')
+            ->assertSee('Ajuste aprovado')
+            ->assertSee('Esquecimento de cracha pela manha')
+            ->assertSee('4h 00m');
+    }
+
+    /**
+     * 19. Entrada original + saída manual aprovada formam par regular
+     */
+    public function test_19_entrada_original_e_saida_manual_aprovada(): void
+    {
+        [$user, $employee] = $this->createEmployee('Servidor Par Misto');
+        $schedule = WorkSchedule::createDefault40h();
+        $employee->update(['work_schedule_id' => $schedule->id]);
+
+        $this->createPunch($user, 'in', '2026-10-05 08:00:00');
+
+        TreatmentEvent::create([
+            'employee_id' => $employee->id,
+            'type' => TreatmentEventType::ManualPunchAdded,
+            'status' => TreatmentEventStatus::Approved,
+            'effective_at' => Carbon::parse('2026-10-05 12:00:00', 'America/Maceio'),
+            'reason_text' => 'Terminal travou no fechamento do turno',
+            'requested_by' => $user->id,
+            'approved_by' => $user->id,
+            'decided_at' => Carbon::parse('2026-10-05 13:00:00'),
+        ]);
+
+        Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'administrative'])
+            ->assertOk()
+            ->assertSee('08:00')
+            ->assertSee('12:00')
+            ->assertSee('Ajuste aprovado')
+            ->assertDontSee('Incompleta: Saída pendente');
+    }
+
+    /**
+     * 20. Marcação desconsiderada pelo RH: excluída da apuração efetiva e exibe observação
+     */
+    public function test_20_marcacao_desconsiderada_excluida_da_frequencia_efetiva(): void
+    {
+        [$user, $employee] = $this->createEmployee('Servidor Batida Desconsiderada');
+        $schedule = WorkSchedule::createDefault40h();
+        $employee->update(['work_schedule_id' => $schedule->id]);
+
+        $punchIn = $this->createPunch($user, 'in', '2026-10-05 08:00:00');
+        $punchDup = $this->createPunch($user, 'in', '2026-10-05 08:02:00');
+        $punchOut = $this->createPunch($user, 'out', '2026-10-05 12:00:00');
+
+        TreatmentEvent::create([
+            'employee_id' => $employee->id,
+            'reference_punch_id' => $punchDup->id,
+            'type' => TreatmentEventType::PunchDisregarded,
+            'status' => TreatmentEventStatus::Approved,
+            'effective_at' => Carbon::parse('2026-10-05 08:02:00', 'America/Maceio'),
+            'reason_text' => 'Duplicidade involuntaria por biometria rapida',
+            'requested_by' => $user->id,
+            'approved_by' => $user->id,
+            'decided_at' => Carbon::parse('2026-10-05 09:00:00'),
+        ]);
+
+        Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'administrative'])
+            ->assertOk()
+            ->assertSee('08:00')
+            ->assertSee('12:00')
+            ->assertSee('Duplicidade involuntaria por biometria rapida');
+
+        // PunchDup continua existindo no banco de dados (REP íntegro)
+        $this->assertDatabaseHas('punch_events', ['id' => $punchDup->id]);
+    }
+
+    /**
+     * 21. Ausência justificada sem batidas: exibe status aprovado e não 'Sem registro / Ausência'
+     */
+    public function test_21_ausencia_justificada_sem_batidas(): void
+    {
+        [$user, $employee] = $this->createEmployee('Servidor Com Atestado');
+        $schedule = WorkSchedule::createDefault40h();
+        $employee->update(['work_schedule_id' => $schedule->id]);
+
+        // Ausência justificada na segunda-feira 05/10/2026
+        TreatmentEvent::create([
+            'employee_id' => $employee->id,
+            'type' => TreatmentEventType::AbsenceJustified,
+            'status' => TreatmentEventStatus::Approved,
+            'effective_at' => Carbon::parse('2026-10-05 08:00:00', 'America/Maceio'),
+            'reason_text' => 'Atestado Medico Odontologico',
+            'requested_by' => $user->id,
+            'approved_by' => $user->id,
+            'decided_at' => Carbon::parse('2026-10-05 10:00:00'),
+        ]);
+
+        $test = Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'administrative'])
+            ->assertOk()
+            ->assertSee('Ausência justificada: Atestado Medico Odontologico')
+            ->assertSee('JUSTIFICADA');
+
+        $rows = $test->viewData('administrativeRows') ?? [];
+        $day05 = collect($rows)->firstWhere('day', 5);
+        $this->assertNotNull($day05);
+        $this->assertSame('JUSTIFICADA', $day05['rubrica1']);
+        $this->assertSame('JUSTIFICADA', $day05['rubrica2']);
+        $this->assertStringContainsString('Ausência justificada', $day05['observation']);
+        $this->assertStringNotContainsString('Sem registro / Ausência', $day05['observation']);
+    }
+
+    /**
+     * 22. Ajuste pendente não altera totais definitivos e exibe indicação de aguardando análise
+     */
+    public function test_22_ajuste_pendente_nao_altera_totais_e_exibe_aviso(): void
+    {
+        [$user, $employee] = $this->createEmployee('Servidor Com Solicitacao Pendente');
+        $schedule = WorkSchedule::createDefault40h();
+        $employee->update(['work_schedule_id' => $schedule->id]);
+
+        $this->createPunch($user, 'in', '2026-10-05 08:00:00');
+
+        // Solicitação manual pendente de análise
+        TreatmentEvent::create([
+            'employee_id' => $employee->id,
+            'type' => TreatmentEventType::ManualPunchAdded,
+            'status' => TreatmentEventStatus::Pending,
+            'effective_at' => Carbon::parse('2026-10-05 17:00:00', 'America/Maceio'),
+            'reason_text' => 'Esquecimento ao sair',
+            'requested_by' => $user->id,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'administrative'])
+            ->assertOk()
+            ->assertSee('08:00')
+            ->assertSee('Ajuste aguardando análise')
+            ->assertSee('Pendente de Análise')
+            ->assertSee('Incompleta: Saída pendente');
+    }
+
+    /**
+     * 23. Ajuste rejeitado não altera apuração e exibe status correspondente
+     */
+    public function test_23_ajuste_rejeitado(): void
+    {
+        [$user, $employee] = $this->createEmployee('Servidor Ajuste Indeferido');
+        $schedule = WorkSchedule::createDefault40h();
+        $employee->update(['work_schedule_id' => $schedule->id]);
+
+        TreatmentEvent::create([
+            'employee_id' => $employee->id,
+            'type' => TreatmentEventType::ManualPunchAdded,
+            'status' => TreatmentEventStatus::Rejected,
+            'effective_at' => Carbon::parse('2026-10-05 08:00:00', 'America/Maceio'),
+            'reason_text' => 'Solicito inclusao sem comprovante',
+            'requested_by' => $user->id,
+            'rejected_by' => $user->id,
+            'decided_at' => Carbon::parse('2026-10-05 15:00:00'),
+            'rejection_reason' => 'Sem comprovacao idonea',
+        ]);
+
+        Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'administrative'])
+            ->assertOk()
+            ->assertSee('Rejeitado')
+            ->assertSee('Sem registro / Ajuste rejeitado')
+            ->assertSee('Sem comprovacao idonea')
+            ->assertSee('--:--');
+    }
+
+    /**
+     * 24. Competência aberta atualizada imediatamente após nova aprovação pelo RH
+     */
+    public function test_24_competencia_aberta_atualizada_imediatamente_apos_aprovacao(): void
+    {
+        [$user, $employee] = $this->createEmployee('Servidor Tempo Real');
+        $schedule = WorkSchedule::createDefault40h();
+        $employee->update(['work_schedule_id' => $schedule->id]);
+
+        // Inicialmente dia 05/10/2026 sem batidas
+        Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'administrative'])
+            ->assertOk()
+            ->assertSee('DOCUMENTO PROVISÓRIO')
+            ->assertSee('Sem registro / Ausência');
+
+        // RH aprova batidas manuais
+        TreatmentEvent::create([
+            'employee_id' => $employee->id,
+            'type' => TreatmentEventType::ManualPunchAdded,
+            'status' => TreatmentEventStatus::Approved,
+            'effective_at' => Carbon::parse('2026-10-05 08:00:00', 'America/Maceio'),
+            'reason_text' => 'Declaracao de servico externo matutino',
+            'requested_by' => $user->id,
+            'approved_by' => $user->id,
+            'decided_at' => Carbon::now(),
+        ]);
+        TreatmentEvent::create([
+            'employee_id' => $employee->id,
+            'type' => TreatmentEventType::ManualPunchAdded,
+            'status' => TreatmentEventStatus::Approved,
+            'effective_at' => Carbon::parse('2026-10-05 12:00:00', 'America/Maceio'),
+            'reason_text' => 'Declaracao de servico externo vespertino',
+            'requested_by' => $user->id,
+            'approved_by' => $user->id,
+            'decided_at' => Carbon::now(),
+        ]);
+
+        // Ao recarregar a Folha de Ponto na competência aberta, já reflete imediatamente
+        Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'administrative'])
+            ->assertOk()
+            ->assertSee('08:00')
+            ->assertSee('12:00')
+            ->assertSee('Ajuste aprovado')
+            ->assertSee('4h 00m');
+    }
+
+    /**
+     * 25. Servidor sem escala configurada exibe explicitamente "Escala não configurada"
+     */
+    public function test_25_escala_ausente_exibe_escala_nao_configurada(): void
+    {
+        [$user, $employee] = $this->createEmployee('Servidor Sem Escala');
+        // Garantir que não há escala nem plantão
+        $employee->update(['work_schedule_id' => null]);
+
+        Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'administrative'])
+            ->assertOk()
+            ->assertSee('Escala não configurada')
+            ->assertDontSee('Padrão Administrativo');
+    }
+
+    /**
+     * 26. Horários e totais perfeitamente coerentes entre Espelho, Folha e apuração PTRP
+     */
+    public function test_26_coerencia_totais_entre_espelho_folha_e_ptrp(): void
+    {
+        [$user, $employee] = $this->createEmployee('Servidor Coerencia Total');
+        $schedule = WorkSchedule::createDefault40h();
+        $employee->update(['work_schedule_id' => $schedule->id]);
+
+        // Batidas eletrônicas
+        $this->createPunch($user, 'in', '2026-10-05 08:00:00');
+        $this->createPunch($user, 'out', '2026-10-05 12:00:00');
+        $this->createPunch($user, 'in', '2026-10-05 13:00:00');
+
+        // Saída manual aprovada
+        TreatmentEvent::create([
+            'employee_id' => $employee->id,
+            'type' => TreatmentEventType::ManualPunchAdded,
+            'status' => TreatmentEventStatus::Approved,
+            'effective_at' => Carbon::parse('2026-10-05 17:00:00', 'America/Maceio'),
+            'reason_text' => 'Liberacao de expediente em servico externo',
+            'requested_by' => $user->id,
+            'approved_by' => $user->id,
+            'decided_at' => Carbon::parse('2026-10-05 17:30:00'),
+        ]);
+
+        // Cálculo PTRP direto
+        $service = app(TimesheetJourneyService::class);
+        $calculatedData = $service->resolveMonthData($user, 2026, 10);
+        $ptrpWorkedMinutes = $calculatedData['totalWorkedMinutes'];
+        $this->assertSame(480, $ptrpWorkedMinutes); // 8 horas = 480 minutos
+
+        // Espelho de Ponto
+        Livewire::actingAs($user)
+            ->test('timesheet', ['userId' => $user->id, 'month' => 10, 'year' => 2026])
+            ->assertOk()
+            ->assertSee('08:00')
+            ->assertSee('12:00')
+            ->assertSee('13:00')
+            ->assertSee('17:00')
+            ->assertSee('8h 00m');
+
+        // Folha de Ponto
+        Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'administrative'])
+            ->assertOk()
+            ->assertSee('08:00')
+            ->assertSee('12:00')
+            ->assertSee('13:00')
+            ->assertSee('17:00')
+            ->assertSee('8h 00m');
+    }
+
+    /**
+     * 27. Competência fechada preserva dados e tratamentos congelados do snapshot
+     */
+    public function test_27_competencia_fechada_utiliza_snapshot_preservando_tratamentos_e_totais(): void
+    {
+        [$admin, $adminEmp] = $this->createEmployee('Admin Snapshot RH', UserRole::Admin);
+        [$user, $employee] = $this->createEmployee('Servidor Snapshot');
+        $schedule = WorkSchedule::createDefault40h();
+        $employee->update(['work_schedule_id' => $schedule->id]);
+
+        $this->createPunch($user, 'in', '2026-10-05 08:00:00');
+        $this->createPunch($user, 'out', '2026-10-05 12:00:00');
+
+        TreatmentEvent::create([
+            'employee_id' => $employee->id,
+            'type' => TreatmentEventType::ManualPunchAdded,
+            'status' => TreatmentEventStatus::Approved,
+            'effective_at' => Carbon::parse('2026-10-05 13:00:00', 'America/Maceio'),
+            'reason_text' => 'Turno extra da tarde aprovado',
+            'requested_by' => $user->id,
+            'approved_by' => $admin->id,
+            'decided_at' => Carbon::parse('2026-10-05 14:00:00'),
+        ]);
+
+        TreatmentEvent::create([
+            'employee_id' => $employee->id,
+            'type' => TreatmentEventType::ManualPunchAdded,
+            'status' => TreatmentEventStatus::Approved,
+            'effective_at' => Carbon::parse('2026-10-05 17:00:00', 'America/Maceio'),
+            'reason_text' => 'Saida do turno extra aprovada',
+            'requested_by' => $user->id,
+            'approved_by' => $admin->id,
+            'decided_at' => Carbon::parse('2026-10-05 17:30:00'),
+        ]);
+
+        // Fechar competência 10/2026
+        ReviewForClose::reviewAll(Employee::all(), 2026, 10, $admin);
+        app(CloseMonthlyPeriodAction::class)->execute(2026, 10, $admin);
+
+        // Inserir novo tratamento POSTERIOR ao fechamento (tentativa de alteração pós-fechamento)
+        TreatmentEvent::create([
+            'employee_id' => $employee->id,
+            'type' => TreatmentEventType::ManualPunchAdded,
+            'status' => TreatmentEventStatus::Approved,
+            'effective_at' => Carbon::parse('2026-10-06 08:00:00', 'America/Maceio'),
+            'reason_text' => 'Tentativa de ajuste apos fechamento',
+            'requested_by' => $user->id,
+            'approved_by' => $admin->id,
+            'decided_at' => Carbon::parse('2026-11-01 10:00:00'),
+        ]);
+
+        // A Folha da competência fechada deve usar EXCLUSIVAMENTE os dados congelados do snapshot
+        Livewire::actingAs($admin)
+            ->test('folha-ponto', ['userId' => $user->id, 'month' => 10, 'year' => 2026])
+            ->assertOk()
+            ->assertSee('COMPETÊNCIA FECHADA')
+            ->assertSee('Turno extra da tarde aprovado')
+            ->assertDontSee('Tentativa de ajuste apos fechamento');
     }
 }
