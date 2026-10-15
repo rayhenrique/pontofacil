@@ -47,6 +47,9 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
     // Orientação de impressão: 'auto', 'portrait', 'landscape'
     public string $pageOrientation = 'auto';
 
+    // Quadro complementar opcional de programação de escalas (referência do RH)
+    public bool $showComplementarySchedule = false;
+
     // Cabeçalho Institucional Oficial
     public $headerState = '';
     public $headerEntity = '';
@@ -528,6 +531,34 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
 
         if (empty($scheduleName)) {
             $scheduleName = 'Escala não configurada';
+            $scheduleSummary = 'Escala não configurada';
+        } else {
+            $scheduleSummary = $scheduleName;
+            if ($activeModel === 'shifts') {
+                if ($preloadedShifts && $preloadedShifts->isNotEmpty()) {
+                    $firstActive = $preloadedShifts->first(fn ($s) => empty($s->is_day_off) && ! empty($s->start_at_local));
+                    if ($firstActive) {
+                        $startT = Carbon::parse($firstActive->start_at_local)->format('H:i');
+                        $endT = Carbon::parse($firstActive->end_at_local)->format('H:i');
+                        $scheduleSummary .= " (Previsto: {$startT} às {$endT})";
+                    }
+                } elseif (! empty($monthJourneyData['shiftsSnapshot'])) {
+                    $firstActive = collect($monthJourneyData['shiftsSnapshot'])->first(fn ($s) => empty($s['is_day_off']) && ! empty($s['start_at_local']));
+                    if ($firstActive) {
+                        $startT = Carbon::parse($firstActive['start_at_local'])->format('H:i');
+                        $endT = Carbon::parse($firstActive['end_at_local'])->format('H:i');
+                        $scheduleSummary .= " (Previsto: {$startT} às {$endT})";
+                    }
+                }
+            } elseif ($workSchedule && $workSchedule->isAuthorizedForRegime($employee?->legal_regime)) {
+                $firstDaySched = collect($workSchedule->schedule_data)->first(fn ($d) => ! empty($d['active']));
+                if ($firstDaySched && ! empty($firstDaySched['periods'])) {
+                    $periodsStr = collect($firstDaySched['periods'])->map(fn ($p) => ($p['start'] ?? '').'–'.($p['end'] ?? ''))->implode(' / ');
+                    if ($periodsStr) {
+                        $scheduleSummary .= " ({$periodsStr})";
+                    }
+                }
+            }
         }
 
         // Tratamentos e Justificativas da competência para o Quadro de Tratamentos
@@ -607,6 +638,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
             'printOrientation' => $printOrientation,
             'workSchedule' => $workSchedule,
             'scheduleName' => $scheduleName,
+            'scheduleSummary' => $scheduleSummary,
             'monthTreatmentsList' => $monthTreatmentsList,
             'isPendingConfigOverall' => $isPendingConfigOverall,
             'totalWorkedMinutes' => $totalWorkedMinutes,
@@ -1370,6 +1402,10 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                     'startTime' => $startLocal->format('H:i'),
                     'endDate' => $endLocal->format('d/m/Y'),
                     'endTime' => $endLocal->format('H:i'),
+                    'shiftTypeLabel' => $shiftTypeLabel,
+                    'breakDurationMinutes' => $breakMin,
+                    'isDayOff' => ! empty($shiftData['is_day_off']),
+                    'shiftNotes' => $shiftData['notes'] ?? 'Conforme escala congelada',
                 ];
             }
 
@@ -1406,6 +1442,10 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                         'startTime' => $startLocal->format('H:i'),
                         'endDate' => $endLocal->format('d/m/Y'),
                         'endTime' => $endLocal->format('H:i'),
+                        'shiftTypeLabel' => $shift->shift_type?->label() ?? 'Plantão',
+                        'breakDurationMinutes' => (int) ($shift->break_minutes ?? 0),
+                        'isDayOff' => true,
+                        'shiftNotes' => $shift->notes ?: 'Descanso programado da escala',
                     ];
                     continue;
                 }
@@ -1451,6 +1491,10 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                         'startTime' => $startLocal->format('H:i'),
                         'endDate' => $endLocal->format('d/m/Y'),
                         'endTime' => $endLocal->format('H:i'),
+                        'shiftTypeLabel' => $shift->shift_type?->label() ?? 'Plantão',
+                        'breakDurationMinutes' => (int) ($shift->break_minutes ?? 0),
+                        'isDayOff' => false,
+                        'shiftNotes' => sprintf('Plantão iniciado em %s (apurado na competência anterior sem duplicação)', $startLocal->format('d/m/Y')),
                     ];
                     continue;
                 }
@@ -1484,6 +1528,10 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                         'startTime' => $startLocal->format('H:i'),
                         'endDate' => $endLocal->format('d/m/Y'),
                         'endTime' => $endLocal->format('H:i'),
+                        'shiftTypeLabel' => $shift->shift_type?->label() ?? 'Plantão',
+                        'breakDurationMinutes' => (int) ($shift->break_minutes ?? 0),
+                        'isDayOff' => false,
+                        'shiftNotes' => $shift->notes ?: 'Preenchimento manual',
                     ];
                     continue;
                 }
@@ -1558,6 +1606,10 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                     'startTime' => $startLocal->format('H:i'),
                     'endDate' => $endLocal->format('d/m/Y'),
                     'endTime' => $endLocal->format('H:i'),
+                    'shiftTypeLabel' => $shift->shift_type?->label() ?? 'Plantão',
+                    'breakDurationMinutes' => (int) ($shift->break_minutes ?? 0),
+                    'isDayOff' => false,
+                    'shiftNotes' => $shift->notes ?: 'Conforme escala homologada',
                 ];
             }
 
@@ -1609,6 +1661,10 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                     'startTime' => $startTime,
                     'endDate' => $endDate,
                     'endTime' => $endTime,
+                    'shiftTypeLabel' => 'Plantão Registrado',
+                    'breakDurationMinutes' => 0,
+                    'isDayOff' => false,
+                    'shiftNotes' => 'Plantão apurado por batidas',
                 ];
             }
         }
@@ -1760,6 +1816,11 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                 <label class="flex items-center gap-1.5 cursor-pointer text-gray-700">
                     <input type="checkbox" wire:model.live="includeRubrica" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                     <span>Exibir registro eletrônico</span>
+                </label>
+
+                <label class="flex items-center gap-1.5 cursor-pointer text-gray-700">
+                    <input type="checkbox" wire:model.live="showComplementarySchedule" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    <span>Quadro complementar de programação (RH)</span>
                 </label>
             </div>
         </div>
@@ -2061,8 +2122,8 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                     <div class="flex-1 truncate mr-4">
                         <strong>Local / Lotação:</strong> {{ $location ?: (optional(optional($selectedUser->employee)->sector)->name ?? 'Geral') }}
                     </div>
-                    <div class="w-56 truncate text-right">
-                        <strong>Escala:</strong> {{ $scheduleName }}
+                    <div class="max-w-[65%] truncate text-right">
+                        <strong>Escala Vigente:</strong> {{ $scheduleSummary }}
                     </div>
                 </div>
 
@@ -2206,30 +2267,26 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                     <table class="w-full border-collapse border border-black text-center text-[10px] leading-tight">
                         <thead>
                             <tr class="font-bold text-[9px] bg-slate-50 print:bg-transparent">
-                                <th class="border border-black py-1 w-[35px]">DIA</th>
-                                <th class="border border-black py-1 w-[60px]">ENTR. PREV.</th>
-                                <th class="border border-black py-1 w-[60px]">ENTR. REG.</th>
-                                <th class="border border-black py-1 w-[70px]">INTERVALO</th>
-                                <th class="border border-black py-1 w-[60px]">SAÍDA PREV.</th>
-                                <th class="border border-black py-1 w-[60px]">SAÍDA REG.</th>
-                                <th class="border border-black py-1 w-[65px]">H. FÍSICAS</th>
-                                <th class="border border-black py-1 w-[75px]">SITUAÇÃO</th>
+                                <th class="border border-black py-1 w-[40px]">DIA</th>
+                                <th class="border border-black py-1 w-[80px]">ENTRADA</th>
+                                <th class="border border-black py-1 w-[80px]">SAÍDA</th>
+                                <th class="border border-black py-1 w-[80px]">INTERVALO</th>
+                                <th class="border border-black py-1 w-[75px]">H. FÍSICAS</th>
+                                <th class="border border-black py-1 w-[90px]">SITUAÇÃO</th>
                                 <th class="border border-black py-1">OBSERVAÇÕES</th>
-                                <th class="border border-black py-1 w-[80px]">CONFERÊNCIA</th>
+                                <th class="border border-black py-1 w-[90px]">CONFERÊNCIA</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($continuousRows as $row)
                                 <tr class="h-[18px] sm:h-[19px] print:h-[17px] {{ ($row['isSaturday'] || $row['isSunday']) && ! $row['hasEntries'] ? 'bg-slate-100/50 print:bg-transparent' : '' }}">
                                     <td class="border border-black font-bold text-[9px]">{{ $row['day'] }}</td>
-                                    <td class="border border-black font-mono text-[9px] text-slate-600 print:text-black">{{ $row['entryScheduled'] }}</td>
                                     <td class="border border-black font-mono text-[9px] font-bold">{{ $row['entryReal'] }}</td>
-                                    <td class="border border-black text-[8px]">{{ $row['intervalFormatted'] }}</td>
-                                    <td class="border border-black font-mono text-[9px] text-slate-600 print:text-black">{{ $row['exitScheduled'] }}</td>
                                     <td class="border border-black font-mono text-[9px] font-bold">{{ $row['exitReal'] }}</td>
+                                    <td class="border border-black text-[8px]">{{ $row['intervalFormatted'] }}</td>
                                     <td class="border border-black font-mono text-[9px] font-bold">{{ $row['physicalWorkedFormatted'] }}</td>
                                     <td class="border border-black text-[8px] font-semibold">{{ $row['statusLabel'] }}</td>
-                                    <td class="border border-black text-[8px] text-left px-1 truncate max-w-[130px]" title="{{ $row['observation'] }}">{{ $row['observation'] }}</td>
+                                    <td class="border border-black text-[8px] text-left px-1 truncate max-w-[160px]" title="{{ $row['observation'] }}">{{ $row['observation'] }}</td>
                                     <td class="border border-black text-[8px]">{{ $row['rubrica'] }}</td>
                                 </tr>
                             @endforeach
@@ -2304,43 +2361,30 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                     <table class="w-full border-collapse border border-black text-center text-[10px] leading-tight">
                         <thead>
                             <tr class="font-bold text-[9px] bg-slate-50 print:bg-transparent">
-                                <th colspan="2" class="border border-black py-1 tracking-wide">INÍCIO PREVISTO</th>
-                                <th colspan="2" class="border border-black py-1 tracking-wide">FIM PREVISTO</th>
-                                <th colspan="2" class="border border-black py-1 tracking-wide">REGISTRO EFETIVO</th>
-                                <th rowspan="2" class="border border-black py-1 w-[60px]">INTERVALO</th>
-                                <th rowspan="2" class="border border-black py-1 w-[55px]">H. FÍSICAS</th>
-                                <th rowspan="2" class="border border-black py-1 w-[55px]">H. NOTURNA</th>
-                                <th rowspan="2" class="border border-black py-1 w-[55px]">EQ. LEGAL</th>
-                                <th rowspan="2" class="border border-black py-1 w-[70px]">SITUAÇÃO</th>
-                                <th rowspan="2" class="border border-black py-1">OBSERVAÇÕES</th>
-                                <th rowspan="2" class="border border-black py-1 w-[75px]">CONFERÊNCIA</th>
-                            </tr>
-                            <tr class="font-bold text-[8px] bg-slate-50 print:bg-transparent">
-                                <th class="border border-black py-0.5 w-[60px]">DATA</th>
-                                <th class="border border-black py-0.5 w-[42px]">HORA</th>
-                                <th class="border border-black py-0.5 w-[60px]">DATA</th>
-                                <th class="border border-black py-0.5 w-[42px]">HORA</th>
-                                <th class="border border-black py-0.5 w-[50px]">ENTRADA</th>
-                                <th class="border border-black py-0.5 w-[50px]">SAÍDA</th>
+                                <th class="border border-black py-1 w-[70px]">DATA INÍCIO</th>
+                                <th class="border border-black py-1 w-[60px]">ENTRADA</th>
+                                <th class="border border-black py-1 w-[70px]">DATA FIM</th>
+                                <th class="border border-black py-1 w-[60px]">SAÍDA</th>
+                                <th class="border border-black py-1 w-[65px]">INTERVALO</th>
+                                <th class="border border-black py-1 w-[60px]">H. FÍSICAS</th>
+                                <th class="border border-black py-1 w-[60px]">H. NOTURNA</th>
+                                <th class="border border-black py-1 w-[60px]">EQ. LEGAL</th>
+                                <th class="border border-black py-1 w-[75px]">SITUAÇÃO</th>
+                                <th class="border border-black py-1">OCORRÊNCIAS / OBSERVAÇÕES</th>
+                                <th class="border border-black py-1 w-[80px]">CONFERÊNCIA</th>
                             </tr>
                         </thead>
                         <tbody>
                             @forelse($shiftsRows as $shift)
                                 <tr class="h-[18px] sm:h-[19px] print:h-[17px]">
-                                    <td class="border border-black font-bold text-[9px]">
-                                        {{ $shift['scheduledStartDate'] }}
-                                    </td>
-                                    <td class="border border-black font-mono text-[9px]">
-                                        {{ $shift['scheduledStartTime'] }}
-                                    </td>
-                                    <td class="border border-black font-bold text-[9px]">
-                                        {{ $shift['scheduledEndDate'] }}
-                                    </td>
-                                    <td class="border border-black font-mono text-[9px]">
-                                        {{ $shift['scheduledEndTime'] }}
+                                    <td class="border border-black font-semibold text-[9px]">
+                                        {{ $shift['realEntryDate'] ?? $shift['scheduledStartDate'] }}
                                     </td>
                                     <td class="border border-black font-mono text-[9px] font-bold">
                                         {{ $shift['realEntryTime'] }}
+                                    </td>
+                                    <td class="border border-black font-semibold text-[9px]">
+                                        {{ $shift['realExitDate'] ?? $shift['scheduledEndDate'] }}
                                     </td>
                                     <td class="border border-black font-mono text-[9px] font-bold">
                                         {{ $shift['realExitTime'] }}
@@ -2360,7 +2404,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                                     <td class="border border-black text-[8px] font-semibold">
                                         {{ $shift['statusLabel'] }}
                                     </td>
-                                    <td class="border border-black text-[8px] text-left px-1 truncate max-w-[120px]" title="{{ $shift['observation'] }}">
+                                    <td class="border border-black text-[8px] text-left px-1 truncate max-w-[130px]" title="{{ $shift['observation'] }}">
                                         {{ $shift['observation'] }}
                                     </td>
                                     <td class="border border-black text-[8px]">
@@ -2369,7 +2413,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="13" class="border border-black py-3 text-gray-500 text-xs">
+                                    <td colspan="11" class="border border-black py-3 text-gray-500 text-xs">
                                         Nenhum plantão agendado ou registrado na competência.
                                     </td>
                                 </tr>
@@ -2377,6 +2421,44 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                         </tbody>
                     </table>
                 </div>
+
+                @if($showComplementarySchedule && !empty($shiftsRows))
+                    <!-- QUADRO COMPLEMENTAR DE PROGRAMAÇÃO DA ESCALA (REFERÊNCIA DO RH) -->
+                    <div class="mt-3 page-break-avoid border border-black p-2 bg-slate-50/50 print:bg-transparent">
+                        <div class="text-[9px] font-bold uppercase tracking-wider mb-1 flex items-center justify-between border-b border-black pb-0.5">
+                            <span>Quadro Complementar de Programação da Escala (Referência do RH)</span>
+                            <span class="text-[8px] font-normal italic">Horários previstos conforme escala oficial — Não computa batidas reais</span>
+                        </div>
+                        <table class="w-full border-collapse border border-black text-center text-[9px] leading-tight mt-1">
+                            <thead>
+                                <tr class="font-bold bg-slate-100 print:bg-transparent">
+                                    <th class="border border-black py-0.5 w-[75px]">DATA INÍCIO</th>
+                                    <th class="border border-black py-0.5 w-[65px]">INÍCIO PREV.</th>
+                                    <th class="border border-black py-0.5 w-[75px]">DATA FIM</th>
+                                    <th class="border border-black py-0.5 w-[65px]">FIM PREV.</th>
+                                    <th class="border border-black py-0.5 w-[90px]">TIPO DE ESCALA</th>
+                                    <th class="border border-black py-0.5 w-[85px]">INTERVALO PREV.</th>
+                                    <th class="border border-black py-0.5 w-[85px]">STATUS ESCALA</th>
+                                    <th class="border border-black py-0.5">OBSERVAÇÕES DA PROGRAMAÇÃO</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($shiftsRows as $shift)
+                                    <tr class="h-[16px] print:h-[15px]">
+                                        <td class="border border-black font-semibold">{{ $shift['scheduledStartDate'] }}</td>
+                                        <td class="border border-black font-mono">{{ $shift['scheduledStartTime'] }}</td>
+                                        <td class="border border-black font-semibold">{{ $shift['scheduledEndDate'] }}</td>
+                                        <td class="border border-black font-mono">{{ $shift['scheduledEndTime'] }}</td>
+                                        <td class="border border-black">{{ $shift['shiftTypeLabel'] ?? 'Plantão' }}</td>
+                                        <td class="border border-black">{{ ($shift['breakDurationMinutes'] ?? 0) > 0 ? $shift['intervalFormatted'] : 'Sem intervalo' }}</td>
+                                        <td class="border border-black font-semibold">{{ !empty($shift['isDayOff']) ? 'Folga' : 'Plantão Programado' }}</td>
+                                        <td class="border border-black text-left px-1 truncate max-w-[200px]">{{ $shift['shiftNotes'] ?? 'Conforme escala homologada' }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
             @endif
 
             <!-- QUADRO DE TRATAMENTOS E JUSTIFICATIVAS DE PONTO -->

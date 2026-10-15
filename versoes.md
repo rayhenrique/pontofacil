@@ -1,9 +1,12 @@
 # Histórico de Versões (Changelog)
 
 ## v2.6.12 (Atual)
-- **Consolidação Técnica e Impressão A4 Adaptativa da Folha de Ponto:**
-  - **Modelos Especializados por Jornada:** Suporte completo com seleção automática ou manual entre os modelos Administrativo (convencional com 4 marcações e suporte a batidas extras), Horário Corrido (entrada e saída únicas com orientação vertical), Jornada Noturna (com marcação explícita de virada de dia e horas físicas/legais separadas), Escala de Plantões (12×36, 24×72 e variáveis) e Folha em Branco para preenchimento manual.
-  - **Separação entre Horário Previsto e Registrado:** Na escala de plantões, início e fim programados são exibidos em colunas separadas das entradas e saídas efetivas. Caso falte batida, o documento estampa "Não registrada" ou "Incompleta", nunca preenchendo horários previstos como se fossem batidas realizadas.
+- **Consolidação Técnica e Simplificação da Folha de Ponto:**
+  - **Apresentação Objetiva e Foco nas Batidas Reais:** Na folha impressa, exibição prioritária das marcações efetivamente registradas, intervalos usufruídos, horas apuradas e ocorrências, eliminando colunas redundantes de horários previstos em cada linha e evitando sobrecarga visual.
+  - **Resumo da Escala Vigente no Cabeçalho:** O cabeçalho do documento consolida o nome da escala e sua programação horária oficial quando disponível (ex: `Escala 12x36 (Previsto: 07:00 às 19:00)`), dispensando duplicações em cada linha.
+  - **Quadro Complementar de Programação (RH):** Para plantões e escalas especiais, disponibilização de quadro complementar opcional na barra de controle, exibindo a referência completa da programação homologada de forma segregada, sem misturar horários previstos com batidas reais.
+  - **Identificação Clara de Falta de Registro:** Batidas pendentes exibem "Não registrada", nunca preenchendo o campo com horários programados.
+  - **Modelos Especializados por Jornada:** Suporte completo com seleção automática ou manual entre os modelos Administrativo (convencional com 4 marcações e suporte a batidas extras), Horário Corrido (8 colunas limpas com orientação retrato), Jornada Noturna (com marcação explícita de virada de dia e horas físicas/legais separadas), Escala de Plantões (11 colunas objetivas em paisagem) e Folha em Branco para preenchimento manual.
   - **Plantões na Virada de Mês:** Plantões iniciados no mês anterior que terminam no mês atual são apresentados na escala documental para conferência completa, com horas atribuídas à competência de origem, garantindo zero duplicação de horas na virada de competência.
   - **Jornadas Noturnas Vinculadas ao PTRP:** Eliminação de regras heurísticas no Blade; exibição fiel da vinculação de turnos realizada pelo motor de cálculo do PTRP para turnos 22h–06h, 19h–07h, 00h–06h e plantões de 24h, anotando a conclusão no dia seguinte (+1d).
   - **Intervalos Reais:** Remoção definitiva do valor padrão fictício de 60 minutos; o sistema apresenta o intervalo real usufruído, o previsto em escala ou "Sem intervalo" / "Não informado".
