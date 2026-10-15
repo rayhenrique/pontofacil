@@ -677,22 +677,24 @@ A interface não deve sobrecarregar o usuário com dezenas de campos obrigatóri
 ## 32. Folha de Ponto Documental e Impressão A4 Adaptativa (/folha-ponto)
 
 ### 32.1. Modelos Documentais e Orientação Dinâmica de Impressão
-A Folha de Ponto adapta sua orientação geométrica de página (`@page`) e estrutura de colunas dinamicamente de acordo com a densidade do modelo ativo:
+A Folha de Ponto adapta sua orientação geométrica de página (`@page`) e estrutura de colunas dinamicamente de acordo com a densidade do modelo ativo, priorizando marcações efetivamente registradas e evitando excesso de colunas:
 
-| Modelo | Orientação A4 | Densidade de Colunas | Estrutura de Pareamento |
+| Modelo | Orientação A4 | Densidade de Colunas | Estrutura de Pareamento e Apresentação |
 |---|---|---|---|
-| **Horário Corrido (`continuous`)** | Retrato (`portrait`) | Compacta (6 colunas) | Entrada e saída únicas, com intervalos aplicáveis |
-| **Administrativo (`administrative`)** | Paisagem (`landscape`) | Alta (10 colunas) | Matutino (Entr 1 / Saída 1) + Vespertino (Entr 2 / Saída 2) + Extras |
-| **Jornada Noturna (`nocturnal`)** | Paisagem (`landscape`) | Média (9 colunas) | Entrada, saída (+1d), horas físicas, horas noturnas e equivalência legal |
-| **Escala de Plantões (`shifts`)** | Paisagem (`landscape`) | Alta (11 colunas) | Início/Fim programados estritamente separados de Entrada/Saída registradas |
+| **Horário Corrido (`continuous`)** | Retrato (`portrait`) | Compacta (8 colunas) | Foco em batidas reais (Entrada, Saída, Intervalo, Horas Físicas, Situação, Observações, Conferência), sem colunas de previsão por linha |
+| **Administrativo (`administrative`)** | Paisagem (`landscape`) | Alta (10 colunas) | Matutino (Entr 1 / Saída 1) + Vespertino (Entr 2 / Saída 2) + Rubricas e Ocorrências |
+| **Jornada Noturna (`nocturnal`)** | Paisagem (`landscape`) | Média (10 colunas) | Entrada, saída (+1d), intervalo, horas físicas, horas noturnas e equivalência legal |
+| **Escala de Plantões (`shifts`)** | Paisagem (`landscape`) | Alta (11 colunas) | Cabeçalho único focado nas batidas registradas (faltas identificadas como "Não registrada") |
 | **Em Branco (`blank`)** | Configurável (padrão Paisagem) | Tradicional | Guias tracejadas para preenchimento manual físico com rubricas de folga/feriado |
 
 ### 32.2. Diretrizes Técnicas de Impressão e Paginação Fiel
 1. **Regra de Orientação Dinâmica:** O componente Livewire injeta `@page { size: A4 portrait/landscape; margin: 8mm; }` dinamicamente conforme a seleção do usuário ou recomendação do modelo.
-2. **Repetição de Cabeçalhos:** Tabelas de impressão utilizam `thead { display: table-header-group !important; }` para que a identificação das colunas se repita automaticamente no topo de todas as páginas adicionais.
-3. **Evitar Quebra de Linhas:** Linhas de registro nunca podem ser fatiadas entre páginas: `tr { break-inside: avoid !important; page-break-inside: avoid !important; }`.
-4. **Sem Truncamento em Relatórios Impressos:** Na mídia de impressão, classes `.truncate` são desativadas (`overflow: visible !important; white-space: normal !important; text-overflow: clip !important;`) para garantir a legibilidade integral de ocorrências e justificativas.
-5. **Autonomia Mobile-First:** Em viewports móveis (< 640px), exibe cartões verticais resumidos e legíveis com botão expansível para alternância da prévia A4 completa, preservando o layout de impressão independente da visualização em tela.
+2. **Resumo da Escala no Cabeçalho:** O cabeçalho exibe o resumo da escala vigente com horários programados (ex: `Escala 12x36 (Previsto: 07:00 às 19:00)`), eliminando colunas redundantes de previsão em cada linha.
+3. **Quadro Complementar de Programação Opcional:** Para escalas especiais e plantões, disponibilização de quadro complementar de programação segregado, acionável pelo RH, preservando o documento limpo para o colaborador.
+4. **Repetição de Cabeçalhos:** Tabelas de impressão utilizam `thead { display: table-header-group !important; }` para que a identificação das colunas se repita automaticamente no topo de todas as páginas adicionais.
+5. **Evitar Quebra de Linhas:** Linhas de registro nunca podem ser fatiadas entre páginas: `tr { break-inside: avoid !important; page-break-inside: avoid !important; }`.
+6. **Sem Truncamento em Relatórios Impressos:** Na mídia de impressão, classes `.truncate` são desativadas (`overflow: visible !important; white-space: normal !important; text-overflow: clip !important;`) para garantir a legibilidade integral de ocorrências e justificativas.
+7. **Autonomia Mobile-First:** Em viewports móveis (< 640px), exibe cartões verticais resumidos e legíveis com botão expansível para alternância da prévia A4 completa, preservando o layout de impressão independente da visualização em tela.
 
 
 
