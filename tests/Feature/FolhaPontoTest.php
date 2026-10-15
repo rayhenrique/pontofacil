@@ -948,4 +948,341 @@ class FolhaPontoTest extends TestCase
             ->assertSee('Turno extra da tarde aprovado')
             ->assertDontSee('Tentativa de ajuste apos fechamento');
     }
+
+    /**
+     * 28. Modelo Horário Corrido com duas marcações e orientação A4 retrato
+     */
+    public function test_28_modelo_corrido_com_duas_marcacoes_e_orientacao_retrato(): void
+    {
+        [$user, $employee] = $this->createEmployee('Servidor Horario Corrido');
+        $schedule = WorkSchedule::create([
+            'code' => 'CORR-6H',
+            'name' => 'Jornada Corrida 6h Diárias',
+            'modality' => WorkScheduleModality::FixedWeekly,
+            'expected_daily_minutes' => 360,
+            'active' => true,
+        ]);
+        $employee->update(['work_schedule_id' => $schedule->id]);
+
+        $this->createPunch($user, 'in', '2026-10-05 08:00:00');
+        $this->createPunch($user, 'out', '2026-10-05 14:00:00');
+
+        $component = Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'continuous'])
+            ->assertOk()
+            ->assertSee('FOLHA DE PONTO — HORÁRIO CORRIDO')
+            ->assertSee('08:00')
+            ->assertSee('14:00')
+            ->assertSee('06h 00m')
+            ->assertSee('Sem intervalo')
+            ->assertSee('size: A4 portrait');
+
+        $rows = $component->viewData('continuousRows') ?? [];
+        $day05 = collect($rows)->firstWhere('day', '05');
+        $this->assertNotNull($day05);
+        $this->assertSame('08:00', $day05['entryReal']);
+        $this->assertSame('14:00', $day05['exitReal']);
+        $this->assertSame('06h 00m', $day05['physicalWorkedFormatted']);
+    }
+
+    /**
+     * 29. Jornada noturna iniciando à meia-noite (00h às 06h)
+     */
+    public function test_29_noturno_00h_06h(): void
+    {
+        [$user, $employee] = $this->createEmployee('Vigilante Madrugada');
+
+        $this->createPunch($user, 'in', '2026-10-05 00:00:00');
+        $this->createPunch($user, 'out', '2026-10-05 06:00:00');
+
+        Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'nocturnal'])
+            ->assertOk()
+            ->assertSee('FOLHA DE PONTO — JORNADA NOTURNA')
+            ->assertSee('00:00')
+            ->assertSee('06:00')
+            ->assertSee('06h 00m')
+            ->assertSee('H. NOTURNA')
+            ->assertSee('EQ. LEGAL');
+    }
+
+    /**
+     * 30. Plantão com entrada real diferente da prevista
+     */
+    public function test_30_plantao_entrada_real_diferente_da_prevista(): void
+    {
+        [$user, $employee] = $this->createEmployee('Plantonista Atraso');
+
+        $schedule = WorkSchedule::create([
+            'code' => 'PL-12X36-ATR',
+            'name' => 'Escala 12x36',
+            'modality' => WorkScheduleModality::TwelveByThirtySix,
+            'expected_daily_minutes' => 720,
+            'active' => true,
+        ]);
+        $employee->update(['work_schedule_id' => $schedule->id]);
+
+        ShiftAssignment::create([
+            'employee_id' => $employee->id,
+            'work_schedule_id' => $schedule->id,
+            'start_at_local' => Carbon::parse('2026-10-06 07:00:00', 'America/Maceio'),
+            'end_at_local' => Carbon::parse('2026-10-06 19:00:00', 'America/Maceio'),
+            'start_at_utc' => Carbon::parse('2026-10-06 10:00:00', 'UTC'),
+            'end_at_utc' => Carbon::parse('2026-10-06 22:00:00', 'UTC'),
+            'timezone' => 'America/Maceio',
+            'shift_type' => ShiftType::Shift12x36,
+            'status' => ShiftStatus::Scheduled,
+            'break_minutes' => 60,
+            'expected_work_minutes' => 660,
+        ]);
+
+        // Entrada real 18 minutos após o previsto: 07:18
+        $this->createPunch($user, 'in', '2026-10-06 07:18:00');
+        $this->createPunch($user, 'out', '2026-10-06 19:00:00');
+
+        $component = Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'shifts'])
+            ->assertOk()
+            ->assertSee('07:00')
+            ->assertSee('07:18');
+
+        $rows = $component->viewData('shiftsRows') ?? [];
+        $row = collect($rows)->first();
+        $this->assertNotNull($row);
+        $this->assertSame('07:00', $row['scheduledStartTime']);
+        $this->assertSame('07:18', $row['realEntryTime']);
+        $this->assertNotSame($row['scheduledStartTime'], $row['realEntryTime']);
+    }
+
+    /**
+     * 31. Plantão com saída real diferente da prevista
+     */
+    public function test_31_plantao_saida_real_diferente_da_prevista(): void
+    {
+        [$user, $employee] = $this->createEmployee('Plantonista Hora Extra');
+
+        $schedule = WorkSchedule::create([
+            'code' => 'PL-12X36-EXT',
+            'name' => 'Escala 12x36 Extra',
+            'modality' => WorkScheduleModality::TwelveByThirtySix,
+            'expected_daily_minutes' => 720,
+            'active' => true,
+        ]);
+        $employee->update(['work_schedule_id' => $schedule->id]);
+
+        ShiftAssignment::create([
+            'employee_id' => $employee->id,
+            'work_schedule_id' => $schedule->id,
+            'start_at_local' => Carbon::parse('2026-10-06 07:00:00', 'America/Maceio'),
+            'end_at_local' => Carbon::parse('2026-10-06 19:00:00', 'America/Maceio'),
+            'start_at_utc' => Carbon::parse('2026-10-06 10:00:00', 'UTC'),
+            'end_at_utc' => Carbon::parse('2026-10-06 22:00:00', 'UTC'),
+            'timezone' => 'America/Maceio',
+            'shift_type' => ShiftType::Shift12x36,
+            'status' => ShiftStatus::Scheduled,
+            'break_minutes' => 60,
+            'expected_work_minutes' => 660,
+        ]);
+
+        // Entrada normal às 07:00, saída estendida às 19:25
+        $this->createPunch($user, 'in', '2026-10-06 07:00:00');
+        $this->createPunch($user, 'out', '2026-10-06 19:25:00');
+
+        $component = Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'shifts'])
+            ->assertOk()
+            ->assertSee('19:00')
+            ->assertSee('19:25');
+
+        $rows = $component->viewData('shiftsRows') ?? [];
+        $row = collect($rows)->first();
+        $this->assertNotNull($row);
+        $this->assertSame('19:00', $row['scheduledEndTime']);
+        $this->assertSame('19:25', $row['realExitTime']);
+        $this->assertNotSame($row['scheduledEndTime'], $row['realExitTime']);
+    }
+
+    /**
+     * 32. Plantão iniciado no mês anterior e virada de mês sem duplicação de horas
+     */
+    public function test_32_plantao_iniciado_mes_anterior_e_virada_mes_sem_duplicacao_horas(): void
+    {
+        [$user, $employee] = $this->createEmployee('Enfermeiro Transicao Mes');
+
+        $schedule = WorkSchedule::create([
+            'code' => 'PL-12X36-MES',
+            'name' => 'Escala 12x36 Transicao',
+            'modality' => WorkScheduleModality::TwelveByThirtySix,
+            'expected_daily_minutes' => 720,
+            'active' => true,
+        ]);
+        $employee->update(['work_schedule_id' => $schedule->id]);
+
+        // Plantão iniciado em 31/10/2026 às 19:00 e terminando em 01/11/2026 às 07:00
+        ShiftAssignment::create([
+            'employee_id' => $employee->id,
+            'work_schedule_id' => $schedule->id,
+            'start_at_local' => Carbon::parse('2026-10-31 19:00:00', 'America/Maceio'),
+            'end_at_local' => Carbon::parse('2026-11-01 07:00:00', 'America/Maceio'),
+            'start_at_utc' => Carbon::parse('2026-10-31 22:00:00', 'UTC'),
+            'end_at_utc' => Carbon::parse('2026-11-01 10:00:00', 'UTC'),
+            'timezone' => 'America/Maceio',
+            'shift_type' => ShiftType::Shift12x36,
+            'status' => ShiftStatus::Scheduled,
+            'crosses_midnight' => true,
+            'is_night_shift' => true,
+            'break_minutes' => 0,
+            'expected_work_minutes' => 720,
+        ]);
+
+        $this->createPunch($user, 'in', '2026-10-31 19:00:00');
+        $this->createPunch($user, 'out', '2026-11-01 07:00:00');
+
+        // 1. Em Outubro (competência de início): a jornada deve conter as 12 horas
+        $octData = app(TimesheetJourneyService::class)->resolveMonthData($user, 2026, 10);
+        $this->assertSame(720, $octData['totalWorkedMinutes']);
+
+        // 2. Em Novembro (competência de término): as horas NÃO podem ser duplicadas
+        $novData = app(TimesheetJourneyService::class)->resolveMonthData($user, 2026, 11);
+        $this->assertSame(0, $novData['totalWorkedMinutes']);
+
+        // 3. Na Folha de Ponto de Novembro: o plantão deve constar na escala com identificação clara
+        $component = Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 11, 'year' => 2026, 'reportModel' => 'shifts'])
+            ->assertOk()
+            ->assertSee('31/10/2026')
+            ->assertSee('01/11/2026')
+            ->assertSee('Mês anterior')
+            ->assertSee('apurado na competência anterior sem duplicação');
+
+        $rows = $component->viewData('shiftsRows') ?? [];
+        $row = collect($rows)->first();
+        $this->assertNotNull($row);
+        $this->assertSame('Mês anterior', $row['statusLabel']);
+        $this->assertSame('00h 00m', $row['physicalWorkedFormatted']);
+    }
+
+    /**
+     * 33. Múltiplos intervalos no dia sem fallback fictício de 60 minutos
+     */
+    public function test_33_multiplos_intervalos_sem_fallback_ficticio(): void
+    {
+        [$user, $employee] = $this->createEmployee('Servidor Multiplos Intervalos');
+        $schedule = WorkSchedule::createDefault40h();
+        $employee->update(['work_schedule_id' => $schedule->id]);
+
+        // 6 marcações no dia 05/10/2026:
+        // Turno 1: 08:00 - 10:00
+        // Intervalo 1: 10:00 - 10:15 (15 min)
+        // Turno 2: 10:15 - 12:00
+        // Intervalo 2: 12:00 - 13:00 (60 min)
+        // Turno 3: 13:00 - 17:00
+        $this->createPunch($user, 'in', '2026-10-05 08:00:00');
+        $this->createPunch($user, 'out', '2026-10-05 10:00:00');
+        $this->createPunch($user, 'in', '2026-10-05 10:15:00');
+        $this->createPunch($user, 'out', '2026-10-05 12:00:00');
+        $this->createPunch($user, 'in', '2026-10-05 13:00:00');
+        $this->createPunch($user, 'out', '2026-10-05 17:00:00');
+
+        $component = Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'administrative'])
+            ->assertOk()
+            ->assertSee('08:00')
+            ->assertSee('10:00')
+            ->assertSee('10:15')
+            ->assertSee('12:00')
+            ->assertSee('Batidas extras: 13:00 (E), 17:00 (S)');
+
+        $rows = $component->viewData('administrativeRows') ?? [];
+        $day05 = collect($rows)->firstWhere('day', 5);
+        $this->assertNotNull($day05);
+        $this->assertSame('15 min', $day05['intervalFormatted']);
+    }
+
+    /**
+     * 34. Feriado ou folga trabalhada: exibe horas trabalhadas e observação correspondente
+     */
+    public function test_34_feriado_folga_trabalhada(): void
+    {
+        [$user, $employee] = $this->createEmployee('Servidor Feriado Trabalhado');
+        $schedule = WorkSchedule::createDefault40h();
+        $employee->update(['work_schedule_id' => $schedule->id]);
+
+        // Feriado em 12/10/2026
+        CalendarEvent::create([
+            'establishment_id' => $this->establishment->id,
+            'event_date' => '2026-10-12',
+            'name' => 'Nossa Senhora Aparecida',
+            'type' => CalendarEventType::Holiday,
+            'scope' => CalendarEventScope::National,
+            'work_behavior' => WorkBehavior::NoWorkExpected,
+            'active' => true,
+        ]);
+
+        // Trabalho realizado no feriado: 08:00 às 12:00
+        $this->createPunch($user, 'in', '2026-10-12 08:00:00');
+        $this->createPunch($user, 'out', '2026-10-12 12:00:00');
+
+        $test = Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'administrative'])
+            ->assertOk()
+            ->assertSee('08:00')
+            ->assertSee('12:00')
+            ->assertSee('4h 00m')
+            ->assertSee('Feriado trabalhado: Nossa Senhora Aparecida')
+            ->assertDontSee('Sem registro / Ausência');
+
+        $rows = $test->viewData('administrativeRows') ?? [];
+        $day12 = collect($rows)->firstWhere('day', 12);
+        $this->assertNotNull($day12);
+        $this->assertSame('04h 00m', $day12['physicalWorkedFormatted']);
+    }
+
+    /**
+     * 35. Regras CSS de paginação e impressão A4
+     */
+    public function test_35_regras_css_paginacao_e_impressao_a4(): void
+    {
+        [$user, $employee] = $this->createEmployee('Servidor Paginacao A4');
+
+        Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'administrative'])
+            ->assertOk()
+            ->assertSee('@media print')
+            ->assertSee('display: table-header-group !important;')
+            ->assertSee('break-inside: avoid !important;')
+            ->assertSee('border-collapse: collapse !important;');
+    }
+
+    /**
+     * 36. Orientação A4 adaptativa por modelo (retrato no corrido, paisagem nos demais)
+     */
+    public function test_36_orientacao_a4_adaptativa_por_modelo(): void
+    {
+        [$user, $employee] = $this->createEmployee('Servidor Orientacao A4');
+
+        // Corrido -> portrait
+        Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'continuous'])
+            ->assertOk()
+            ->assertSee('size: A4 portrait;');
+
+        // Administrativo -> landscape
+        Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'administrative'])
+            ->assertOk()
+            ->assertSee('size: A4 landscape;');
+
+        // Noturno -> landscape
+        Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'nocturnal'])
+            ->assertOk()
+            ->assertSee('size: A4 landscape;');
+
+        // Plantões -> landscape
+        Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'shifts'])
+            ->assertOk()
+            ->assertSee('size: A4 landscape;');
+    }
 }

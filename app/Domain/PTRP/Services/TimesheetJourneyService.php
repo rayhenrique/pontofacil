@@ -408,6 +408,9 @@ class TimesheetJourneyService
             'monthlyDifferencesSummary' => $differencesSummary,
             'operatesTimeBank' => $operatesTimeBank,
             'scheduleSnapshot' => $scheduleSnapshot,
+            'shiftsSnapshot' => $snapshot->shifts_snapshot ?? [],
+            'calendarSnapshot' => $snapshot->calendar_snapshot ?? [],
+            'ruleProfileSnapshot' => $snapshot->rule_profile_snapshot ?? null,
             'treatmentSnapshot' => $treatmentSnapshot,
             'employeeSnapshot' => $snapshot->employee_snapshot ?? [],
         ];
