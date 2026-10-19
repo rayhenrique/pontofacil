@@ -19,6 +19,8 @@ use Livewire\Component;
 
 new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] class extends Component
 {
+    use \App\Domain\PTRP\Traits\HandlesPointAdjustment;
+
     public int $year;
     public int $month;
     public string $sectorId = '';
@@ -142,6 +144,18 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
         $this->reviewingData = $service->resolveEmployeeReviewData($employee, $this->year, $this->month);
         $this->reservationNotes = $this->reviewingData['reservation_notes'] ?? '';
         $this->showReviewModal = true;
+    }
+
+    public function onPointAdjustmentSaved($event): void
+    {
+        if ($this->showReviewModal && $this->reviewingEmployeeId) {
+            $employee = Employee::with(['user', 'sector', 'workSchedule'])->find($this->reviewingEmployeeId);
+            if ($employee) {
+                $service = app(MonthlyAttendanceReviewService::class);
+                $this->reviewingData = $service->resolveEmployeeReviewData($employee, $this->year, $this->month);
+                $this->reservationNotes = $this->reviewingData['reservation_notes'] ?? '';
+            }
+        }
     }
 
     public function confirmSingleReview(): void
@@ -794,6 +808,18 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
 
                                     @if (! $isClosed)
                                         <button
+                                            wire:click="openPointAdjustmentModal({{ $item['employee_id'] }}, '{{ sprintf('%04d-%02d-01', $year, $month) }}')"
+                                            type="button"
+                                            class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-white hover:bg-gray-50 text-gray-700 dark:bg-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-600 transition"
+                                            title="Corrigir marcações deste servidor nesta competência"
+                                        >
+                                            <svg class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                            </svg>
+                                            <span>Corrigir ponto</span>
+                                        </button>
+
+                                        <button
                                             wire:click="openReviewModal({{ $item['employee_id'] }})"
                                             type="button"
                                             class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 transition"
@@ -880,18 +906,26 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                 @endif
 
                 <!-- Ações Contextuais -->
-                <div class="flex items-center justify-end gap-2 pt-1 border-t border-gray-100 dark:border-gray-700">
+                <div class="flex items-center justify-end gap-2 pt-1 border-t border-gray-100 dark:border-gray-700 flex-wrap">
                     @if ($userId)
                         <a
                             href="{{ route('timesheet', ['userId' => $userId, 'month' => $month, 'year' => $year]) }}"
                             target="_blank"
-                            class="px-3.5 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl min-h-[44px] inline-flex items-center justify-center transition"
+                            class="px-3 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl min-h-[44px] inline-flex items-center justify-center transition"
                         >
                             Ver Espelho
                         </a>
                     @endif
 
                     @if (! $isClosed)
+                        <button
+                            wire:click="openPointAdjustmentModal({{ $item['employee_id'] }}, '{{ sprintf('%04d-%02d-01', $year, $month) }}')"
+                            type="button"
+                            class="px-3.5 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-800 rounded-xl min-h-[44px] inline-flex items-center justify-center transition"
+                        >
+                            Corrigir ponto
+                        </button>
+
                         <button
                             wire:click="openReviewModal({{ $item['employee_id'] }})"
                             type="button"
@@ -973,9 +1007,21 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
                                     <li>{{ $occ }}</li>
                                 @endforeach
                             </ul>
-                            <p class="text-[11px] pt-1 text-rose-700 dark:text-rose-400 italic">
-                                * É obrigatório registrar uma justificativa formal/ressalva fundamentada abaixo para concluir a conferência deste servidor.
-                            </p>
+                            <div class="pt-2 flex items-center justify-between border-t border-rose-200/60 dark:border-rose-800/60">
+                                <p class="text-[11px] text-rose-700 dark:text-rose-400 italic">
+                                    * É obrigatório registrar justificativa/ressalva formal para concluir a conferência deste servidor com ocorrências pendentes.
+                                </p>
+                                <button
+                                    type="button"
+                                    wire:click="openPointAdjustmentModal({{ $reviewingData['employee_id'] }}, '{{ sprintf('%04d-%02d-01', $year, $month) }}')"
+                                    class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow-xs transition"
+                                >
+                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                    </svg>
+                                    <span>Corrigir ponto</span>
+                                </button>
+                            </div>
                         </div>
                     @endif
 
@@ -1150,4 +1196,7 @@ new #[Layout('layouts.app')] #[Title('Conferência Mensal de Frequência')] clas
             </div>
         </div>
     @endif
+
+    {{-- MODAL UNIFICADO: CORRIGIR PONTO (PTRP) --}}
+    @include('components.ptrp.point-adjustment-modal')
 </div>

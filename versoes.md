@@ -1,6 +1,18 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.13 (Atual)
+## v2.6.14 (Atual)
+- **Unificação e Simplificação dos Ajustes de Ponto no PTRP:**
+  - **Eliminação de Escritas Legadas:** Extinta a gravação direta e independente em `time_entries` e `time_adjustments` pela interface de ajuste manual. Todas as correções passam agora estritamente pelo fluxo oficial de eventos de tratamento do PTRP (`TreatmentEvent`), com validação de competência, escopo e conformidade com a Portaria 671/2021 MTP.
+  - **Preservação Histórica Integral:** Apontamentos e ajustes legados anteriores permanecem integralmente preservados no banco de dados e são projetados com fidelidade histórica na apuração analítica, sem migrações cegas ou exclusões.
+  - **Ação Contextual "Corrigir Ponto":** Inserido botão claro de correção de ponto na Conferência Mensal (visão desktop e cartões mobile), nos detalhes de ocorrências de cada servidor e no Espelho de Ponto autorizado (cabeçalho geral e linhas de cada dia).
+  - **Modal Inteligente com Prévia em Tempo Real:** O modal contextual abre com servidor, data e ocorrências pré-carregados, sem inventar horários. Exibe uma linha do tempo clara com batidas originais do REP-P, tratamentos aprovados, propostas em análise e o diagnóstico da sequência do dia.
+  - **Quatro Opções Objetivas de Tratamento:** Interface simplificada permitindo escolher com um clique entre: Incluir Entrada, Incluir Saída, Desconsiderar Marcação Indevida e Justificar Falta/Ausência Legal (com anexo obrigatório de atestado médico quando aplicável).
+  - **Segregação Rigorosa de Funções:** O RH/Administrador pode registrar e aprovar formalmente com identidades de solicitante e aprovador auditadas separadamente. Gestores operam livremente suas equipes autorizadas via `SectorScopeService`, mas são terminantemente impedidos de auto-aprovar correções em seus próprios espelhos de ponto (encaminhadas compulsoriamente para a Coordenação de RH).
+  - **Invalidação Automática de Conferências:** A aprovação de qualquer novo tratamento recalcula instantaneamente o fingerprint da apuração do colaborador, marcando conferências anteriores como desatualizadas ("Revisar novamente") para assegurar a integridade fiscal antes do fechamento do mês.
+  - **Portal Único Seguro em `/admin/adjustment`:** A tela antiga de ajuste manual foi convertida na porta de entrada segura do PTRP, com listagem de colaboradores autorizados, busca instantânea e histórico recente de tratamentos homologados.
+
+## v2.6.13
+
 - **Correção Crítica no Calendário e Paginação da Folha de Ponto:**
   - **Feriados Aplicados Rigorosamente na Data Correta:** Corrigido o processamento de eventos do calendário em lote que aplicava indevidamente o feriado do mês (ex: Nossa Senhora Aparecida em 12/10) em todos os dias anteriores da folha. Os eventos agora são estritamente filtrados pelo dia de ocorrência, preservando o escopo territorial e prioridade.
   - **Paginação A4 e Fim das Páginas em Branco:** Ajustadas as regras de impressão (`@media print`) para remover restrições de altura e rolagem dos contêineres principais no navegador (Edge/Chrome). A folha agora fragmenta perfeitamente em páginas contínuas, garantindo a exibição de todos os dias do mês (01 a 31), sem páginas em branco e sem cortes.

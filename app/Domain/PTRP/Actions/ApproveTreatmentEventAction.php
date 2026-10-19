@@ -34,7 +34,8 @@ class ApproveTreatmentEventAction
         if ($approvedBy->isManager()) {
             // 1. Segregação de Funções: O gestor NÃO PODE aprovar solicitações dele próprio.
             // Somente a Coordenação de RH (Admin) pode aprovar solicitações do Gestor.
-            if ($event->requested_by === $approvedBy->id || ($event->employee && $event->employee->user_id === $approvedBy->id)) {
+            $isOwnRequest = ($event->employee && $event->employee->user_id === $approvedBy->id);
+            if ($isOwnRequest) {
                 throw new \DomainException('Segregação de Funções: Solicitações do próprio Gestor devem ser aprovadas exclusivamente pela Coordenação de RH.');
             }
 

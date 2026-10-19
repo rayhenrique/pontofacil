@@ -29,7 +29,8 @@ class RejectTreatmentEventAction
         if ($rejectedBy->isManager()) {
             // 1. Segregação de Funções: O gestor NÃO PODE recusar/decidir solicitações dele próprio.
             // Somente a Coordenação de RH (Admin) decide solicitações do Gestor.
-            if ($event->requested_by === $rejectedBy->id || ($event->employee && $event->employee->user_id === $rejectedBy->id)) {
+            $isOwnRequest = ($event->employee && $event->employee->user_id === $rejectedBy->id);
+            if ($isOwnRequest) {
                 throw new \DomainException('Segregação de Funções: Solicitações do próprio Gestor devem ser decididas exclusivamente pela Coordenação de RH.');
             }
 
