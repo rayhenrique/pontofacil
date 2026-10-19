@@ -3,6 +3,7 @@
 namespace App\Domain\Calendar\Services;
 
 use App\Domain\Calendar\DTOs\ResolvedCalendarDay;
+use App\Enums\CalendarEventScope;
 use App\Enums\CalendarEventType;
 use App\Enums\WorkBehavior;
 use App\Models\CalendarEvent;
@@ -35,15 +36,33 @@ class WorkCalendarService
         $dateStr = $date instanceof CarbonInterface ? $date->format('Y-m-d') : $date;
 
         // 20.18.7 — Buscar eventos aplicáveis por hierarquia territorial
-        $events = $prefetchedEvents ?? CalendarEvent::forDate($dateStr, $establishment)
-            ->orderByRaw("CASE scope
-                WHEN 'establishment' THEN 4
-                WHEN 'municipal' THEN 3
-                WHEN 'state' THEN 2
-                WHEN 'national' THEN 1
-                ELSE 0
-            END DESC")
-            ->get();
+        if ($prefetchedEvents !== null) {
+            $events = $prefetchedEvents->filter(function (CalendarEvent $e) use ($dateStr, $establishment) {
+                if (isset($e->active) && ! $e->active) {
+                    return false;
+                }
+
+                $evDate = $e->event_date instanceof CarbonInterface
+                    ? $e->event_date->format('Y-m-d')
+                    : substr((string) $e->event_date, 0, 10);
+
+                if ($evDate !== $dateStr) {
+                    return false;
+                }
+
+                return $this->isEventApplicableTo($e, $establishment);
+            })->sortByDesc(fn (CalendarEvent $e) => $this->eventScopePriority($e))->values();
+        } else {
+            $events = CalendarEvent::forDate($dateStr, $establishment)
+                ->orderByRaw("CASE scope
+                    WHEN 'establishment' THEN 4
+                    WHEN 'municipal' THEN 3
+                    WHEN 'state' THEN 2
+                    WHEN 'national' THEN 1
+                    ELSE 0
+                END DESC")
+                ->get();
+        }
 
         if ($events->isEmpty()) {
             return new ResolvedCalendarDay(
@@ -163,5 +182,53 @@ class WorkCalendarService
         $endMinutes = (int) $endParts[0] * 60 + (int) ($endParts[1] ?? 0);
 
         return max(0, $endMinutes - $startMinutes);
+    }
+
+    /**
+     * Verifica se o evento se aplica ao estabelecimento respeitando hierarquia territorial.
+     */
+    public function isEventApplicableTo(CalendarEvent $event, ?Establishment $establishment): bool
+    {
+        if (isset($event->active) && ! $event->active) {
+            return false;
+        }
+
+        if ($event->scope === CalendarEventScope::National) {
+            return true;
+        }
+
+        if ($establishment === null) {
+            return false;
+        }
+
+        if ($event->scope === CalendarEventScope::State) {
+            return ! empty($establishment->state) && $event->state === $establishment->state;
+        }
+
+        if ($event->scope === CalendarEventScope::Municipal) {
+            return ! empty($establishment->state) && ! empty($establishment->city)
+                && $event->state === $establishment->state
+                && $event->city === $establishment->city;
+        }
+
+        if ($event->scope === CalendarEventScope::Establishment) {
+            return (int) $event->establishment_id === (int) $establishment->id;
+        }
+
+        return false;
+    }
+
+    /**
+     * Prioridade para resolução hierárquica (maior = mais específico).
+     */
+    public function eventScopePriority(CalendarEvent $event): int
+    {
+        return match ($event->scope) {
+            CalendarEventScope::Establishment => 4,
+            CalendarEventScope::Municipal => 3,
+            CalendarEventScope::State => 2,
+            CalendarEventScope::National => 1,
+            default => 0,
+        };
     }
 }

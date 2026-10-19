@@ -63,6 +63,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
     public array $missingCompanyFields = [];
 
     // Metadados Funcionais (carregados do cadastro ou do snapshot congelado)
+    public $employeeName = '';
     public $workload = '40h';
     public $zone = 'Urbana';
     public $jobTitle = '';
@@ -106,8 +107,27 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
 
     public function updatedReportModel(): void
     {
+        $allowedModels = ['auto', 'administrative', 'continuous', 'nocturnal', 'shifts', 'blank'];
+        if (! in_array($this->reportModel, $allowedModels, true)) {
+            $this->reportModel = 'auto';
+        }
+
         if ($this->reportModel === 'blank') {
             $this->fillMode = 'blank';
+        } else {
+            $this->fillMode = 'punches';
+        }
+    }
+
+    public function updatedFillMode(): void
+    {
+        $allowedModes = ['punches', 'blank'];
+        if (! in_array($this->fillMode, $allowedModes, true)) {
+            $this->fillMode = 'punches';
+        }
+
+        if ($this->fillMode === 'punches' && $this->reportModel === 'blank') {
+            $this->reportModel = 'auto';
         }
     }
 
@@ -237,21 +257,23 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
 
                 if ($snapshot && ! empty($snapshot->employee_snapshot)) {
                     $snapEmp = $snapshot->employee_snapshot;
-                    $this->jobTitle = $snapEmp['job_title'] ?? ($emp->job_title ?: 'Colaborador');
-                    $this->contractType = $snapEmp['contract_type'] ?? ($emp->contract_type ?: 'CLT');
-                    $this->workload = $snapEmp['workload'] ?? ($emp->workload ?: '40h');
-                    $this->zone = $snapEmp['zone'] ?? ($emp->zone ?: 'Urbana');
-                    $this->location = $snapEmp['department'] ?? ($snapEmp['sector_name'] ?? (optional($emp->sector)->name ?? 'Geral'));
-                    $this->registrationNumber = $snapEmp['registration_number'] ?? ($emp->registration_number ?: 'Não informada');
-                    $this->cpf = $snapEmp['cpf'] ?? ($emp->cpf ?: 'Não informado');
-                    $this->admissionDate = isset($snapEmp['normative_effective_from'])
-                        ? Carbon::parse($snapEmp['normative_effective_from'])->format('d/m/Y')
-                        : ($emp->normative_effective_from ? $emp->normative_effective_from->format('d/m/Y') : 'Não informada');
-                    $this->establishmentName = $snapEmp['establishment_name'] ?? ($est?->name ?: 'Sede Central');
+                    $this->employeeName = $snapEmp['name'] ?? 'Informação histórica não disponível';
+                    $this->jobTitle = $snapEmp['job_title'] ?? 'Informação histórica não disponível';
+                    $this->contractType = $snapEmp['contract_type'] ?? ($snapEmp['legal_regime'] ?? 'Informação histórica não disponível');
+                    $this->workload = $snapEmp['workload'] ?? ($snapEmp['workload_description'] ?? 'Informação histórica não disponível');
+                    $this->zone = $snapEmp['zone'] ?? 'Informação histórica não disponível';
+                    $this->location = $snapEmp['department'] ?? ($snapEmp['sector_name'] ?? 'Informação histórica não disponível');
+                    $this->registrationNumber = $snapEmp['registration_number'] ?? 'Informação histórica não disponível';
+                    $this->cpf = $snapEmp['cpf'] ?? 'Informação histórica não disponível';
+                    $this->admissionDate = ! empty($snapEmp['admission_date'])
+                        ? Carbon::parse($snapEmp['admission_date'])->format('d/m/Y')
+                        : 'Informação histórica não disponível';
+                    $this->establishmentName = $snapEmp['establishment_name'] ?? 'Informação histórica não disponível';
                     return;
                 }
             }
 
+            $this->employeeName = $targetUser->name;
             $this->location = optional($emp->sector)->name ?? 'Geral';
             $this->jobTitle = $emp->job_title ?: ($targetUser->role === UserRole::Admin ? 'Administrador' : ($targetUser->role === UserRole::Manager ? 'Gestor' : 'Colaborador'));
             $this->contractType = $emp->contract_type ?: ($emp->legal_regime?->label() ?? 'CLT');
@@ -259,9 +281,10 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
             $this->zone = $emp->zone ?: 'Urbana';
             $this->registrationNumber = $emp->registration_number ?: 'Não informada';
             $this->cpf = $emp->cpf ?: 'Não informado';
-            $this->admissionDate = $emp->normative_effective_from ? $emp->normative_effective_from->format('d/m/Y') : 'Não informada';
+            $this->admissionDate = ! empty($emp->admission_date) ? Carbon::parse($emp->admission_date)->format('d/m/Y') : 'Não informada';
             $this->establishmentName = $est?->name ?: 'Sede Central';
         } else {
+            $this->employeeName = $targetUser?->name ?? 'Colaborador';
             $this->location = 'Geral';
             $this->jobTitle = ($targetUser && $targetUser->role === UserRole::Admin) ? 'Administrador' : (($targetUser && $targetUser->role === UserRole::Manager) ? 'Gestor' : 'Colaborador');
             $this->contractType = 'CLT';
@@ -695,7 +718,8 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
             // Calendário Laboral utilizando eventos pré-carregados (zero N+1)
             $calendarDay = $calendarService->resolveDay($currentDate, $establishment, 0, [], $calendarEvents);
             $isHoliday = $calendarDay->isHoliday;
-            $holidayName = $calendarDay->appliedEvents[0]['name'] ?? ($isHoliday ? 'Feriado' : null);
+            $firstEvent = $calendarDay->appliedEvents[0] ?? null;
+            $holidayName = is_object($firstEvent) ? $firstEvent->name : ($firstEvent['name'] ?? ($isHoliday ? 'Feriado' : null));
 
             // Apuração PTRP para a data
             $dayCalc = $daysCalculated[$dateKey] ?? null;
@@ -886,14 +910,6 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
 
                 $row['observation'] = implode(' | ', $observations);
 
-                // Anexar notas de tratamentos aprovados
-                if ($dayCalc && ! empty($dayCalc['notes'])) {
-                    $noteStr = implode('; ', $dayCalc['notes']);
-                    if (! str_contains($row['observation'], $noteStr)) {
-                        $row['observation'] = $row['observation'] ? "{$row['observation']} | {$noteStr}" : $noteStr;
-                    }
-                }
-
                 $rows[] = $row;
                 continue;
             }
@@ -952,13 +968,6 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                 } else {
                     $row['observation'] = 'Jornada prevista';
                 }
-
-                if ($dayCalc && ! empty($dayCalc['notes'])) {
-                    $noteStr = implode('; ', $dayCalc['notes']);
-                    if ($row['observation'] && ! str_contains($row['observation'], $noteStr)) {
-                        $row['observation'] .= " | {$noteStr}";
-                    }
-                }
             }
 
             $rows[] = $row;
@@ -993,7 +1002,8 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
 
             $calendarDay = $calendarService->resolveDay($currentDate, $establishment, 0, [], $calendarEvents);
             $isHoliday = $calendarDay->isHoliday;
-            $holidayName = $calendarDay->appliedEvents[0]['name'] ?? ($isHoliday ? 'Feriado' : null);
+            $firstEvent = $calendarDay->appliedEvents[0] ?? null;
+            $holidayName = is_object($firstEvent) ? $firstEvent->name : ($firstEvent['name'] ?? ($isHoliday ? 'Feriado' : null));
 
             $dayCalc = $daysCalculated[$dateKey] ?? null;
             $dayTreatments = $dayCalc['treatments'] ?? collect([]);
@@ -1071,9 +1081,6 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                 if ($dayCalc) {
                     $wm = (int) ($dayCalc['minutes'] ?? 0);
                     $row['physicalWorkedFormatted'] = sprintf('%02dh %02dm', intdiv($wm, 60), $wm % 60);
-                    if (! empty($dayCalc['notes'])) {
-                        $row['observation'] = $row['observation'] ? $row['observation'].' | '.implode('; ', $dayCalc['notes']) : implode('; ', $dayCalc['notes']);
-                    }
                 }
 
                 if ($isHoliday) {
@@ -1139,7 +1146,8 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
 
             $calendarDay = $calendarService->resolveDay($currentDate, $establishment, 0, [], $calendarEvents);
             $isHoliday = $calendarDay->isHoliday;
-            $holidayName = $calendarDay->appliedEvents[0]['name'] ?? ($isHoliday ? 'Feriado' : null);
+            $firstEvent = $calendarDay->appliedEvents[0] ?? null;
+            $holidayName = is_object($firstEvent) ? $firstEvent->name : ($firstEvent['name'] ?? ($isHoliday ? 'Feriado' : null));
 
             $dayCalc = $daysCalculated[$dateKey] ?? null;
             $dayTreatments = $dayCalc['treatments'] ?? collect([]);
@@ -1156,6 +1164,8 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                 'day' => $dayNum,
                 'dateFormatted' => $currentDate->format('d/m/Y'),
                 'dayOfWeekName' => ucfirst($currentDate->translatedFormat('D')),
+                'isHoliday' => $isHoliday,
+                'isDayOff' => $isDayOff,
                 'entryTime' => '--:--',
                 'exitTime' => '--:--',
                 'crossesMidnight' => false,
@@ -1224,8 +1234,10 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
 
                     $row['statusLabel'] = ! empty($dayCalc['is_incomplete']) || ! $hasExit ? 'Incompleta' : ($dayCalc['status_label'] ?? 'Concluída');
 
-                    if (! empty($dayCalc['notes'])) {
-                        $row['observation'] = implode('; ', $dayCalc['notes']);
+                    if ($isHoliday) {
+                        $row['observation'] = 'Feriado trabalhado: ' . ($holidayName ?? 'Feriado');
+                    } elseif ($isDayOff) {
+                        $row['observation'] = 'Folga trabalhada da escala';
                     }
                 }
 
@@ -1344,11 +1356,11 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
 
                 $hasEntry = ! empty($unpaired);
                 $realEntryTime = $hasEntry ? $unpaired[0]['time'] : 'Não registrada';
-                $realEntryDate = $hasEntry && isset($unpaired[0]['timestamp']) ? Carbon::parse($unpaired[0]['timestamp'])->format('d/m/Y') : $startLocal->format('d/m/Y');
+                $realEntryDate = $hasEntry && isset($unpaired[0]['timestamp']) ? Carbon::parse($unpaired[0]['timestamp'])->format('d/m/Y') : '—';
 
                 $hasExit = count($unpaired) > 1;
-                $realExitTime = $hasExit ? end($unpaired)['time'] : ($hasEntry ? 'Não registrada' : 'Não registrada');
-                $realExitDate = $hasExit && isset(end($unpaired)['timestamp']) ? Carbon::parse(end($unpaired)['timestamp'])->format('d/m/Y') : $endLocal->format('d/m/Y');
+                $realExitTime = $hasExit ? end($unpaired)['time'] : 'Não registrada';
+                $realExitDate = $hasExit && isset(end($unpaired)['timestamp']) ? Carbon::parse(end($unpaired)['timestamp'])->format('d/m/Y') : '—';
                 if ($hasExit && (! empty(end($unpaired)['is_next_day_exit']) || Carbon::parse(end($unpaired)['timestamp'])->isAfter($startLocal->copy()->endOfDay()))) {
                     $realExitTime .= ' (+1d)';
                 }
@@ -1368,7 +1380,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                 }
 
                 $breakMin = (int) ($shiftData['break_minutes'] ?? 0);
-                $intervalFormatted = $breakMin > 0 ? "{$breakMin} min" : 'Sem intervalo';
+                $intervalFormatted = $breakMin > 0 ? "{$breakMin} min (Previsto)" : 'Sem intervalo';
 
                 $shiftTypeLabel = 'Plantão';
                 if (! empty($shiftData['shift_type'])) {
@@ -1377,9 +1389,6 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                 }
 
                 $obs = $shiftTypeLabel;
-                if (! empty($dayCalc['notes'])) {
-                    $obs .= ' | ' . implode('; ', $dayCalc['notes']);
-                }
 
                 $rows[] = [
                     'scheduledStartDate' => $startLocal->format('d/m/Y'),
@@ -1465,21 +1474,23 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                         ->first();
 
                     $realEntry = $prevPunch ? $prevPunch->occurred_at_local->format('H:i') : 'Não registrada';
+                    $realEntryDate = $prevPunch ? $prevPunch->occurred_at_local->format('d/m/Y') : '—';
 
                     $firstDayPunches = $groupedEntries[$periodStartLocal->format('Y-m-d')] ?? collect([]);
                     $exitPunch = $firstDayPunches->first(fn ($p) => ($p->type ?? '') === 'out' || ($p->direction ?? '') === 'out');
                     $realExit = $exitPunch ? Carbon::parse($exitPunch->timestamp)->format('H:i') : 'Não registrada';
+                    $realExitDate = $exitPunch ? Carbon::parse($exitPunch->timestamp)->format('d/m/Y') : '—';
 
                     $rows[] = [
                         'scheduledStartDate' => $startLocal->format('d/m/Y'),
                         'scheduledStartTime' => $startLocal->format('H:i'),
                         'scheduledEndDate' => $endLocal->format('d/m/Y'),
                         'scheduledEndTime' => $endLocal->format('H:i'),
-                        'realEntryDate' => $startLocal->format('d/m/Y'),
+                        'realEntryDate' => $realEntryDate,
                         'realEntryTime' => $realEntry,
-                        'realExitDate' => $endLocal->format('d/m/Y'),
+                        'realExitDate' => $realExitDate,
                         'realExitTime' => $realExit,
-                        'intervalFormatted' => $shift->break_minutes > 0 ? "{$shift->break_minutes} min" : 'Sem intervalo',
+                        'intervalFormatted' => $shift->break_minutes > 0 ? "{$shift->break_minutes} min (Previsto)" : 'Sem intervalo',
                         'physicalWorkedFormatted' => '00h 00m',
                         'physicalNightFormatted' => '00h 00m',
                         'legalNightFormatted' => '00h 00m',
@@ -1545,11 +1556,11 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
 
                 $hasEntry = ! empty($unpaired);
                 $realEntryTime = $hasEntry ? $unpaired[0]['time'] : 'Não registrada';
-                $realEntryDate = $hasEntry && isset($unpaired[0]['timestamp']) ? Carbon::parse($unpaired[0]['timestamp'])->format('d/m/Y') : $startLocal->format('d/m/Y');
+                $realEntryDate = $hasEntry && isset($unpaired[0]['timestamp']) ? Carbon::parse($unpaired[0]['timestamp'])->format('d/m/Y') : '—';
 
                 $hasExit = count($unpaired) > 1;
-                $realExitTime = $hasExit ? end($unpaired)['time'] : ($hasEntry ? 'Não registrada' : 'Não registrada');
-                $realExitDate = $hasExit && isset(end($unpaired)['timestamp']) ? Carbon::parse(end($unpaired)['timestamp'])->format('d/m/Y') : $endLocal->format('d/m/Y');
+                $realExitTime = $hasExit ? end($unpaired)['time'] : 'Não registrada';
+                $realExitDate = $hasExit && isset(end($unpaired)['timestamp']) ? Carbon::parse(end($unpaired)['timestamp'])->format('d/m/Y') : '—';
                 if ($hasExit && (! empty(end($unpaired)['is_next_day_exit']) || Carbon::parse(end($unpaired)['timestamp'])->isAfter($startLocal->copy()->endOfDay()))) {
                     $realExitTime .= ' (+1d)';
                 }
@@ -1579,9 +1590,6 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                 if ($justified) {
                     $obs .= ' | Ausência justificada' . ($justified->reason_text ? ": {$justified->reason_text}" : '');
                 }
-                if ($dayCalc && ! empty($dayCalc['notes'])) {
-                    $obs .= ' | ' . implode('; ', $dayCalc['notes']);
-                }
 
                 $hasManual = collect($unpaired)->contains(fn ($p) => ($p['source'] ?? '') === 'ptrp_manual');
 
@@ -1594,7 +1602,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                     'realEntryTime' => $realEntryTime,
                     'realExitDate' => $realExitDate,
                     'realExitTime' => $realExitTime,
-                    'intervalFormatted' => $shift->break_minutes > 0 ? "{$shift->break_minutes} min" : 'Sem intervalo',
+                    'intervalFormatted' => $shift->break_minutes > 0 ? "{$shift->break_minutes} min (Previsto)" : 'Sem intervalo',
                     'physicalWorkedFormatted' => sprintf('%02dh %02dm', intdiv($wm, 60), $wm % 60),
                     'physicalNightFormatted' => sprintf('%02dh %02dm', intdiv($nm, 60), $nm % 60),
                     'legalNightFormatted' => sprintf('%02dh %02dm', intdiv($nlm, 60), $nlm % 60),
@@ -1826,39 +1834,48 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
         </div>
 
         <!-- Campos de Metadados Editáveis na Prévia -->
-        <div x-data="{ showAdvanced: false }" class="pt-2 border-t border-gray-100">
-            <button @click="showAdvanced = !showAdvanced" type="button" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 focus:outline-hidden">
-                <span x-text="showAdvanced ? '− Ocultar Personalização de Prévia' : '+ Ajustar Cargo / Vínculo / Carga Horária na Prévia'"></span>
-            </button>
+        @if(! $isClosedPeriod)
+            <div x-data="{ showAdvanced: false }" class="pt-2 border-t border-gray-100">
+                <button @click="showAdvanced = !showAdvanced" type="button" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 focus:outline-hidden">
+                    <span x-text="showAdvanced ? '− Ocultar Personalização de Prévia' : '+ Ajustar Cargo / Vínculo / Carga Horária na Prévia'"></span>
+                </button>
 
-            <div x-show="showAdvanced" x-cloak class="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                <div class="text-[11px] text-slate-500">
-                    <strong>Nota:</strong> Alterações nestes campos afetam apenas esta prévia/impressão e <u>não</u> sobrescrevem o cadastro definitivo do servidor.
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-                    <div>
-                        <label class="block text-[10px] font-semibold text-gray-600 uppercase mb-0.5">Cargo</label>
-                        <input type="text" wire:model.live="jobTitle" wire:change="$set('isEditedForPreview', true)" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg bg-white">
+                <div x-show="showAdvanced" x-cloak class="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                    <div class="text-[11px] text-slate-500">
+                        <strong>Nota:</strong> Alterações nestes campos afetam apenas esta prévia/impressão e <u>não</u> sobrescrevem o cadastro definitivo do servidor.
                     </div>
-                    <div>
-                        <label class="block text-[10px] font-semibold text-gray-600 uppercase mb-0.5">Vínculo</label>
-                        <input type="text" wire:model.live="contractType" wire:change="$set('isEditedForPreview', true)" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg bg-white">
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-semibold text-gray-600 uppercase mb-0.5">Carga Horária</label>
-                        <input type="text" wire:model.live="workload" wire:change="$set('isEditedForPreview', true)" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg bg-white">
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-semibold text-gray-600 uppercase mb-0.5">Zona</label>
-                        <input type="text" wire:model.live="zone" wire:change="$set('isEditedForPreview', true)" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg bg-white">
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-semibold text-gray-600 uppercase mb-0.5">Local / Setor</label>
-                        <input type="text" wire:model.live="location" wire:change="$set('isEditedForPreview', true)" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg bg-white">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                        <div>
+                            <label class="block text-[10px] font-semibold text-gray-600 uppercase mb-0.5">Cargo</label>
+                            <input type="text" wire:model.live="jobTitle" wire:change="$set('isEditedForPreview', true)" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-semibold text-gray-600 uppercase mb-0.5">Vínculo</label>
+                            <input type="text" wire:model.live="contractType" wire:change="$set('isEditedForPreview', true)" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-semibold text-gray-600 uppercase mb-0.5">Carga Horária</label>
+                            <input type="text" wire:model.live="workload" wire:change="$set('isEditedForPreview', true)" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-semibold text-gray-600 uppercase mb-0.5">Zona</label>
+                            <input type="text" wire:model.live="zone" wire:change="$set('isEditedForPreview', true)" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-semibold text-gray-600 uppercase mb-0.5">Local / Setor</label>
+                            <input type="text" wire:model.live="location" wire:change="$set('isEditedForPreview', true)" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg bg-white">
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        @else
+            <div class="pt-2 border-t border-gray-100 text-[11px] text-gray-500 flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                </svg>
+                <span>Competência fechada: metadados cadastrais e funcionais congelados para preservação histórica.</span>
+            </div>
+        @endif
 
     </div>
 
@@ -1869,7 +1886,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
             <div class="flex items-center justify-between border-b border-gray-100 pb-2.5">
                 <div>
                     <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Servidor</div>
-                    <div class="text-base font-bold text-gray-900">{{ $selectedUser->name }}</div>
+                    <div class="text-base font-bold text-gray-900">{{ $employeeName ?: $selectedUser->name }}</div>
                 </div>
                 <div class="text-right">
                     <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Competência</div>
@@ -1999,7 +2016,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
     </div>
 
     <!-- 3. FOLHA DE PONTO OFICIAL (A4 ADAPTATIVA CENTRALIZADA COM SUPORTE A IMPRESSÃO E MULTIPÁGINAS) -->
-    <div class="{{ ! $showMobileFullDoc ? 'hidden sm:block' : 'block' }} overflow-x-auto">
+    <div class="{{ ! $showMobileFullDoc ? 'hidden sm:block' : 'block' }} overflow-x-auto print:overflow-visible print:block">
         <div class="print-container {{ $printOrientation === 'landscape' ? 'max-w-[1050px]' : 'max-w-[820px]' }} mx-auto bg-white border border-gray-300 shadow-md p-6 sm:p-8 text-black print-sheet" style="font-family: Arial, Helvetica, 'Times New Roman', sans-serif;">
             
             <!-- CABEÇALHO DA EMPRESA / ESTABELECIMENTO -->
@@ -2096,7 +2113,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
 
                 <div class="flex justify-between items-baseline">
                     <div class="flex-1 truncate mr-4">
-                        <strong>Nome do Servidor:</strong> <span class="uppercase font-semibold">{{ mb_strtoupper($selectedUser->name) }}</span>
+                        <strong>Nome do Servidor:</strong> <span class="uppercase font-semibold">{{ mb_strtoupper($employeeName ?: $selectedUser->name) }}</span>
                     </div>
                     <div class="w-48 truncate">
                         <strong>Matrícula:</strong> {{ $registrationNumber ?: 'Não informada' }}
@@ -2120,7 +2137,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
 
                 <div class="flex justify-between items-baseline">
                     <div class="flex-1 truncate mr-4">
-                        <strong>Local / Lotação:</strong> {{ $location ?: (optional(optional($selectedUser->employee)->sector)->name ?? 'Geral') }}
+                        <strong>Local / Lotação:</strong> {{ $location ?: 'Informação histórica não disponível' }}
                     </div>
                     <div class="max-w-[65%] truncate text-right">
                         <strong>Escala Vigente:</strong> {{ $scheduleSummary }}
@@ -2174,7 +2191,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
             <!-- MODELO 1: ADMINISTRATIVO (CONVENCIONAL) -->
             <!-- ========================================================================= -->
             @if($activeModel === 'administrative' || $activeModel === 'blank')
-                <div class="w-full overflow-hidden">
+                <div class="w-full overflow-hidden print:overflow-visible">
                     <table class="w-full border-collapse border border-black text-center text-[10px] leading-tight">
                         <thead>
                             <tr class="font-bold text-[10px] bg-slate-50 print:bg-transparent">
@@ -2263,7 +2280,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
             <!-- MODELO 2: HORÁRIO CORRIDO (ENTRADA E SAÍDA ÚNICAS) -->
             <!-- ========================================================================= -->
             @elseif($activeModel === 'continuous')
-                <div class="w-full overflow-hidden">
+                <div class="w-full overflow-hidden print:overflow-visible">
                     <table class="w-full border-collapse border border-black text-center text-[10px] leading-tight">
                         <thead>
                             <tr class="font-bold text-[9px] bg-slate-50 print:bg-transparent">
@@ -2298,7 +2315,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
             <!-- MODELO 3: JORNADA NOTURNA (ATRAVESSA MEIA-NOITE) -->
             <!-- ========================================================================= -->
             @elseif($activeModel === 'nocturnal')
-                <div class="w-full overflow-hidden">
+                <div class="w-full overflow-hidden print:overflow-visible">
                     <table class="w-full border-collapse border border-black text-center text-[10px] leading-tight">
                         <thead>
                             <tr class="font-bold text-[9px] bg-slate-50 print:bg-transparent">
@@ -2357,7 +2374,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
             <!-- MODELO 4: PLANTÕES (12×36, 24×72 OU VARIÁVEIS) -->
             <!-- ========================================================================= -->
             @elseif($activeModel === 'shifts')
-                <div class="w-full overflow-hidden">
+                <div class="w-full overflow-hidden print:overflow-visible">
                     <table class="w-full border-collapse border border-black text-center text-[10px] leading-tight">
                         <thead>
                             <tr class="font-bold text-[9px] bg-slate-50 print:bg-transparent">
@@ -2540,7 +2557,7 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
         @media print {
             @page {
                 size: A4 {{ $printOrientation }};
-                margin: 8mm 8mm 8mm 8mm;
+                margin: 8mm;
             }
 
             /* Oculta tudo que não faz parte do documento formal */
@@ -2555,21 +2572,31 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                 display: none !important;
             }
 
-            body, html {
+            html, body {
                 background: #ffffff !important;
                 color: #000000 !important;
                 margin: 0 !important;
                 padding: 0 !important;
-                font-size: 10pt !important;
+                font-size: 9pt !important;
+                overflow: visible !important;
+                height: auto !important;
+                min-height: auto !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
 
-            /* Reset layout wrappers on print */
-            div[class*="md:pl-"], div[class*="pl-"], main, .print-wrapper {
+            /* Desbloquear quebra de página de todos os contêineres ancestrais */
+            div, main, section, article {
+                overflow: visible !important;
+            }
+
+            div[class*="md:pl-"], div[class*="pl-"], main, .print-wrapper, .min-h-full {
                 padding: 0 !important;
                 margin: 0 !important;
                 width: 100% !important;
+                height: auto !important;
+                min-height: auto !important;
+                display: block !important;
             }
 
             .print-container {
@@ -2578,18 +2605,22 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
                 border: none !important;
                 box-shadow: none !important;
                 padding: 0 !important;
-                margin: 0 auto !important;
+                margin: 0 !important;
+                height: auto !important;
+                overflow: visible !important;
             }
 
             table {
                 border-collapse: collapse !important;
                 width: 100% !important;
+                page-break-inside: auto !important;
+                break-inside: auto !important;
             }
 
             th, td {
                 border: 1px solid #000000 !important;
-                padding-top: 1px !important;
-                padding-bottom: 1px !important;
+                padding-top: 1.5px !important;
+                padding-bottom: 1.5px !important;
             }
 
             .page-break-avoid {
@@ -2599,6 +2630,10 @@ new #[Layout('layouts.app')] #[Title('Folha de Ponto de Funcionário')] class ex
 
             thead {
                 display: table-header-group !important;
+            }
+
+            tbody {
+                display: table-row-group !important;
             }
 
             tr {

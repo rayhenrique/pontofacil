@@ -1,6 +1,15 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.12 (Atual)
+## v2.6.13 (Atual)
+- **Correção Crítica no Calendário e Paginação da Folha de Ponto:**
+  - **Feriados Aplicados Rigorosamente na Data Correta:** Corrigido o processamento de eventos do calendário em lote que aplicava indevidamente o feriado do mês (ex: Nossa Senhora Aparecida em 12/10) em todos os dias anteriores da folha. Os eventos agora são estritamente filtrados pelo dia de ocorrência, preservando o escopo territorial e prioridade.
+  - **Paginação A4 e Fim das Páginas em Branco:** Ajustadas as regras de impressão (`@media print`) para remover restrições de altura e rolagem dos contêineres principais no navegador (Edge/Chrome). A folha agora fragmenta perfeitamente em páginas contínuas, garantindo a exibição de todos os dias do mês (01 a 31), sem páginas em branco e sem cortes.
+  - **Observações Diárias Objetivas e Compactas:** Textos legais extensos e notas normativas de apuração foram concentrados exclusivamente no Quadro de Tratamentos e Legenda, mantendo a altura das linhas da tabela compacta e uniforme.
+  - **Garantia do Bloco de Assinaturas e Tratamentos:** O quadro de justificativas/tratamentos auditados, a legenda da Portaria 671/2021 MTP e o bloco de assinaturas (Servidor, Coordenador, Responsável pelo Setor e RH) permanecem preservados no final do documento.
+  - **Fidelidade Cadastral em Meses Fechados:** Nome, cargo, setor, carga horária, matrícula e dados do estabelecimento são resgatados estritamente do snapshot congelado, com fallback claro para "Informação histórica não disponível" em arquivos legados, desativando a prévia editável em períodos fechados.
+  - **Plantões e Intervalos Transparentes:** Plantões previstos sem marcação real apresentam data "—" e hora "Não registrada", com intervalos programados identificados claramente como "(Previsto)".
+
+## v2.6.12
 - **Consolidação Técnica e Simplificação da Folha de Ponto:**
   - **Apresentação Objetiva e Foco nas Batidas Reais:** Na folha impressa, exibição prioritária das marcações efetivamente registradas, intervalos usufruídos, horas apuradas e ocorrências, eliminando colunas redundantes de horários previstos em cada linha e evitando sobrecarga visual.
   - **Resumo da Escala Vigente no Cabeçalho:** O cabeçalho do documento consolida o nome da escala e sua programação horária oficial quando disponível (ex: `Escala 12x36 (Previsto: 07:00 às 19:00)`), dispensando duplicações em cada linha.

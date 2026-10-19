@@ -179,12 +179,21 @@ class CloseMonthlyPeriodAction
                     'job_title' => $employee->job_title,
                     'department' => $employee->sector?->name,
                     'legal_regime' => $employee->legal_regime?->value,
+                    'contract_type' => $employee->contract_type ?: ($employee->legal_regime?->label() ?? 'CLT'),
                     'labor_rule_profile_id' => $employee->labor_rule_profile_id,
                     'workload_modality' => $employee->workload_modality?->value,
                     'workload_description' => $employee->getWorkloadDescription(),
+                    'workload' => $employee->workload ?: $employee->getWorkloadDescription(),
+                    'zone' => $employee->zone ?: 'Urbana',
+                    'admission_date' => ! empty($employee->admission_date) ? Carbon::parse($employee->admission_date)->format('Y-m-d') : null,
+                    'normative_effective_from' => $employee->normative_effective_from?->format('Y-m-d'),
                     'establishment_id' => $establishment?->id,
                     'establishment_name' => $establishment?->name,
                     'establishment_identifier' => $establishment?->identifier_number,
+                    'establishment_address' => $establishment?->address,
+                    'establishment_cnpj' => $establishment?->identifier_number,
+                    'establishment_phone' => $establishment?->phone,
+                    'establishment_email' => $establishment?->email,
                 ];
 
                 // b) Snapshot de escala e sua vigência

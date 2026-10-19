@@ -17,6 +17,7 @@ use App\Enums\UserRole;
 use App\Enums\WorkBehavior;
 use App\Enums\WorkScheduleModality;
 use App\Models\CalendarEvent;
+use App\Models\ClosedPeriod;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Establishment;
@@ -1229,13 +1230,14 @@ class FolhaPontoTest extends TestCase
             ->assertSee('08:00')
             ->assertSee('12:00')
             ->assertSee('4h 00m')
-            ->assertSee('Feriado trabalhado: Nossa Senhora Aparecida')
-            ->assertDontSee('Sem registro / Ausência');
+            ->assertSee('Feriado trabalhado: Nossa Senhora Aparecida');
 
         $rows = $test->viewData('administrativeRows') ?? [];
         $day12 = collect($rows)->firstWhere('day', 12);
         $this->assertNotNull($day12);
         $this->assertSame('04h 00m', $day12['physicalWorkedFormatted']);
+        $this->assertSame('Feriado trabalhado: Nossa Senhora Aparecida', $day12['observation']);
+        $this->assertStringNotContainsString('Sem registro / Ausência', $day12['observation']);
     }
 
     /**
@@ -1284,5 +1286,178 @@ class FolhaPontoTest extends TestCase
             ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'shifts'])
             ->assertOk()
             ->assertSee('size: A4 landscape;');
+    }
+
+    /**
+     * 37. Feriado isolado em 12/10 não contamina os dias 01-11 nem 13-31
+     */
+    public function test_37_feriado_isolado_nao_contamina_outros_dias(): void
+    {
+        [$user, $employee] = $this->createEmployee('Servidor Teste Calendario');
+        $schedule = WorkSchedule::createDefault40h();
+        $employee->update(['work_schedule_id' => $schedule->id]);
+
+        // Criar exclusivamente o feriado de 12/10/2026
+        CalendarEvent::create([
+            'establishment_id' => $this->establishment->id,
+            'event_date' => '2026-10-12',
+            'name' => 'Nossa Senhora Aparecida',
+            'type' => CalendarEventType::Holiday,
+            'scope' => CalendarEventScope::National,
+            'work_behavior' => WorkBehavior::NoWorkExpected,
+            'active' => true,
+        ]);
+
+        $models = ['administrative', 'continuous', 'nocturnal'];
+
+        foreach ($models as $model) {
+            $test = Livewire::actingAs($user)
+                ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => $model])
+                ->assertOk();
+
+            $rowsProp = match ($model) {
+                'administrative' => 'administrativeRows',
+                'continuous' => 'continuousRows',
+                'nocturnal' => 'nocturnalRows',
+            };
+
+            $rows = $test->viewData($rowsProp) ?? [];
+            $this->assertCount(31, $rows, "O modelo {$model} deve conter exatamente 31 dias para outubro.");
+
+            foreach ($rows as $row) {
+                $day = (int) $row['day'];
+                $isHoliday = (bool) ($row['isHoliday'] ?? false);
+                $obs = $row['observation'] ?? '';
+
+                if ($day === 12) {
+                    $this->assertTrue($isHoliday, "O dia 12 deve identificar o feriado no modelo {$model}");
+                    $this->assertStringContainsString('Nossa Senhora Aparecida', $obs);
+                } else {
+                    $this->assertFalse($isHoliday, "O dia {$day} NÃO deve ser feriado no modelo {$model}");
+                    $this->assertStringNotContainsString('Nossa Senhora Aparecida', $obs, "O dia {$day} não pode conter o nome do feriado no modelo {$model}");
+                    $this->assertStringNotContainsString('Feriado trabalhado', $obs, "O dia {$day} não pode conter 'Feriado trabalhado' no modelo {$model}");
+                }
+            }
+        }
+    }
+
+    /**
+     * 38. Fidelidade histórica: dados congelados no snapshot em competência fechada e fallback gracioso
+     */
+    public function test_38_fidelidade_historica_snapshot_fechado_e_fallback(): void
+    {
+        [$admin, $adminEmp] = $this->createEmployee('Admin Fechamento', UserRole::Admin);
+        [$user, $employee] = $this->createEmployee('Servidor Historico Original');
+        $schedule = WorkSchedule::createDefault40h();
+        $employee->update([
+            'work_schedule_id' => $schedule->id,
+            'job_title' => 'Enfermeiro Historico',
+        ]);
+
+        // Registrar batidas e fechar a competência 10/2026
+        $this->createPunch($user, 'in', '2026-10-01 08:00:00');
+        $this->createPunch($user, 'out', '2026-10-01 12:00:00');
+
+        ReviewForClose::reviewAll([$employee, $adminEmp], 2026, 10, $admin);
+        $closeAction = app(CloseMonthlyPeriodAction::class);
+        $closeAction->execute(2026, 10, $admin);
+
+        // Após fechamento, alterar os dados atuais do usuário e funcionário
+        $user->update(['name' => 'Nome Alterado Posteriormente']);
+        $employee->update(['job_title' => 'Cargo Alterado Posteriormente']);
+
+        // Acessar a Folha da competência fechada: deve exibir os dados históricos do snapshot
+        $testClosed = Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'userId' => $user->id])
+            ->assertOk()
+            ->assertSee('SERVIDOR HISTORICO ORIGINAL')
+            ->assertDontSee('NOME ALTERADO POSTERIORMENTE')
+            ->assertSee('Enfermeiro Historico')
+            ->assertDontSee('Cargo Alterado Posteriormente');
+
+        $this->assertTrue((bool) $testClosed->viewData('isClosedPeriod'));
+
+        // Testar fallback quando snapshot não contém campos específicos (snapshot legado)
+        $closedPeriod = ClosedPeriod::findForPeriod(2026, 10);
+        $this->assertNotNull($closedPeriod);
+
+        $snapshot = $closedPeriod->currentSnapshots()
+            ->where('employee_id', $employee->id)
+            ->first();
+
+        $this->assertNotNull($snapshot);
+
+        // Simular snapshot legado com dados parciais
+        $snapEmp = $snapshot->employee_snapshot;
+        unset($snapEmp['establishment_name'], $snapEmp['job_title']);
+        $snapshot->update(['employee_snapshot' => $snapEmp]);
+
+        Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'userId' => $user->id])
+            ->assertOk()
+            ->assertSee('Informação histórica não disponível');
+    }
+
+    /**
+     * 39. Sincronização entre modelo de relatório e modo de preenchimento (Branco <-> Automático)
+     */
+    public function test_39_sincronizacao_modelo_em_branco_e_fill_mode(): void
+    {
+        [$user, $employee] = $this->createEmployee('Servidor Sincronizacao');
+
+        // Selecionar modelo 'blank' sincroniza fillMode para 'blank'
+        $test = Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'administrative', 'fillMode' => 'punches'])
+            ->set('reportModel', 'blank')
+            ->assertSet('fillMode', 'blank');
+
+        // Alternar fillMode de volta para 'punches' restaura reportModel para o padrão auto
+        $test->set('fillMode', 'punches')
+            ->assertSet('reportModel', 'auto');
+    }
+
+    /**
+     * 40. Plantões sem batidas reais exibem data "—", hora "Não registrada" e intervalo previsto
+     */
+    public function test_40_plantoes_sem_batida_real_exibe_nao_registrada_e_intervalo_previsto(): void
+    {
+        [$user, $employee] = $this->createEmployee('Servidor Plantao Sem Batida');
+
+        $shiftSchedule = WorkSchedule::create([
+            'company_id' => $this->company->id,
+            'name' => 'Escala 12x36 Diurno',
+            'modality' => WorkScheduleModality::TwelveByThirtySix,
+            'active' => true,
+        ]);
+
+        $employee->update(['work_schedule_id' => $shiftSchedule->id]);
+
+        ShiftAssignment::create([
+            'employee_id' => $employee->id,
+            'work_schedule_id' => $shiftSchedule->id,
+            'start_at_local' => Carbon::parse('2026-10-05 07:00:00', 'America/Maceio'),
+            'end_at_local' => Carbon::parse('2026-10-05 19:00:00', 'America/Maceio'),
+            'start_at_utc' => Carbon::parse('2026-10-05 10:00:00', 'UTC'),
+            'end_at_utc' => Carbon::parse('2026-10-05 22:00:00', 'UTC'),
+            'timezone' => 'America/Maceio',
+            'shift_type' => ShiftType::Shift12x36,
+            'status' => ShiftStatus::Scheduled,
+            'break_minutes' => 60,
+            'expected_work_minutes' => 660,
+        ]);
+
+        $test = Livewire::actingAs($user)
+            ->test('folha-ponto', ['month' => 10, 'year' => 2026, 'reportModel' => 'shifts'])
+            ->assertOk();
+
+        $rows = $test->viewData('shiftsRows') ?? [];
+        $shiftRow = collect($rows)->firstWhere('scheduledStartDate', '05/10/2026');
+
+        $this->assertNotNull($shiftRow);
+        $this->assertSame('—', $shiftRow['realEntryDate']);
+        $this->assertSame('Não registrada', $shiftRow['realEntryTime']);
+        $this->assertSame('—', $shiftRow['realExitDate']);
+        $this->assertSame('Não registrada', $shiftRow['realExitTime']);
+        $this->assertStringContainsString('(Previsto)', $shiftRow['intervalFormatted']);
     }
 }

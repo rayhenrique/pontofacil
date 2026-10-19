@@ -11,19 +11,36 @@
                 display: none !important;
             }
             @media print {
-                .no-print, header, nav, aside, footer, [role="dialog"], button.no-print {
+                .no-print, header, nav, aside, footer, [role="dialog"], button.no-print, [aria-modal="true"] {
                     display: none !important;
                 }
                 body, html {
                     background: #ffffff !important;
                     color: #000000 !important;
+                    height: auto !important;
+                    min-height: auto !important;
+                    overflow: visible !important;
                 }
                 div[class*="md:pl-"], div[class*="pl-"] {
                     padding-left: 0 !important;
+                    height: auto !important;
+                    min-height: auto !important;
+                    overflow: visible !important;
+                    display: block !important;
                 }
                 main {
                     padding: 0 !important;
                     margin: 0 !important;
+                    height: auto !important;
+                    min-height: auto !important;
+                    overflow: visible !important;
+                    display: block !important;
+                }
+                .min-h-full {
+                    min-height: auto !important;
+                    height: auto !important;
+                    overflow: visible !important;
+                    display: block !important;
                 }
             }
         </style>
