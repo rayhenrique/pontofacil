@@ -11,9 +11,11 @@ use App\Domain\PTRP\Enums\TreatmentEventType;
 use App\Domain\Settlement\Enums\SettlementModality;
 use App\Domain\Settlement\Enums\WorkTimeSettlementStatus;
 use App\Domain\Settlement\Services\WorkTimeSettlementService;
+use App\Domain\WorkSchedule\Services\ShiftMidnightService;
 use App\Models\ClosedPeriod;
 use App\Models\Employee;
 use App\Models\PunchEvent;
+use App\Models\ShiftAssignment;
 use App\Models\TimeBankPolicy;
 use App\Models\TimeEntry;
 use App\Models\TreatmentEvent;
@@ -482,7 +484,7 @@ class TimesheetJourneyService
             $totalPunchesCount += count($effectivePunches);
 
             // Determinação de status contextual rigorosa
-            $statusInfo = $this->determineDayStatus($date, $calculated, $hasPendingTreatment);
+            $statusInfo = $this->determineDayStatus($date, $calculated, $hasPendingTreatment, $employee);
 
             if ($statusInfo['key'] === 'concluded') {
                 $completedDaysCount++;
@@ -765,8 +767,12 @@ class TimesheetJourneyService
      *
      * @return array{key: string, label: string, badge_class: string}
      */
-    protected function determineDayStatus(Carbon $date, CalculatedJourney $journey, bool $hasPendingTreatment): array
-    {
+    protected function determineDayStatus(
+        Carbon $date,
+        CalculatedJourney $journey,
+        bool $hasPendingTreatment,
+        ?Employee $employee = null
+    ): array {
         if ($hasPendingTreatment) {
             return [
                 'key' => 'pending_treatment',
@@ -808,15 +814,19 @@ class TimesheetJourneyService
             ];
         }
 
-        // Caso B: Se for ontem à noite (>=18h) e tiver menos de 16 horas da entrada, é jornada noturna em andamento
-        if ($isYesterday && $punchCount % 2 !== 0 && end($punches)['type'] === 'in') {
-            $lastPunchTime = Carbon::parse(end($punches)['timestamp'] ?? ($date->format('Y-m-d').' '.end($punches)['time']));
-            if ($lastPunchTime->hour >= 18 && now()->diffInHours($lastPunchTime) <= 16) {
-                return [
-                    'key' => 'in_progress',
-                    'label' => 'Jornada noturna em andamento',
-                    'badge_class' => 'bg-indigo-50 text-indigo-800 border-indigo-200 animate-pulse',
-                ];
+        // Caso B: Se for ontem e tiver plantão noturno autorizado em andamento
+        if ($isYesterday && $punchCount % 2 !== 0 && end($punches)['type'] === 'in' && $journey->shiftCode !== null && $employee !== null) {
+            $shiftMidnightService = app(ShiftMidnightService::class);
+            $shift = ShiftAssignment::where('shift_code', $journey->shiftCode)->first();
+            if ($shift && $shiftMidnightService->isAuthorizedCrossMidnightShift($shift, $employee)) {
+                $lastPunchTime = Carbon::parse(end($punches)['timestamp'] ?? ($date->format('Y-m-d').' '.end($punches)['time']));
+                if (now()->diffInHours($lastPunchTime) <= 24 && now()->lte($shift->end_at_local->copy()->addHours(2))) {
+                    return [
+                        'key' => 'in_progress',
+                        'label' => 'Jornada noturna em andamento',
+                        'badge_class' => 'bg-indigo-50 text-indigo-800 border-indigo-200 animate-pulse',
+                    ];
+                }
             }
         }
 

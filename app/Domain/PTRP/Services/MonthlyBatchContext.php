@@ -11,6 +11,7 @@ use App\Domain\PTRP\Enums\TreatmentEventStatus;
 use App\Domain\Settlement\Enums\SettlementModality;
 use App\Domain\Settlement\Enums\SettlementPolicyApprovalStatus;
 use App\Domain\Settlement\Services\WorkTimeSettlementService;
+use App\Domain\WorkSchedule\Services\ShiftMidnightService;
 use App\Enums\CalendarEventScope;
 use App\Enums\LegalRegime;
 use App\Enums\ShiftStatus;
@@ -678,7 +679,7 @@ class MonthlyBatchContext
     {
         $shift = $this->shiftsByEmployeeDate[$employee->id][$prevDateStr] ?? null;
 
-        return $shift && $shift->crosses_midnight ? $shift : null;
+        return $shift && app(ShiftMidnightService::class)->isAuthorizedCrossMidnightShift($shift, $employee) ? $shift : null;
     }
 
     protected function preload(): void
@@ -714,7 +715,8 @@ class MonthlyBatchContext
         // Sem filtro de situação aqui: a contagem de plantões do relatório
         // considera qualquer situação; o motor filtra os ativos em memória.
         // Colunas restritas às utilizadas pela apuração e pela contagem.
-        $shifts = ShiftAssignment::whereIn('employee_id', $employeeIds)
+        $shifts = ShiftAssignment::with('workSchedule')
+            ->whereIn('employee_id', $employeeIds)
             ->where('start_at_local', '<=', $rangeEnd)
             ->where('end_at_local', '>=', $rangeStart)
             ->orderBy('id', 'asc')

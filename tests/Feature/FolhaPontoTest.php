@@ -158,6 +158,29 @@ class FolhaPontoTest extends TestCase
         [$user, $employee] = $this->createEmployee('Paula Vigilante Noturna');
 
         // Turno noturno: 22h às 06h do dia seguinte (atravessa meia-noite)
+        $schedule = WorkSchedule::create([
+            'code' => 'PL-NOTURNO',
+            'name' => 'Escala Plantão Noturno',
+            'modality' => WorkScheduleModality::VariableShifts,
+            'expected_daily_minutes' => 480,
+            'active' => true,
+        ]);
+        $employee->update(['work_schedule_id' => $schedule->id]);
+
+        ShiftAssignment::create([
+            'employee_id' => $employee->id,
+            'work_schedule_id' => $schedule->id,
+            'start_at_local' => Carbon::parse('2026-10-05 22:00:00', 'America/Maceio'),
+            'end_at_local' => Carbon::parse('2026-10-06 06:00:00', 'America/Maceio'),
+            'start_at_utc' => Carbon::parse('2026-10-06 01:00:00', 'UTC'),
+            'end_at_utc' => Carbon::parse('2026-10-06 09:00:00', 'UTC'),
+            'timezone' => 'America/Maceio',
+            'shift_type' => ShiftType::Extraordinary,
+            'status' => ShiftStatus::Scheduled,
+            'break_minutes' => 60,
+            'expected_work_minutes' => 420,
+        ]);
+
         $this->createPunch($user, 'in', '2026-10-05 22:00:00');
         $this->createPunch($user, 'out', '2026-10-06 06:00:00');
 
@@ -515,8 +538,28 @@ class FolhaPontoTest extends TestCase
     public function test_16_horarios_noturnos_fisicos_e_apurados_separados(): void
     {
         [$user, $employee] = $this->createEmployee('Vigilante Noturno Misto');
-        $schedule = WorkSchedule::createDefault40h();
+        $schedule = WorkSchedule::create([
+            'code' => 'PL-NOT-7H',
+            'name' => 'Escala Plantão Noturno 7h',
+            'modality' => WorkScheduleModality::VariableShifts,
+            'expected_daily_minutes' => 420,
+            'active' => true,
+        ]);
         $employee->update(['work_schedule_id' => $schedule->id]);
+
+        ShiftAssignment::create([
+            'employee_id' => $employee->id,
+            'work_schedule_id' => $schedule->id,
+            'start_at_local' => Carbon::parse('2026-10-05 22:00:00', 'America/Maceio'),
+            'end_at_local' => Carbon::parse('2026-10-06 05:00:00', 'America/Maceio'),
+            'start_at_utc' => Carbon::parse('2026-10-06 01:00:00', 'UTC'),
+            'end_at_utc' => Carbon::parse('2026-10-06 08:00:00', 'UTC'),
+            'timezone' => 'America/Maceio',
+            'shift_type' => ShiftType::Extraordinary,
+            'status' => ShiftStatus::Scheduled,
+            'break_minutes' => 0,
+            'expected_work_minutes' => 420,
+        ]);
 
         // Trabalho das 22h às 05h = 7 horas físicas noturnas
         // Pela CLT (52m30s), 7h físicas equivalem a 8h de apuração legal

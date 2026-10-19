@@ -3,6 +3,7 @@
 namespace App\Domain\PTRP\Actions;
 
 use App\Domain\Calendar\Services\WorkCalendarService;
+use App\Domain\Company\Services\CurrentCompany;
 use App\Domain\LaborRules\Actions\CalculateNightWorkAction;
 use App\Domain\LaborRules\DTOs\WorkInterval;
 use App\Domain\PTRP\DTOs\CalculatedJourney;
@@ -12,6 +13,7 @@ use App\Domain\PTRP\Enums\TreatmentEventType;
 use App\Domain\PTRP\Policies\LaborPolicy;
 use App\Domain\Settlement\DTOs\WorkTimeApuracaoResult;
 use App\Domain\Settlement\Services\WorkTimeSettlementService;
+use App\Domain\WorkSchedule\Services\ShiftMidnightService;
 use App\Enums\ShiftType;
 use App\Enums\WorkScheduleModality;
 use App\Models\Employee;
@@ -29,6 +31,12 @@ use Illuminate\Support\Collection;
 
 class CalculateDailyJourneyAction
 {
+    public function __construct(
+        protected ?ShiftMidnightService $shiftMidnightService = null
+    ) {
+        $this->shiftMidnightService ??= app(ShiftMidnightService::class);
+    }
+
     /**
      * Combina fatos brutos do REP (PunchEvent) + Tratamentos Aprovados (TreatmentEvent)
      * + Escala de Trabalho e Plantões (WorkSchedule / ShiftAssignment) + Calendário Laboral (CalendarEvent)
@@ -47,12 +55,16 @@ class CalculateDailyJourneyAction
         ?ShiftAssignment $prefetchedShift = null,
         ?DailyJourneyPrefetch $prefetch = null,
     ): CalculatedJourney {
+        $establishment = $prefetch?->establishment ?? $employee->sector?->establishment ?? CurrentCompany::defaultEstablishment();
+        $tz = $establishment?->resolvedTimezone() ?? config('app.timezone', 'America/Maceio');
+
         $dateStr = $date->format('Y-m-d');
-        $dayStart = $date->copy()->startOfDay();
-        $dayEnd = $date->copy()->addDay()->startOfDay();
+        $localDay = Carbon::parse($dateStr, $tz);
+        $dayStart = $localDay->copy()->startOfDay();
+        $dayEnd = $localDay->copy()->addDay()->startOfDay();
 
         // Jornada futura: prevista, porém ainda não apurada (nunca déficit definitivo).
-        $isFutureDay = $dayStart->gt(Carbon::today());
+        $isFutureDay = $dayStart->gt(Carbon::today($tz));
 
         // 1. Resolver Plantão (ShiftAssignment) e Escala de Trabalho (WorkSchedule)
         if ($prefetch !== null && $prefetch->shiftResolved) {
@@ -255,22 +267,31 @@ class CalculateDailyJourneyAction
             $treatmentNotes[] = sprintf('Batida manual inserida às %s (%s).', $manual->effective_at->format('H:i'), $manual->reason_text);
         }
 
-        // Ordenar cronologicamente
-        usort($effectivePunches, fn ($a, $b) => strcmp($a['time'], $b['time']));
+        // Ordenar cronologicamente por timestamp real (nunca apenas HH:mm)
+        usort($effectivePunches, function ($a, $b) {
+            $tA = $a['timestamp'] instanceof CarbonInterface ? $a['timestamp']->getTimestamp() : Carbon::parse($a['timestamp'])->getTimestamp();
+            $tB = $b['timestamp'] instanceof CarbonInterface ? $b['timestamp']->getTimestamp() : Carbon::parse($b['timestamp'])->getTimestamp();
+            if ($tA === $tB) {
+                return ((int) ($a['nsr'] ?? 0)) <=> ((int) ($b['nsr'] ?? 0));
+            }
 
-        // Jornada em andamento: espelha a determinação de status do Espelho
-        // (hoje com entrada sem saída, ou noite de ontem em janela de 16h).
+            return $tA <=> $tB;
+        });
+
+        $isCurrentShiftMidnight = $this->shiftMidnightService->isAuthorizedCrossMidnightShift($shift, $employee);
+
+        // Jornada em andamento: hoje com entrada sem saída, ou plantão autorizado em andamento.
         $isInProgressDay = false;
         $punchCount = count($effectivePunches);
         if ($punchCount > 0) {
             $lastPunch = end($effectivePunches);
             $lastType = $lastPunch['type'] ?? $lastPunch['direction'] ?? null;
             if ($lastType === 'in' || $lastType === 'clock_in') {
-                if ($date->copy()->startOfDay()->isToday() && $punchCount % 2 !== 0) {
+                if ($localDay->isToday() && $punchCount % 2 !== 0) {
                     $isInProgressDay = true;
-                } elseif ($date->copy()->startOfDay()->isYesterday() && $punchCount % 2 !== 0) {
+                } elseif ($localDay->isYesterday() && $punchCount % 2 !== 0 && $isCurrentShiftMidnight && $shift !== null) {
                     $lastEntryTime = Carbon::parse($lastPunch['timestamp'] ?? ($dateStr.' '.$lastPunch['time']));
-                    if ($lastEntryTime->hour >= 18 && now()->diffInHours($lastEntryTime) <= 16) {
+                    if (now()->diffInHours($lastEntryTime) <= 24 && now()->lte($shift->end_at_local->copy()->addHours(2))) {
                         $isInProgressDay = true;
                     }
                 }
@@ -281,133 +302,185 @@ class CalculateDailyJourneyAction
             $treatmentNotes[] = 'Jornada em andamento — apuração parcial do dia.';
         }
 
-        // 8. Verificar se a primeira batida do dia é a saída de uma jornada noturna iniciada na véspera
-        if (! empty($effectivePunches)) {
-            $firstDir = $effectivePunches[0]['direction'] ?? $effectivePunches[0]['type'];
-            if ($firstDir === 'out') {
-                $prevDate = $date->copy()->subDay();
-                $prevDateStr = $prevDate->format('Y-m-d');
-                $prevDayStart = $prevDate->copy()->startOfDay();
-                $prevDayEnd = $date->copy()->startOfDay();
+        // 8. Verificar se marcações do início do dia pertencem a plantão noturno autorizado iniciado na véspera
+        $prevDate = $localDay->copy()->subDay();
+        $prevDateStr = $prevDate->format('Y-m-d');
+        $prevDayStart = $prevDate->copy()->startOfDay();
+        $prevDayEnd = $localDay->copy()->startOfDay();
 
-                if ($prefetch !== null && $prefetch->neighborsResolved) {
-                    $prevShift = $prefetch->prevShift;
-                    $prevPunches = $prefetch->prevDayPunches;
-                } else {
-                    $prevShift = ShiftAssignment::where('employee_id', $employee->id)
-                        ->active()
-                        ->where('start_at_local', '>=', $prevDayStart)
-                        ->where('start_at_local', '<', $prevDayEnd)
-                        ->where('crosses_midnight', true)
-                        ->first();
+        if ($prefetch !== null && $prefetch->neighborsResolved) {
+            $prevShift = $prefetch->prevShift;
+        } else {
+            $prevShift = ShiftAssignment::where('employee_id', $employee->id)
+                ->active()
+                ->where('start_at_local', '>=', $prevDayStart)
+                ->where('start_at_local', '<', $prevDayEnd)
+                ->orderBy('start_at_local', 'desc')
+                ->first();
+        }
 
-                    $prevPunches = PunchEvent::where(function ($q) use ($employee) {
-                        $q->where('employee_id', $employee->id)
-                            ->orWhere('user_id', $employee->user_id);
-                    })
-                        ->where('occurred_at_local', '>=', $prevDayStart)
-                        ->where('occurred_at_local', '<', $prevDayEnd)
-                        ->orderBy('occurred_at_local', 'asc')
-                        ->get();
+        $isPrevShiftMidnight = $this->shiftMidnightService->isAuthorizedCrossMidnightShift($prevShift, $employee);
 
-                    if ($prevPunches->isEmpty() && $employee->user_id) {
-                        $prevPunches = TimeEntry::where('user_id', $employee->user_id)
-                            ->where('timestamp', '>=', $prevDayStart)
-                            ->where('timestamp', '<', $prevDayEnd)
-                            ->orderBy('timestamp', 'asc')
-                            ->get();
-                    }
-                }
+        if ($isPrevShiftMidnight && ! empty($effectivePunches)) {
+            $prevShiftEndWithGrace = $prevShift->end_at_local->copy()->addHours(3);
 
-                if ($prevPunches->isNotEmpty()) {
-                    $lastPrev = $prevPunches->last();
-                    $lastPrevDir = $lastPrev->direction ?? (match ($lastPrev->type ?? '') {
-                        'clock_in', 'in' => 'in',
-                        'clock_out', 'out' => 'out',
-                        default => 'in',
-                    });
-                    $lastPrevTime = Carbon::parse($lastPrev->occurred_at_local ?? $lastPrev->timestamp);
-                    $currTime = Carbon::parse($effectivePunches[0]['timestamp'] ?? ($dateStr.' '.$effectivePunches[0]['time']));
+            foreach ($effectivePunches as &$punchRef) {
+                $pTimestamp = $punchRef['timestamp'] instanceof CarbonInterface
+                    ? $punchRef['timestamp']
+                    : Carbon::parse($punchRef['timestamp']);
 
-                    $isNightShiftCross = ($prevShift !== null && $prevShift->crosses_midnight);
-                    $isHeuristicCross = ($lastPrevDir === 'in' && ($lastPrevTime->hour >= 18 || $isNightShiftCross) && $currTime->diffInHours($lastPrevTime) <= 24);
+                if ($pTimestamp->lte($prevShiftEndWithGrace)) {
+                    $punchRef['is_previous_day_exit'] = true;
+                    $treatmentNotes[] = sprintf(
+                        'Marcação das %s vinculada ao plantão noturno iniciado na véspera (%s).',
+                        $punchRef['time'],
+                        $prevDateStr
+                    );
 
-                    if ($isNightShiftCross || $isHeuristicCross) {
-                        $effectivePunches[0]['is_previous_day_exit'] = true;
-                        $treatmentNotes[] = sprintf('Saída das %s vinculada à jornada noturna iniciada no dia anterior (%s).', $effectivePunches[0]['time'], $prevDateStr);
+                    if (($punchRef['direction'] ?? $punchRef['type']) === 'out') {
+                        break;
                     }
                 }
             }
+            unset($punchRef);
         }
 
-        // 9. Se o último registro do dia for uma entrada noturna sem saída, buscar saída no dia seguinte
-        $unpairedToday = array_values(array_filter($effectivePunches, fn ($p) => empty($p['is_previous_day_exit'])));
-        $lastTodayPunch = ! empty($unpairedToday) ? end($unpairedToday) : null;
-        $lastTodayDir = $lastTodayPunch ? ($lastTodayPunch['direction'] ?? $lastTodayPunch['type']) : null;
+        // 9. Se hoje for um plantão autorizado que atravessa a meia-noite, buscar continuidade no dia seguinte
+        if ($isCurrentShiftMidnight && $shift !== null) {
+            $nextDate = $localDay->copy()->addDay();
+            $nextDateStr = $nextDate->format('Y-m-d');
+            $nextDayStart = $dayEnd->copy();
+            $nextDayEnd = $nextDayStart->copy()->addDay();
+            $shiftEndWithGrace = $shift->end_at_local->copy()->addHours(3);
 
-        if ($lastTodayPunch && $lastTodayDir === 'in') {
-            $lastEntryTime = Carbon::parse($lastTodayPunch['timestamp'] ?? ($dateStr.' '.$lastTodayPunch['time']));
-            $isNightShift = ($shift !== null && $shift->crosses_midnight) || ($lastEntryTime->hour >= 18);
+            if ($prefetch !== null && $prefetch->neighborsResolved && $prefetch->nextDayPunches->isNotEmpty()) {
+                $nextPunches = $prefetch->nextDayPunches;
+            } else {
+                $nextPunches = PunchEvent::where(function ($q) use ($employee) {
+                    $q->where('employee_id', $employee->id)
+                        ->orWhere('user_id', $employee->user_id);
+                })
+                    ->where('occurred_at_local', '>=', $nextDayStart)
+                    ->where('occurred_at_local', '<', $nextDayEnd)
+                    ->orderBy('occurred_at_local', 'asc')
+                    ->orderBy('id', 'asc')
+                    ->get();
 
-            if ($isNightShift) {
-                $nextDate = $date->copy()->addDay();
-                $nextDateStr = $nextDate->format('Y-m-d');
-                $nextDayStart = $nextDate->copy()->startOfDay();
-                $nextDayEnd = $nextDate->copy()->addDay()->startOfDay();
-
-                if ($prefetch !== null && $prefetch->neighborsResolved) {
-                    $nextPunches = $prefetch->nextDayPunches;
-                } else {
-                    $nextPunches = PunchEvent::where(function ($q) use ($employee) {
-                        $q->where('employee_id', $employee->id)
-                            ->orWhere('user_id', $employee->user_id);
-                    })
-                        ->where('occurred_at_local', '>=', $nextDayStart)
-                        ->where('occurred_at_local', '<', $nextDayEnd)
-                        ->orderBy('occurred_at_local', 'asc')
+                if ($nextPunches->isEmpty() && $employee->user_id) {
+                    $nextPunches = TimeEntry::where('user_id', $employee->user_id)
+                        ->where('timestamp', '>=', $nextDayStart)
+                        ->where('timestamp', '<', $nextDayEnd)
+                        ->orderBy('timestamp', 'asc')
                         ->get();
+                }
+            }
 
-                    if ($nextPunches->isEmpty() && $employee->user_id) {
-                        $nextPunches = TimeEntry::where('user_id', $employee->user_id)
-                            ->where('timestamp', '>=', $nextDayStart)
-                            ->where('timestamp', '<', $nextDayEnd)
-                            ->orderBy('timestamp', 'asc')
-                            ->get();
-                    }
+            $nextTreatments = TreatmentEvent::where(function ($q) use ($employee) {
+                $q->where('employee_id', $employee->id)
+                    ->orWhere('employment_id', $employee->id);
+            })
+                ->where('status', TreatmentEventStatus::Approved)
+                ->where('effective_at', '>=', $nextDayStart)
+                ->where('effective_at', '<=', $shiftEndWithGrace)
+                ->orderBy('effective_at', 'asc')
+                ->get();
+
+            $nextDisregardedIds = $nextTreatments
+                ->where('type', TreatmentEventType::PunchDisregarded)
+                ->pluck('reference_punch_id')
+                ->filter()
+                ->all();
+
+            $collectedNextPunches = [];
+
+            foreach ($nextPunches as $np) {
+                $npId = (string) $np->id;
+                if (in_array($npId, $nextDisregardedIds, true) || in_array((int) $npId, $nextDisregardedIds, true)) {
+                    continue;
                 }
 
-                if ($nextPunches->isNotEmpty()) {
-                    $firstNext = $nextPunches->first();
-                    $firstNextDir = $firstNext->direction ?? (match ($firstNext->type ?? '') {
+                $npTime = Carbon::parse($np->occurred_at_local ?? $np->timestamp);
+                if ($npTime->lte($shiftEndWithGrace)) {
+                    $dir = $np->direction ?? (match ($np->type ?? '') {
                         'clock_out', 'out' => 'out',
+                        'clock_in', 'in' => 'in',
                         default => 'out',
                     });
-                    $firstNextTime = Carbon::parse($firstNext->occurred_at_local ?? $firstNext->timestamp);
 
-                    if ($firstNextDir === 'out' && $firstNextTime->diffInHours($lastEntryTime) <= 24 && $firstNextTime->greaterThan($lastEntryTime)) {
-                        $effectivePunches[] = [
-                            'id' => (string) $firstNext->id,
-                            'nsr' => $firstNext->nsr ?? 0,
-                            'time' => $firstNextTime->format('H:i'),
-                            'timestamp' => $firstNextTime,
-                            'type' => 'out',
-                            'direction' => 'out',
-                            'source' => 'rep_p_next_day_nocturnal',
-                            'is_next_day_exit' => true,
-                        ];
-                        $treatmentNotes[] = sprintf('Jornada noturna concluída no dia seguinte às %s.', $firstNextTime->format('H:i'));
+                    $collectedNextPunches[] = [
+                        'id' => $npId,
+                        'nsr' => $np->nsr ?? 0,
+                        'time' => $npTime->format('H:i'),
+                        'timestamp' => $npTime,
+                        'type' => $dir,
+                        'direction' => $dir,
+                        'source' => 'rep_p_next_day_shift',
+                        'is_next_day_exit' => true,
+                    ];
+
+                    if ($dir === 'out' && $npTime->gte($shift->end_at_local->copy()->subMinutes(60))) {
+                        break;
                     }
                 }
+            }
+
+            foreach ($nextTreatments->where('type', TreatmentEventType::ManualPunchAdded) as $manualNext) {
+                if ($manualNext->effective_at->lte($shiftEndWithGrace)) {
+                    $dir = $manualNext->new_value_json['direction'] ?? 'manual';
+                    $collectedNextPunches[] = [
+                        'id' => $manualNext->id,
+                        'nsr' => 0,
+                        'time' => $manualNext->effective_at->format('H:i'),
+                        'timestamp' => $manualNext->effective_at,
+                        'type' => $dir,
+                        'direction' => $dir,
+                        'source' => 'ptrp_manual_next_day_shift',
+                        'reason' => $manualNext->reason_text,
+                        'is_next_day_exit' => true,
+                    ];
+                }
+            }
+
+            if (! empty($collectedNextPunches)) {
+                usort($collectedNextPunches, function ($a, $b) {
+                    $tA = $a['timestamp'] instanceof CarbonInterface ? $a['timestamp']->getTimestamp() : Carbon::parse($a['timestamp'])->getTimestamp();
+                    $tB = $b['timestamp'] instanceof CarbonInterface ? $b['timestamp']->getTimestamp() : Carbon::parse($b['timestamp'])->getTimestamp();
+
+                    return $tA <=> $tB;
+                });
+
+                foreach ($collectedNextPunches as $cnp) {
+                    $effectivePunches[] = $cnp;
+                }
+
+                $treatmentNotes[] = sprintf(
+                    'Plantão noturno com continuidade no dia seguinte até %s (%s).',
+                    end($collectedNextPunches)['time'],
+                    $nextDateStr
+                );
             }
         }
 
         // 10. Pareamento Direcional e Cálculo de Minutos Trabalhados e Intervalos
         $punchesToCalculate = array_values(array_filter($effectivePunches, fn ($p) => empty($p['is_previous_day_exit'])));
+
+        // Ordenar cronologicamente por timestamp real
+        usort($punchesToCalculate, function ($a, $b) {
+            $tA = $a['timestamp'] instanceof CarbonInterface ? $a['timestamp']->getTimestamp() : Carbon::parse($a['timestamp'])->getTimestamp();
+            $tB = $b['timestamp'] instanceof CarbonInterface ? $b['timestamp']->getTimestamp() : Carbon::parse($b['timestamp'])->getTimestamp();
+            if ($tA === $tB) {
+                return ((int) ($a['nsr'] ?? 0)) <=> ((int) ($b['nsr'] ?? 0));
+            }
+
+            return $tA <=> $tB;
+        });
+
         $workedMinutes = 0;
         $breakMinutes = 0;
         $workedIntervals = [];
         $breakIntervals = [];
         $isIncomplete = false;
+        $hasMissingExit = false;
         $currentEntry = null;
         $lastExitTime = null;
 
@@ -419,11 +492,14 @@ class CalculateDailyJourneyAction
                 $dir = 'out';
             }
 
-            $pTime = Carbon::parse($p['timestamp'] ?? ($dateStr.' '.$p['time']));
+            $pTime = $p['timestamp'] instanceof CarbonInterface
+                ? $p['timestamp']
+                : Carbon::parse($p['timestamp'] ?? ($dateStr.' '.$p['time']));
 
             if ($dir === 'in') {
                 if ($currentEntry !== null) {
                     $isIncomplete = true;
+                    $hasMissingExit = true;
                     $treatmentNotes[] = sprintf('Sequência ambígua: entrada às %s sem saída anterior (nova entrada às %s).', $currentEntry['time'], $p['time']);
                     $currentEntry = ['punch' => $p, 'time' => $p['time'], 'time_obj' => $pTime];
                 } else {
@@ -472,12 +548,19 @@ class CalculateDailyJourneyAction
 
         if ($currentEntry !== null) {
             $isIncomplete = true;
+            $hasMissingExit = true;
             $treatmentNotes[] = sprintf('Marcação de entrada às %s em aberto (sem registro de saída).', $currentEntry['time']);
         }
 
         if (count($punchesToCalculate) % 2 !== 0) {
             $isIncomplete = true;
         }
+
+        if ($hasMissingExit && ! $isInProgressDay) {
+            $treatmentNotes[] = 'Jornada incompleta — saída não registrada. Solicite correção.';
+        }
+
+        $treatmentNotes = array_values(array_unique($treatmentNotes));
 
         // 11. Apuração comparativa com a escala e aplicação da tolerância legal (Art. 58 CLT)
         $ordinaryMinutes = 0;

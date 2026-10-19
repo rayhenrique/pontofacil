@@ -143,7 +143,7 @@ class RecordPunchEventAction
                     // 4. Determinação robusta da direção de batida se não informada explicitamente
                     $resolvedDirection = in_array($direction, ['in', 'out'], true)
                         ? $direction
-                        : $this->determineNextPunchDirectionAction->execute($user);
+                        : $this->determineNextPunchDirectionAction->execute($user, $nowLocal, $est);
 
                     // 5. Busca o hash fiscal da batida (Tipo 7) imediatamente anterior para encadeamento fiscal oficial
                     $previousPunchArp = ArpEvent::where('establishment_id', $est->id)

@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Domain\Company\Services\CurrentCompany;
+use App\Enums\ShiftStatus;
+use App\Enums\ShiftType;
 use App\Enums\UserRole;
 use App\Models\ClosedPeriod;
 use App\Models\ClosedPeriodEmployeeSnapshot;
@@ -11,6 +13,7 @@ use App\Models\Employee;
 use App\Models\Establishment;
 use App\Models\PunchEvent;
 use App\Models\Sector;
+use App\Models\ShiftAssignment;
 use App\Models\TreatmentEvent;
 use App\Models\User;
 use Carbon\Carbon;
@@ -229,6 +232,18 @@ class TimesheetSecurityAndPtrpTest extends TestCase
         [$user, $emp] = $this->createEmployeeUser('Plantonista Noturno', 'noturno@test.com');
         $nightDate = Carbon::create(2026, 10, 3, 0, 0, 0, 'America/Maceio');
         $nextDate = Carbon::create(2026, 10, 4, 0, 0, 0, 'America/Maceio');
+
+        ShiftAssignment::create([
+            'employee_id' => $emp->id,
+            'start_at_local' => $nightDate->copy()->setTime(22, 0, 0),
+            'end_at_local' => $nextDate->copy()->setTime(6, 0, 0),
+            'start_at_utc' => $nightDate->copy()->setTime(22, 0, 0)->setTimezone('UTC'),
+            'end_at_utc' => $nextDate->copy()->setTime(6, 0, 0)->setTimezone('UTC'),
+            'shift_type' => ShiftType::Shift12x36,
+            'status' => ShiftStatus::Scheduled,
+            'is_day_off' => false,
+            'crosses_midnight' => true,
+        ]);
 
         $this->createPunch($emp, $nightDate->copy()->setTime(22, 0, 0), 'in', 301);
         $this->createPunch($emp, $nextDate->copy()->setTime(6, 0, 0), 'out', 302);

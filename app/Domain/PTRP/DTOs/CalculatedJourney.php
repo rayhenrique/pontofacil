@@ -225,7 +225,7 @@ class CalculatedJourney
         }
 
         if ($this->isIncomplete) {
-            return 'Jornada incompleta (marcação em aberto).';
+            return 'Jornada incompleta — saída não registrada. Solicite correção.';
         }
 
         if ($this->absenceMinutes > 0) {

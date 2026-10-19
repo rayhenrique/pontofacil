@@ -1,6 +1,16 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.14 (Atual)
+## v2.6.15 (Atual)
+- **Delimitação de Jornada Comum e Meia-Noite no PTRP (Etapa 2):**
+  - **Dia Civil Local Estrito:** O dia de apuração corresponde estritamente ao intervalo `[00:00:00, 00:00:00 do dia seguinte)` no timezone do estabelecimento vigente. A primeira batida após as 00:00 inicia compulsoriamente uma nova sequência de marcações.
+  - **Fim do Vazamento de Jornadas Comuns:** Em jornadas administrativas, corridas, 5x2, 6x1 e convencionais, é terminantemente proibido vincular batidas entre dias civis diferentes. Entradas abertas não são transportadas nem geram saída automática ou batida fictícia às 00:00. O dia anterior permanece incompleto com o aviso: *"Jornada incompleta — saída não registrada. Solicite correção."*, eliminando a anomalia de jornadas irreais de 15, 20 ou 30 horas por esquecimento de saída.
+  - **Tratamento de Saídas Órfãs:** Batidas com direção de saída sem entrada correspondente no dia civil local são classificadas como ocorrências órfãs, mantendo a integridade do espelho e exigindo tratamento formal pelo RH, sem reclassificação silenciosa.
+  - **Preservação Exclusiva para Plantões Autorizados:** Continuidade após a meia-noite restrita exclusivamente a plantões reais (12x36, 24x72, extraordinários ou trocados) que estejam ativos, atribuídos ao servidor, vigentes e juridicamente autorizados conforme o regime e perfil normativo. Horários após 18h, última batida ser entrada, sobreavisos, folgas ou plantões cancelados não habilitam continuidade contínua.
+  - **Direção Automática Inteligente (`DetermineNextPunchDirectionAction`):** Adaptada para consultar o contexto do dia civil local (jornadas comuns iniciam sempre com 'in' no novo dia) ou prosseguir com a sequência direcional legítima em plantões autorizados.
+  - **Motor PTRP sem Heurísticas de Horário:** Pareamento efetuado exclusivamente por ordenação cronológica de timestamps reais completos, com suporte a múltiplos intervalos usufruídos atravessando a meia-noite e garantia de que nenhuma batida seja consumida por duas jornadas simultaneamente.
+  - **Integridade Cadastral e Fiscal Absoluta:** PunchEvents, TimeEntries, TreatmentEvents, NSRs, ARPs, hashes e snapshots de competências fechadas mantêm-se 100% intocados e imutáveis.
+
+## v2.6.14
 - **Unificação e Simplificação dos Ajustes de Ponto no PTRP:**
   - **Eliminação de Escritas Legadas:** Extinta a gravação direta e independente em `time_entries` e `time_adjustments` pela interface de ajuste manual. Todas as correções passam agora estritamente pelo fluxo oficial de eventos de tratamento do PTRP (`TreatmentEvent`), com validação de competência, escopo e conformidade com a Portaria 671/2021 MTP.
   - **Preservação Histórica Integral:** Apontamentos e ajustes legados anteriores permanecem integralmente preservados no banco de dados e são projetados com fidelidade histórica na apuração analítica, sem migrações cegas ou exclusões.
