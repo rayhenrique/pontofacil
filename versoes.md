@@ -1,6 +1,15 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.15 (Atual)
+## v2.6.16 (Atual)
+- **Regressão e Consistência End-to-End de Ajustes e Jornadas (Etapa 3):**
+  - **Validação do Fluxo A (Jornada Comum):** Homologada a independência total entre dias civis. Entrada aberta às 13h no Dia 1 gera ocorrência de jornada incompleta (`workedMinutes = 240`, referentes apenas ao primeiro período matutino), sem criar saídas artificiais às 00:00. O Dia 2 inicia nova sequência compulsoriamente com `in` às 08h e apura 480 minutos normais, sem contaminação do dia anterior.
+  - **Validação do Fluxo B (Correção e Invalidação):** Homologada a cadeia completa de correção no PTRP. A inclusão da saída esquecida com justificativa homologada pelo RH completa o dia com 8h e recalcula instantaneamente o fingerprint fiscal da competência na Conferência Mensal, marcando a análise anterior como desatualizada (`stale`) e exigindo reanálise formal antes do fechamento.
+  - **Validação do Fluxo C (Plantão Noturno):** Homologada a continuidade autorizada de plantões 12×36 (19h às 07h). A saída das 07h do dia seguinte é absorvida pelo plantão de origem (720 min apurados), sem gerar resíduos, ocorrências órfãs ou duplicação de horas na competência.
+  - **Validação do Fluxo D (Plantão Incompleto):** Esquecimento de saída em plantão noturno gera pendência imediata de jornada incompleta, plenamente sanada mediante aprovação de tratamento de ponto pelo RH.
+  - **Validação do Fluxo E (Competência Fechada):** Comprovada a imutabilidade fiscal dos snapshots congelados (`ClosedPeriodEmployeeSnapshot`). Mesmo após alterações ou execuções do código do PTRP, relatórios e espelhos de meses fechados continuam rigorosamente idênticos e protegidos contra modificações retroativas.
+  - **Conformidade Fiscal e Rastreabilidade:** AFD gerado estritamente a partir dos eventos originais do REP-P com NSR monotônico e hashes inalterados; AEJ gerado com transparência das jornadas apuradas e tratamentos homologados; Segregação estrita de funções (colaborador impedido de aprovar solicitações de tratamento e gestor impedido de auto-aprovar seu espelho).
+
+## v2.6.15
 - **Delimitação de Jornada Comum e Meia-Noite no PTRP (Etapa 2):**
   - **Dia Civil Local Estrito:** O dia de apuração corresponde estritamente ao intervalo `[00:00:00, 00:00:00 do dia seguinte)` no timezone do estabelecimento vigente. A primeira batida após as 00:00 inicia compulsoriamente uma nova sequência de marcações.
   - **Fim do Vazamento de Jornadas Comuns:** Em jornadas administrativas, corridas, 5x2, 6x1 e convencionais, é terminantemente proibido vincular batidas entre dias civis diferentes. Entradas abertas não são transportadas nem geram saída automática ou batida fictícia às 00:00. O dia anterior permanece incompleto com o aviso: *"Jornada incompleta — saída não registrada. Solicite correção."*, eliminando a anomalia de jornadas irreais de 15, 20 ou 30 horas por esquecimento de saída.
