@@ -311,33 +311,162 @@ class CalculateDailyJourneyAction
         if ($prefetch !== null && $prefetch->neighborsResolved) {
             $prevShift = $prefetch->prevShift;
         } else {
-            $prevShift = ShiftAssignment::where('employee_id', $employee->id)
+            $prevShifts = ShiftAssignment::where('employee_id', $employee->id)
                 ->active()
                 ->where('start_at_local', '>=', $prevDayStart)
                 ->where('start_at_local', '<', $prevDayEnd)
                 ->orderBy('start_at_local', 'desc')
-                ->first();
+                ->get();
+
+            $authorizedPrevShifts = $prevShifts->filter(
+                fn ($s) => $this->shiftMidnightService->isAuthorizedCrossMidnightShift($s, $employee)
+            );
+
+            if ($authorizedPrevShifts->count() > 1) {
+                $treatmentNotes[] = 'Alerta: múltiplos plantões autorizados com virada de meia-noite detectados na véspera — pendência para conferência do RH.';
+                $prevShift = null;
+            } else {
+                $prevShift = $authorizedPrevShifts->first();
+            }
         }
 
-        $isPrevShiftMidnight = $this->shiftMidnightService->isAuthorizedCrossMidnightShift($prevShift, $employee);
+        $isPrevShiftMidnight = $prevShift && $this->shiftMidnightService->isAuthorizedCrossMidnightShift($prevShift, $employee);
 
-        if ($isPrevShiftMidnight && ! empty($effectivePunches)) {
+        // Confirmar se o plantão da véspera tinha de fato uma sequência em aberto (entrada sem saída correspondente antes da 00h)
+        $prevHadOpenSequence = false;
+        if ($isPrevShiftMidnight) {
+            if ($prefetch !== null && $prefetch->neighborsResolved) {
+                $prevPunchesRaw = $prefetch->prevDayPunches;
+            } else {
+                $prevPunchesRaw = PunchEvent::where(function ($q) use ($employee) {
+                    $q->where('employee_id', $employee->id)
+                        ->orWhere('user_id', $employee->user_id);
+                })
+                    ->where('occurred_at_local', '>=', $prevDayStart)
+                    ->where('occurred_at_local', '<', $prevDayEnd)
+                    ->orderBy('occurred_at_local', 'asc')
+                    ->get();
+
+                if ($prevPunchesRaw->isEmpty() && $employee->user_id) {
+                    $prevPunchesRaw = TimeEntry::where('user_id', $employee->user_id)
+                        ->where('timestamp', '>=', $prevDayStart)
+                        ->where('timestamp', '<', $prevDayEnd)
+                        ->orderBy('timestamp', 'asc')
+                        ->get();
+                }
+            }
+
+            // Tratamentos aprovados da véspera
+            $prevTreatments = TreatmentEvent::where(function ($q) use ($employee) {
+                $q->where('employee_id', $employee->id)
+                    ->orWhere('employment_id', $employee->id);
+            })
+                ->where('status', TreatmentEventStatus::Approved)
+                ->where('effective_at', '>=', $prevDayStart)
+                ->where('effective_at', '<', $prevDayEnd)
+                ->get();
+
+            $prevDisregardedIds = $prevTreatments
+                ->where('type', TreatmentEventType::PunchDisregarded)
+                ->pluck('reference_punch_id')
+                ->filter()
+                ->all();
+
+            $prevEffectiveCount = 0;
+            $prevLastDir = null;
+            foreach ($prevPunchesRaw as $pp) {
+                if (in_array((string) $pp->id, $prevDisregardedIds, true) || in_array((int) $pp->id, $prevDisregardedIds, true)) {
+                    continue;
+                }
+                $prevEffectiveCount++;
+                $prevLastDir = $pp->direction ?? (match ($pp->type ?? '') {
+                    'clock_out', 'out' => 'out',
+                    default => 'in',
+                });
+            }
+
+            foreach ($prevTreatments->where('type', TreatmentEventType::ManualPunchAdded) as $mp) {
+                $prevEffectiveCount++;
+                $prevLastDir = $mp->new_value_json['direction'] ?? 'in';
+            }
+
+            $prevHadOpenSequence = ($prevEffectiveCount > 0);
+        }
+
+        if ($isPrevShiftMidnight && $prevHadOpenSequence && ! empty($effectivePunches)) {
             $prevShiftEndWithGrace = $prevShift->end_at_local->copy()->addHours(3);
+            $currentShiftDir = $prevLastDir;
 
             foreach ($effectivePunches as &$punchRef) {
                 $pTimestamp = $punchRef['timestamp'] instanceof CarbonInterface
                     ? $punchRef['timestamp']
                     : Carbon::parse($punchRef['timestamp']);
 
-                if ($pTimestamp->lte($prevShiftEndWithGrace)) {
+                $dir = $punchRef['direction'] ?? $punchRef['type'] ?? 'in';
+                if ($dir === 'clock_out') {
+                    $dir = 'out';
+                } elseif ($dir === 'clock_in') {
+                    $dir = 'in';
+                }
+
+                // Se passou do limite com tolerância operacional, interrompe
+                if ($pTimestamp->gt($prevShiftEndWithGrace)) {
+                    break;
+                }
+
+                // Se já estiver além do término previsto da escala (janela de tolerância operacional):
+                if ($pTimestamp->gt($prevShift->end_at_local)) {
+                    // Se a sequência já estava fechada antes do término, não associa batida após o fim previsto
+                    if ($currentShiftDir === 'out') {
+                        break;
+                    }
+                    // Se for entrada na tolerância pós-término, nunca transforma em saída de ontem!
+                    if ($dir === 'in') {
+                        $treatmentNotes[] = sprintf(
+                            'Plantão anterior (iniciado em %s) sem marcação de saída registrada; marcação de entrada das %s preservada na data atual.',
+                            $prevDateStr,
+                            $punchRef['time']
+                        );
+                        break;
+                    }
+                    // Se for saída e a sequência estava aberta, é o encerramento com prorrogação/tolerância
                     $punchRef['is_previous_day_exit'] = true;
                     $treatmentNotes[] = sprintf(
                         'Marcação das %s vinculada ao plantão noturno iniciado na véspera (%s).',
                         $punchRef['time'],
                         $prevDateStr
                     );
+                    $currentShiftDir = 'out';
+                    break;
+                }
 
-                    if (($punchRef['direction'] ?? $punchRef['type']) === 'out') {
+                // Instante dentro da escala do plantão (<= end_at_local):
+                if ($currentShiftDir === 'out') {
+                    // Sequência fechada (ex: saída para ceia/intervalo antes da meia-noite):
+                    // Uma batida de entrada dentro do plantão é retorno do intervalo
+                    if ($dir === 'in') {
+                        $punchRef['is_previous_day_exit'] = true;
+                        $treatmentNotes[] = sprintf(
+                            'Marcação das %s vinculada ao plantão noturno iniciado na véspera (%s).',
+                            $punchRef['time'],
+                            $prevDateStr
+                        );
+                        $currentShiftDir = 'in';
+                    } else {
+                        break;
+                    }
+                } else {
+                    // Sequência aberta ($currentShiftDir === 'in'):
+                    // Uma saída dentro do plantão é saída do plantão ou início de intervalo
+                    if ($dir === 'out') {
+                        $punchRef['is_previous_day_exit'] = true;
+                        $treatmentNotes[] = sprintf(
+                            'Marcação das %s vinculada ao plantão noturno iniciado na véspera (%s).',
+                            $punchRef['time'],
+                            $prevDateStr
+                        );
+                        $currentShiftDir = 'out';
+                    } else {
                         break;
                     }
                 }
@@ -346,7 +475,20 @@ class CalculateDailyJourneyAction
         }
 
         // 9. Se hoje for um plantão autorizado que atravessa a meia-noite, buscar continuidade no dia seguinte
-        if ($isCurrentShiftMidnight && $shift !== null) {
+        $dayEffectiveBeforeNext = array_values(array_filter($effectivePunches, fn ($p) => empty($p['is_previous_day_exit'])));
+        $dayEffectiveCount = count($dayEffectiveBeforeNext);
+        $dayLastDir = null;
+        if ($dayEffectiveCount > 0) {
+            $lastP = $dayEffectiveBeforeNext[$dayEffectiveCount - 1];
+            $dayLastDir = $lastP['direction'] ?? $lastP['type'] ?? 'in';
+            if ($dayLastDir === 'clock_out') {
+                $dayLastDir = 'out';
+            } elseif ($dayLastDir === 'clock_in') {
+                $dayLastDir = 'in';
+            }
+        }
+
+        if ($isCurrentShiftMidnight && $shift !== null && $dayEffectiveCount > 0) {
             $nextDate = $localDay->copy()->addDay();
             $nextDateStr = $nextDate->format('Y-m-d');
             $nextDayStart = $dayEnd->copy();
@@ -391,8 +533,7 @@ class CalculateDailyJourneyAction
                 ->filter()
                 ->all();
 
-            $collectedNextPunches = [];
-
+            $allNextCandidates = [];
             foreach ($nextPunches as $np) {
                 $npId = (string) $np->id;
                 if (in_array($npId, $nextDisregardedIds, true) || in_array((int) $npId, $nextDisregardedIds, true)) {
@@ -400,57 +541,104 @@ class CalculateDailyJourneyAction
                 }
 
                 $npTime = Carbon::parse($np->occurred_at_local ?? $np->timestamp);
-                if ($npTime->lte($shiftEndWithGrace)) {
-                    $dir = $np->direction ?? (match ($np->type ?? '') {
-                        'clock_out', 'out' => 'out',
-                        'clock_in', 'in' => 'in',
-                        default => 'out',
-                    });
+                $dir = $np->direction ?? (match ($np->type ?? '') {
+                    'clock_out', 'out' => 'out',
+                    'clock_in', 'in' => 'in',
+                    default => 'out',
+                });
 
-                    $collectedNextPunches[] = [
-                        'id' => $npId,
-                        'nsr' => $np->nsr ?? 0,
-                        'time' => $npTime->format('H:i'),
-                        'timestamp' => $npTime,
-                        'type' => $dir,
-                        'direction' => $dir,
-                        'source' => 'rep_p_next_day_shift',
-                        'is_next_day_exit' => true,
-                    ];
+                $allNextCandidates[] = [
+                    'id' => $npId,
+                    'nsr' => $np->nsr ?? 0,
+                    'time' => $npTime->format('H:i'),
+                    'timestamp' => $npTime,
+                    'type' => $dir,
+                    'direction' => $dir,
+                    'source' => 'rep_p_next_day_shift',
+                    'is_next_day_exit' => true,
+                ];
+            }
 
-                    if ($dir === 'out' && $npTime->gte($shift->end_at_local->copy()->subMinutes(60))) {
+            foreach ($nextTreatments->where('type', TreatmentEventType::ManualPunchAdded) as $manualNext) {
+                $dir = $manualNext->new_value_json['direction'] ?? 'manual';
+                if ($dir === 'clock_out') {
+                    $dir = 'out';
+                } elseif ($dir === 'clock_in') {
+                    $dir = 'in';
+                }
+
+                $allNextCandidates[] = [
+                    'id' => $manualNext->id,
+                    'nsr' => 0,
+                    'time' => $manualNext->effective_at->format('H:i'),
+                    'timestamp' => $manualNext->effective_at,
+                    'type' => $dir,
+                    'direction' => $dir,
+                    'source' => 'ptrp_manual_next_day_shift',
+                    'reason' => $manualNext->reason_text,
+                    'is_next_day_exit' => true,
+                ];
+            }
+
+            usort($allNextCandidates, function ($a, $b) {
+                $tA = $a['timestamp'] instanceof CarbonInterface ? $a['timestamp']->getTimestamp() : Carbon::parse($a['timestamp'])->getTimestamp();
+                $tB = $b['timestamp'] instanceof CarbonInterface ? $b['timestamp']->getTimestamp() : Carbon::parse($b['timestamp'])->getTimestamp();
+                if ($tA === $tB) {
+                    return ((int) ($a['nsr'] ?? 0)) <=> ((int) ($b['nsr'] ?? 0));
+                }
+
+                return $tA <=> $tB;
+            });
+
+            $collectedNextPunches = [];
+            $currentShiftDir = $dayLastDir;
+
+            foreach ($allNextCandidates as $candidate) {
+                $npTime = $candidate['timestamp'];
+                $dir = $candidate['direction'];
+
+                if ($npTime->gt($shiftEndWithGrace)) {
+                    break;
+                }
+
+                if ($npTime->gt($shift->end_at_local)) {
+                    if ($currentShiftDir === 'out') {
+                        break;
+                    }
+                    if ($dir === 'in') {
+                        $treatmentNotes[] = sprintf(
+                            'Plantão com saída pendente / não registrada; nova entrada registrada no dia seguinte (%s às %s).',
+                            $nextDateStr,
+                            $npTime->format('H:i')
+                        );
+                        break;
+                    }
+                    $collectedNextPunches[] = $candidate;
+                    $currentShiftDir = 'out';
+                    break;
+                }
+
+                // Dentro da escala (<= end_at_local):
+                if ($currentShiftDir === 'out') {
+                    if ($dir === 'in') {
+                        $collectedNextPunches[] = $candidate;
+                        $currentShiftDir = 'in';
+                    } else {
+                        break;
+                    }
+                } else {
+                    if ($dir === 'out') {
+                        $collectedNextPunches[] = $candidate;
+                        $currentShiftDir = 'out';
+                    } else {
                         break;
                     }
                 }
             }
 
-            foreach ($nextTreatments->where('type', TreatmentEventType::ManualPunchAdded) as $manualNext) {
-                if ($manualNext->effective_at->lte($shiftEndWithGrace)) {
-                    $dir = $manualNext->new_value_json['direction'] ?? 'manual';
-                    $collectedNextPunches[] = [
-                        'id' => $manualNext->id,
-                        'nsr' => 0,
-                        'time' => $manualNext->effective_at->format('H:i'),
-                        'timestamp' => $manualNext->effective_at,
-                        'type' => $dir,
-                        'direction' => $dir,
-                        'source' => 'ptrp_manual_next_day_shift',
-                        'reason' => $manualNext->reason_text,
-                        'is_next_day_exit' => true,
-                    ];
-                }
-            }
-
             if (! empty($collectedNextPunches)) {
-                usort($collectedNextPunches, function ($a, $b) {
-                    $tA = $a['timestamp'] instanceof CarbonInterface ? $a['timestamp']->getTimestamp() : Carbon::parse($a['timestamp'])->getTimestamp();
-                    $tB = $b['timestamp'] instanceof CarbonInterface ? $b['timestamp']->getTimestamp() : Carbon::parse($b['timestamp'])->getTimestamp();
-
-                    return $tA <=> $tB;
-                });
-
-                foreach ($collectedNextPunches as $cnp) {
-                    $effectivePunches[] = $cnp;
+                foreach ($collectedNextPunches as $cp) {
+                    $effectivePunches[] = $cp;
                 }
 
                 $treatmentNotes[] = sprintf(

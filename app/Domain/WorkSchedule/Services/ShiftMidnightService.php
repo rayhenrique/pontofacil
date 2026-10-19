@@ -10,9 +10,11 @@ use App\Enums\WorkScheduleModality;
 use App\Models\Employee;
 use App\Models\Establishment;
 use App\Models\LaborRuleProfile;
+use App\Models\PunchEvent;
 use App\Models\ShiftAssignment;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Facades\Log;
 
 class ShiftMidnightService
 {
@@ -145,35 +147,96 @@ class ShiftMidnightService
         $dayEnd = $localTime->copy()->addDay()->startOfDay();
 
         // 1. Plantão que iniciou na véspera e atravessou a meia-noite
-        $prevShift = ShiftAssignment::where('employee_id', $employee->id)
+        $prevShifts = ShiftAssignment::where('employee_id', $employee->id)
             ->whereIn('status', [ShiftStatus::Scheduled, ShiftStatus::Confirmed, ShiftStatus::Completed])
             ->where('is_day_off', false)
             ->where('start_at_local', '>=', $prevDayStart)
             ->where('start_at_local', '<', $dayStart)
             ->orderBy('start_at_local', 'desc')
-            ->first();
+            ->get();
 
-        if ($prevShift && $this->isAuthorizedCrossMidnightShift($prevShift, $employee)) {
+        $authorizedPrevShifts = $prevShifts->filter(
+            fn ($s) => $this->isAuthorizedCrossMidnightShift($s, $employee)
+        );
+
+        if ($authorizedPrevShifts->count() > 1) {
+            Log::warning('shift_midnight.ambiguous_overlapping_prev_shifts', [
+                'employee_id' => $employee->id,
+                'target_time' => $localTime->toDateTimeString(),
+                'shifts_count' => $authorizedPrevShifts->count(),
+            ]);
+
+            return null; // Situação ambígua: não escolher silenciosamente
+        }
+
+        $prevShift = $authorizedPrevShifts->first();
+
+        if ($prevShift) {
+            // Se o instante for antes ou no encerramento previsto: cobre o plantão
+            if ($localTime->lte($prevShift->end_at_local)) {
+                return $prevShift;
+            }
+
             // Tolerância operacional de até 3 horas além do término previsto para troca de plantão
             $shiftEndWithGrace = $prevShift->end_at_local->copy()->addHours(3);
             if ($localTime->lte($shiftEndWithGrace)) {
-                return $prevShift;
+                // A tolerância é estritamente contexto operacional: exige que o plantão tenha
+                // sido efetivamente iniciado e esteja com sequência em aberto (sem saída registrada).
+                $lastPunchInShift = PunchEvent::where(function ($q) use ($employee) {
+                    $q->where('employee_id', $employee->id)
+                        ->orWhere('user_id', $employee->user_id);
+                })
+                    ->where('occurred_at_local', '>=', $prevShift->start_at_local)
+                    ->where('occurred_at_local', '<=', $localTime)
+                    ->orderBy('occurred_at_local', 'desc')
+                    ->orderBy('id', 'desc')
+                    ->first();
+
+                // Se não houve nenhuma batida ou se a última batida já foi saída, o plantão não tem sequência aberta
+                if ($lastPunchInShift !== null && $lastPunchInShift->direction === 'in') {
+                    // Verificar se há novo plantão ativo já iniciando hoje cobrindo este horário
+                    $hasNewShiftStartingNow = ShiftAssignment::where('employee_id', $employee->id)
+                        ->whereIn('status', [ShiftStatus::Scheduled, ShiftStatus::Confirmed, ShiftStatus::Completed])
+                        ->where('is_day_off', false)
+                        ->where('start_at_local', '>=', $dayStart)
+                        ->where('start_at_local', '<=', $localTime)
+                        ->where('end_at_local', '>', $localTime)
+                        ->exists();
+
+                    if (! $hasNewShiftStartingNow) {
+                        return $prevShift;
+                    }
+                }
             }
         }
 
         // 2. Plantão que iniciou hoje
-        $todayShift = ShiftAssignment::where('employee_id', $employee->id)
+        $todayShifts = ShiftAssignment::where('employee_id', $employee->id)
             ->whereIn('status', [ShiftStatus::Scheduled, ShiftStatus::Confirmed, ShiftStatus::Completed])
             ->where('is_day_off', false)
             ->where('start_at_local', '>=', $dayStart)
             ->where('start_at_local', '<', $dayEnd)
             ->orderBy('start_at_local', 'asc')
-            ->first();
+            ->get();
 
-        if ($todayShift && $this->isAuthorizedCrossMidnightShift($todayShift, $employee)) {
-            if ($localTime->gte($todayShift->start_at_local)) {
-                return $todayShift;
-            }
+        $authorizedTodayShifts = $todayShifts->filter(
+            fn ($s) => $this->isAuthorizedCrossMidnightShift($s, $employee)
+        );
+
+        if ($authorizedTodayShifts->count() > 1) {
+            Log::warning('shift_midnight.ambiguous_overlapping_today_shifts', [
+                'employee_id' => $employee->id,
+                'target_time' => $localTime->toDateTimeString(),
+                'shifts_count' => $authorizedTodayShifts->count(),
+            ]);
+
+            return null; // Situação ambígua: não escolher silenciosamente
+        }
+
+        $todayShift = $authorizedTodayShifts->first();
+
+        if ($todayShift && $localTime->gte($todayShift->start_at_local)) {
+            return $todayShift;
         }
 
         return null;

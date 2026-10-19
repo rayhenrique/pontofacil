@@ -4,8 +4,10 @@ namespace App\Domain\PTRP\Services;
 
 use App\Domain\PTRP\Enums\TreatmentEventStatus;
 use App\Domain\PTRP\Enums\TreatmentEventType;
+use App\Domain\WorkSchedule\Services\ShiftMidnightService;
 use App\Models\Employee;
 use App\Models\PunchEvent;
+use App\Models\ShiftAssignment;
 use App\Models\TimeEntry;
 use App\Models\TreatmentEvent;
 use Carbon\Carbon;
@@ -228,26 +230,88 @@ class PointAdjustmentPreviewService
             return ($a['effective'] ? 0 : 1) <=> ($b['effective'] ? 0 : 1);
         });
 
-        // 3. Montar Resumo / Diagnóstico da Sequência
+        // 3. Montar Resumo / Diagnóstico Direcional da Sequência
         $effectiveItems = array_values(array_filter($items, fn ($i) => ! empty($i['effective'])));
         $effectiveCount = count($effectiveItems);
 
         $hasAbsence = $hasApprovedAbsence || ($proposedAction === 'justify_absence');
 
+        // Validação direcional cronológica (in -> out -> in -> out)
+        $currentEntry = null;
+        $hasEntryAfterEntry = false;
+        $hasExitWithoutEntry = false;
+
+        foreach ($effectiveItems as $item) {
+            $dir = $item['direction'] ?? 'in';
+            if ($dir === 'clock_in') {
+                $dir = 'in';
+            } elseif ($dir === 'clock_out') {
+                $dir = 'out';
+            }
+
+            if ($dir === 'in') {
+                if ($currentEntry !== null) {
+                    $hasEntryAfterEntry = true;
+                }
+                $currentEntry = $item;
+            } elseif ($dir === 'out') {
+                if ($currentEntry !== null) {
+                    $currentEntry = null;
+                } else {
+                    $hasExitWithoutEntry = true;
+                }
+            }
+        }
+
+        // Se houver plantão autorizado atravessando a meia-noite e sobrou uma entrada aberta antes da 00h
+        if ($currentEntry !== null) {
+            $shift = ShiftAssignment::where('employee_id', $employee->id)
+                ->active()
+                ->where('start_at_local', '>=', $dayStart)
+                ->where('start_at_local', '<', $dayEnd)
+                ->first();
+
+            $isShiftMidnight = $shift && app(ShiftMidnightService::class)->isAuthorizedCrossMidnightShift($shift, $employee);
+
+            if ($isShiftMidnight && $shift !== null) {
+                $nextDayStart = $dayEnd->copy();
+                $nextDayGrace = $shift->end_at_local->copy()->addHours(3);
+
+                $hasExitNextDay = PunchEvent::where(function ($q) use ($employee) {
+                    $q->where('employee_id', $employee->id)
+                        ->orWhere('user_id', $employee->user_id);
+                })
+                    ->where('occurred_at_local', '>=', $nextDayStart)
+                    ->where('occurred_at_local', '<=', $nextDayGrace)
+                    ->where('direction', 'out')
+                    ->exists();
+
+                if (! $hasExitNextDay && $employee->user_id) {
+                    $hasExitNextDay = TimeEntry::where('user_id', $employee->user_id)
+                        ->where('timestamp', '>=', $nextDayStart)
+                        ->where('timestamp', '<=', $nextDayGrace)
+                        ->where('type', 'out')
+                        ->exists();
+                }
+
+                if ($hasExitNextDay) {
+                    $currentEntry = null;
+                }
+            }
+        }
+
         if ($hasAbsence) {
             $summary = 'Ausência justificada legalmente para a data.';
         } elseif ($effectiveCount === 0) {
             $summary = 'Nenhum registro efetivo para esta data.';
-        } elseif ($effectiveCount % 2 !== 0) {
-            $last = end($effectiveItems);
-            $summary = sprintf(
-                'Sequência incompleta (%d batidas): Última marcação é %s às %s (saída pendente).',
-                $effectiveCount,
-                $last['direction'] === 'in' ? 'Entrada' : 'Saída',
-                $last['time']
-            );
+        } elseif ($hasEntryAfterEntry) {
+            $summary = 'Há marcações que precisam de conferência.';
+        } elseif ($hasExitWithoutEntry) {
+            $summary = 'Existe uma saída sem entrada correspondente.';
+        } elseif ($currentEntry !== null) {
+            $summary = 'Falta registrar uma saída.';
         } else {
-            $summary = sprintf('Sequência equilibrada: %d marcações efetivas registradas no dia.', $effectiveCount);
+            $summary = 'Jornada completa.';
         }
 
         return [

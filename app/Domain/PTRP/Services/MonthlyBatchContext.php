@@ -31,6 +31,7 @@ use App\Models\WorkTimeSettlementPolicy;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -60,6 +61,9 @@ class MonthlyBatchContext
 
     /** @var array<int, array<string, ShiftAssignment>> */
     protected array $shiftsByEmployeeDate = [];
+
+    /** @var array<int, array<string, array<int, ShiftAssignment>>> */
+    protected array $activeShiftsByEmployeeDate = [];
 
     /** @var array<int, array<int, ShiftAssignment>> Todos os plantões pré-carregados (qualquer situação). */
     protected array $allShiftsByEmployee = [];
@@ -677,9 +681,30 @@ class MonthlyBatchContext
      */
     protected function prevShiftFor(Employee $employee, string $prevDateStr): ?ShiftAssignment
     {
-        $shift = $this->shiftsByEmployeeDate[$employee->id][$prevDateStr] ?? null;
+        $shifts = $this->activeShiftsByEmployeeDate[$employee->id][$prevDateStr] ?? [];
+        if (empty($shifts)) {
+            $single = $this->shiftsByEmployeeDate[$employee->id][$prevDateStr] ?? null;
+            if ($single !== null) {
+                $shifts = [$single];
+            }
+        }
 
-        return $shift && app(ShiftMidnightService::class)->isAuthorizedCrossMidnightShift($shift, $employee) ? $shift : null;
+        $crossMidnightShifts = array_filter(
+            $shifts,
+            fn ($s) => app(ShiftMidnightService::class)->isAuthorizedCrossMidnightShift($s, $employee)
+        );
+
+        if (count($crossMidnightShifts) > 1) {
+            Log::warning('monthly_batch.ambiguous_overlapping_prev_shifts', [
+                'employee_id' => $employee->id,
+                'prev_date' => $prevDateStr,
+                'count' => count($crossMidnightShifts),
+            ]);
+
+            return null; // Situação ambígua: não escolher silenciosamente
+        }
+
+        return ! empty($crossMidnightShifts) ? reset($crossMidnightShifts) : null;
     }
 
     protected function preload(): void
@@ -736,6 +761,7 @@ class MonthlyBatchContext
             }
 
             $dateStr = $shift->start_at_local->format('Y-m-d');
+            $this->activeShiftsByEmployeeDate[$shift->employee_id][$dateStr][] = $shift;
             $this->shiftsByEmployeeDate[$shift->employee_id][$dateStr] ??= $shift;
         }
     }

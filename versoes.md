@@ -1,6 +1,14 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.16 (Atual)
+## v2.6.17 (Atual)
+- **Estabilização de Segurança, Integridade de Ajustes e Associação de Plantões:**
+  - **Titularidade Rigorosa de Marcações no PTRP:** Validação obrigatória de pertencimento da batida ao colaborador correto, checagem da data no fuso institucional e resolução inequívoca de colisões entre identificadores do REP-P e tabelas legadas. Bloqueio definitivo de tentativas de desconsideração cruzada, marcações em datas divergentes, duplicatas e competências encerradas. Os registros originais nunca são apagados e nenhum registro fiscal fictício é produzido.
+  - **Associação Fiel de Marcações em Plantões Noturnos:** A tolerância operacional após o fim previsto da escala atua estritamente como contexto e não autoriza a apropriação indevida de batidas. Uma nova batida de entrada jamais é convertida artificialmente em saída do plantão anterior; em saídas esquecidas, a marcação é mantida no novo dia e a inconsistência é sinalizada ao RH. Plantões com intervalos e escalas de 24h mantêm continuidade legítima e sobreposições ambíguas são registradas com segurança. Jornadas comuns mantêm reinício estrito às 00:00 do dia local.
+  - **Atomicidade e Idempotência na Aplicação de Ajustes:** Operação de criação e aprovação de tratamentos agrupada em transação atômica única no banco de dados (`DB::transaction`) com bloqueio pessimista no colaborador para evitar submissões concorrentes idênticas. Arquivos de atestado médico ou anexos temporários são descartados com segurança se a transação sofrer reversão.
+  - **Validação Direcional Cronológica na Prévia de Correções:** Substituição da simples paridade numérica por máquina de estados direcional (`in -> out`), identificando inconsistências reais como entradas consecutivas ou saídas isoladas com diagnósticos canônicos diretos ao usuário (*"Jornada completa."*, *"Falta registrar uma saída."*, *"Existe uma saída sem entrada correspondente."*, *"Há marcações que precisam de conferência."*).
+  - **Tratamento Estruturado e Seguro de Falhas no Ponto:** Captura resiliente de erros na identificação de escalas durante o registro de ponto com logs técnicos anônimos sem exposição de dados sensíveis, garantindo a gravação tempestiva e preservando a sequência de NSR.
+
+## v2.6.16
 - **Regressão e Consistência End-to-End de Ajustes e Jornadas (Etapa 3):**
   - **Validação do Fluxo A (Jornada Comum):** Homologada a independência total entre dias civis. Entrada aberta às 13h no Dia 1 gera ocorrência de jornada incompleta (`workedMinutes = 240`, referentes apenas ao primeiro período matutino), sem criar saídas artificiais às 00:00. O Dia 2 inicia nova sequência compulsoriamente com `in` às 08h e apura 480 minutos normais, sem contaminação do dia anterior.
   - **Validação do Fluxo B (Correção e Invalidação):** Homologada a cadeia completa de correção no PTRP. A inclusão da saída esquecida com justificativa homologada pelo RH completa o dia com 8h e recalcula instantaneamente o fingerprint fiscal da competência na Conferência Mensal, marcando a análise anterior como desatualizada (`stale`) e exigindo reanálise formal antes do fechamento.

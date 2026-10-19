@@ -11,6 +11,7 @@ use App\Models\TimeEntry;
 use App\Models\User;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Facades\Log;
 
 class DetermineNextPunchDirectionAction
 {
@@ -35,8 +36,10 @@ class DetermineNextPunchDirectionAction
      *    - Continua a sequência ininterrupta do mesmo plantão.
      *    - Se a última batida no plantão foi 'in', a próxima é 'out'. Se foi 'out' (intervalo), a próxima é 'in'.
      *
-     * 4. RESILIÊNCIA:
-     *    - Nunca bloqueia o registro de ponto por escala ausente ou inconsistência. Fallback seguro para 'in'.
+     * 4. RESILIÊNCIA E AUDITORIA DE ERROS:
+     *    - Isola falhas de resolução de escalas para não forçar direção errada em batidas subsequentes do dia.
+     *    - Registra exceções técnicas de forma estruturada e anônima (sem dados sensíveis como CPF ou senhas).
+     *    - Preserva o contrato fiscal REP-P/Portaria 671 e o direito de marcação sem bloqueios.
      */
     public function execute(
         User $user,
@@ -54,24 +57,35 @@ class DetermineNextPunchDirectionAction
 
             // Cenário A: Plantão autorizado atravessando a meia-noite
             if ($employee !== null) {
-                $coveringShift = $this->shiftMidnightService->findCoveringAuthorizedShift($employee, $localTime, $est);
+                try {
+                    $coveringShift = $this->shiftMidnightService->findCoveringAuthorizedShift($employee, $localTime, $est);
 
-                if ($coveringShift !== null) {
-                    $lastShiftPunch = PunchEvent::where(function ($q) use ($user, $employee) {
-                        $q->where('user_id', $user->id)
-                            ->orWhere('employee_id', $employee->id);
-                    })
-                        ->where('occurred_at_local', '>=', $coveringShift->start_at_local)
-                        ->where('occurred_at_local', '<=', $localTime)
-                        ->orderBy('occurred_at_local', 'desc')
-                        ->orderBy('id', 'desc')
-                        ->first();
+                    if ($coveringShift !== null) {
+                        $lastShiftPunch = PunchEvent::where(function ($q) use ($user, $employee) {
+                            $q->where('user_id', $user->id)
+                                ->orWhere('employee_id', $employee->id);
+                        })
+                            ->where('occurred_at_local', '>=', $coveringShift->start_at_local)
+                            ->where('occurred_at_local', '<=', $localTime)
+                            ->orderBy('occurred_at_local', 'desc')
+                            ->orderBy('id', 'desc')
+                            ->first();
 
-                    if ($lastShiftPunch !== null) {
-                        return ($lastShiftPunch->direction === 'in') ? 'out' : 'in';
+                        if ($lastShiftPunch !== null) {
+                            return ($lastShiftPunch->direction === 'in') ? 'out' : 'in';
+                        }
+
+                        return 'in';
                     }
-
-                    return 'in';
+                } catch (\Throwable $e) {
+                    // Log técnico estruturado sem exposição de dados pessoais ou sensíveis
+                    Log::warning('punch_direction.shift_lookup_failed', [
+                        'user_id' => $user->id,
+                        'employee_id' => $employee->id,
+                        'exception' => get_class($e),
+                        'error_code' => $e->getCode(),
+                    ]);
+                    // Degrada graciosamente para inspeção das marcações do dia local
                 }
             }
 
@@ -111,10 +125,20 @@ class DetermineNextPunchDirectionAction
                 return ($dir === 'in') ? 'out' : 'in';
             }
 
-            // Primeira batida de novo dia inicia nova sequência
+            // Primeira batida legítima do dia inicia nova sequência
+            Log::info('punch_direction.first_punch_of_day', [
+                'user_id' => $user->id,
+            ]);
+
             return 'in';
-        } catch (\Throwable) {
-            // Em qualquer cenário de exceção não prevista, o registro nunca deve ser bloqueado
+        } catch (\Throwable $e) {
+            // Em caso de exceção de infraestrutura, registra o incidente e preserva o direito de bater ponto
+            Log::error('punch_direction.determination_unexpected_error', [
+                'user_id' => $user->id,
+                'exception' => get_class($e),
+                'error_code' => $e->getCode(),
+            ]);
+
             return 'in';
         }
     }
