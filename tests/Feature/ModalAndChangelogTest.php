@@ -29,8 +29,26 @@ class ModalAndChangelogTest extends TestCase
         $response->assertSee('Manual do Usuário');
     }
 
+    protected function getCurrentVersion(): string
+    {
+        $path = base_path('versoes.md');
+        if (! file_exists($path)) {
+            return 'v2.4.0';
+        }
+        foreach (file($path, FILE_IGNORE_NEW_LINES) as $line) {
+            $trimmed = trim($line);
+            if (str_starts_with($trimmed, '## ')) {
+                return trim(str_replace('(Atual)', '', substr($trimmed, 3)));
+            }
+        }
+
+        return 'v2.4.0';
+    }
+
     public function test_version_notifier_detects_new_version_modal(): void
     {
+        $currentVersion = $this->getCurrentVersion();
+
         $user = User::create([
             'name' => 'Admin RH',
             'email' => 'admin_notifier@test.com',
@@ -42,29 +60,31 @@ class ModalAndChangelogTest extends TestCase
         $test = Livewire::actingAs($user)
             ->test('version-notifier')
             ->assertSet('showModal', true)
-            ->assertSet('currentVersion', 'v2.6.11')
-            ->assertSee('PontoFácil v2.6.11')
+            ->assertSet('currentVersion', $currentVersion)
+            ->assertSee("PontoFácil {$currentVersion}")
             ->call('close')
             ->assertSet('showModal', false);
 
         $user->refresh();
-        $this->assertEquals('v2.6.11', $user->last_seen_version);
+        $this->assertEquals($currentVersion, $user->last_seen_version);
     }
 
     public function test_version_notifier_does_not_show_modal_if_user_already_viewed_current_version(): void
     {
+        $currentVersion = $this->getCurrentVersion();
+
         $user = User::create([
             'name' => 'Colaborador Atualizado',
             'email' => 'colab_updated@test.com',
             'password' => 'secret123',
             'role' => UserRole::Employee,
-            'last_seen_version' => 'v2.6.11',
+            'last_seen_version' => $currentVersion,
         ]);
 
         Livewire::actingAs($user)
             ->test('version-notifier')
             ->assertSet('showModal', false)
-            ->assertSet('currentVersion', 'v2.6.11');
+            ->assertSet('currentVersion', $currentVersion);
     }
 
     public function test_help_page_changelog_items_are_properly_parsed_without_empty_melhoria_titles(): void

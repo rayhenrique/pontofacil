@@ -7,6 +7,8 @@ enum TreatmentEventStatus: string
     case Pending = 'pending';
     case Approved = 'approved';
     case Rejected = 'rejected';
+    case Cancelled = 'cancelled';
+    case Revoked = 'revoked';
 
     public function label(): string
     {
@@ -14,6 +16,8 @@ enum TreatmentEventStatus: string
             self::Pending => 'Pendente de Análise',
             self::Approved => 'Aprovado',
             self::Rejected => 'Rejeitado',
+            self::Cancelled => 'Cancelado',
+            self::Revoked => 'Revertido',
         };
     }
 }

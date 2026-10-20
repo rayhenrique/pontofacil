@@ -248,6 +248,28 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
             );
             $nsrFormatted = str_pad((string) $punchEvent->nsr, 9, '0', STR_PAD_LEFT);
             $nowInTz = $punchEvent->occurred_at_local;
+        } catch (\App\Domain\TimeClock\Exceptions\GpsEnforcementException $e) {
+            $this->status = 'error';
+            $this->message = $e->getMessage();
+            $this->confirmationData = null;
+            $this->dispatch('app-modal-alert', [
+                'type' => 'error',
+                'title' => 'Registro Não Autorizado',
+                'message' => $e->getMessage(),
+                'buttonText' => 'Entendido'
+            ]);
+            return [
+                'success' => false,
+                'status' => 'error',
+                'message' => $this->message,
+                'advice' => match ($e->getReasonCode()) {
+                    'outside_allowed_radius' => 'Dirija-se à área autorizada do seu setor para registrar a marcação.',
+                    'missing_coordinates', 'invalid_coordinates' => 'Ative o GPS e conceda permissão de localização no navegador.',
+                    'insufficient_accuracy' => 'Aproxime-se de uma janela ou local com melhor sinal de GPS.',
+                    'inconsistent_sector_config' => 'Contate o setor de RH para verificar o cadastro geográfico.',
+                    default => 'Verifique as condições do seu setor e tente novamente.',
+                },
+            ];
         } catch (\Throwable $e) {
             report($e);
             $this->status = 'error';
@@ -323,16 +345,8 @@ new #[Layout('layouts.app')] #[Title('Registro de Ponto')] class extends Compone
 
     private function calculateDistance($lat1, $lon1, $lat2, $lon2)
     {
-        $earthRadius = 6371000; // in meters
-        $dLat = deg2rad($lat2 - $lat1);
-        $dLon = deg2rad($lon2 - $lon1);
-
-        $a = sin($dLat/2) * sin($dLat/2) +
-             cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
-             sin($dLon/2) * sin($dLon/2);
-
-        $c = 2 * atan2(sqrt($a), sqrt(1-$a));
-        return $earthRadius * $c;
+        return app(\App\Domain\TimeClock\Services\SectorGpsEnforcementService::class)
+            ->calculateHaversineDistance((float) $lat1, (float) $lon1, (float) $lat2, (float) $lon2);
     }
 };
 ?>

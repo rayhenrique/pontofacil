@@ -502,7 +502,7 @@ class IntegratedJourneyAndSettlementAuditTest extends TestCase
 
         $journeyIncomp = app(CalculateDailyJourneyAction::class)->execute($empIncomplete, $date1);
         $this->assertTrue($journeyIncomp->isIncomplete);
-        $this->assertEquals('Jornada incompleta (marcação em aberto).', $journeyIncomp->attentionReason());
+        $this->assertEquals('Jornada incompleta — saída não registrada. Solicite correção.', $journeyIncomp->attentionReason());
 
         // 2. Jornada 12x36 diurna
         $sched12x36 = WorkSchedule::create([

@@ -17,6 +17,7 @@ class Sector extends Model
         'latitude',
         'longitude',
         'allowed_radius_meters',
+        'gps_enforcement_enabled',
     ];
 
     protected function casts(): array
@@ -25,6 +26,7 @@ class Sector extends Model
             'latitude' => 'decimal:8',
             'longitude' => 'decimal:8',
             'allowed_radius_meters' => 'integer',
+            'gps_enforcement_enabled' => 'boolean',
         ];
     }
 
@@ -45,7 +47,7 @@ class Sector extends Model
 
     public function hasCustomLocation(): bool
     {
-        return ! empty($this->latitude) && ! empty($this->longitude);
+        return $this->latitude !== null && $this->longitude !== null;
     }
 
     public function hasCustomQrCode(): bool

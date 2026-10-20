@@ -18,6 +18,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
     public $longitude = '';
     public $allowed_radius_meters = '';
     public $qr_code_hash = '';
+    public bool $gps_enforcement_enabled = false;
     
     public $showModal = false;
     public $showQrModal = false;
@@ -28,7 +29,8 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
     {
         $this->reset([
             'sectorId', 'name', 'description', 'manager_id',
-            'latitude', 'longitude', 'allowed_radius_meters', 'qr_code_hash'
+            'latitude', 'longitude', 'allowed_radius_meters', 'qr_code_hash',
+            'gps_enforcement_enabled'
         ]);
         $this->showModal = true;
     }
@@ -44,6 +46,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
         $this->longitude = $sector->longitude !== null ? (string)$sector->longitude : '';
         $this->allowed_radius_meters = $sector->allowed_radius_meters !== null ? (string)$sector->allowed_radius_meters : '';
         $this->qr_code_hash = $sector->qr_code_hash ?? '';
+        $this->gps_enforcement_enabled = (bool) ($sector->gps_enforcement_enabled ?? false);
         $this->showModal = true;
     }
 
@@ -62,6 +65,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
         $this->latitude = '';
         $this->longitude = '';
         $this->allowed_radius_meters = '';
+        $this->gps_enforcement_enabled = false;
     }
 
     public function openQrModal($id)
@@ -75,7 +79,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
 
     public function save()
     {
-        $this->validate([
+        $rules = [
             'name' => ['required', 'string', 'max:255', Rule::unique('sectors', 'name')->ignore($this->sectorId)],
             'description' => 'nullable|string|max:255',
             'manager_id' => 'nullable|exists:users,id',
@@ -83,6 +87,19 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
             'longitude' => 'nullable|numeric|between:-180,180',
             'allowed_radius_meters' => 'nullable|integer|min:10|max:10000',
             'qr_code_hash' => 'nullable|string|max:255',
+            'gps_enforcement_enabled' => 'boolean',
+        ];
+
+        if ($this->gps_enforcement_enabled) {
+            $rules['latitude'] = 'required|numeric|between:-90,90';
+            $rules['longitude'] = 'required|numeric|between:-180,180';
+            $rules['allowed_radius_meters'] = 'required|integer|min:10|max:10000';
+        }
+
+        $this->validate($rules, [
+            'latitude.required' => 'Para exigir localização (trava de GPS), é obrigatório configurar uma Latitude válida.',
+            'longitude.required' => 'Para exigir localização (trava de GPS), é obrigatório configurar uma Longitude válida.',
+            'allowed_radius_meters.required' => 'Para exigir localização (trava de GPS), é obrigatório configurar um Raio permitido válido (mínimo de 10 metros).',
         ]);
 
         $data = [
@@ -93,6 +110,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
             'longitude' => ($this->longitude !== '' && $this->longitude !== null) ? $this->longitude : null,
             'allowed_radius_meters' => ($this->allowed_radius_meters !== '' && $this->allowed_radius_meters !== null) ? (int)$this->allowed_radius_meters : null,
             'qr_code_hash' => $this->qr_code_hash ?: null,
+            'gps_enforcement_enabled' => (bool) $this->gps_enforcement_enabled,
         ];
 
         if ($this->sectorId) {
@@ -115,7 +133,8 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
 
         $this->reset([
             'sectorId', 'name', 'description', 'manager_id',
-            'latitude', 'longitude', 'allowed_radius_meters', 'qr_code_hash'
+            'latitude', 'longitude', 'allowed_radius_meters', 'qr_code_hash',
+            'gps_enforcement_enabled'
         ]);
         $this->showModal = false;
     }
@@ -249,6 +268,15 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
                             </span>
                         @endif
 
+                        @if($sector->gps_enforcement_enabled)
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300" title="Registro de ponto permitido exclusivamente dentro do raio do setor">
+                                <svg class="w-3.5 h-3.5 text-amber-700" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                                </svg>
+                                GPS Obrigatório
+                            </span>
+                        @endif
+
                         @if(!$sector->hasCustomQrCode() && !$sector->hasCustomLocation())
                             <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
                                 Matriz (Padrão Global)
@@ -335,6 +363,15 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
                                             </svg>
                                             GPS Setor ({{ $sector->allowed_radius_meters ? $sector->allowed_radius_meters . 'm' : 'Padrão' }})
+                                        </span>
+                                    @endif
+
+                                    @if($sector->gps_enforcement_enabled)
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300" title="Registro de ponto permitido exclusivamente dentro do raio do setor">
+                                            <svg class="w-3.5 h-3.5 text-amber-700" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                                            </svg>
+                                            GPS Obrigatório
                                         </span>
                                     @endif
 
@@ -514,6 +551,23 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Setores')] class extends Compone
                                         </svg>
                                         Capturar Minha Posição GPS Atual para este Setor
                                     </button>
+
+                                    <!-- Trava de Bloqueio Opcional por GPS -->
+                                    <div class="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-1.5">
+                                        <label class="flex items-start gap-2.5 cursor-pointer">
+                                            <input type="checkbox" wire:model="gps_enforcement_enabled"
+                                                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-0.5">
+                                            <div>
+                                                <span class="text-xs font-bold text-gray-900 block">
+                                                    Exigir localização dentro do perímetro para registrar ponto
+                                                </span>
+                                                <span class="text-[11px] text-gray-500 block leading-tight">
+                                                    Quando ativado, os registros de ponto dos colaboradores vinculados a este setor somente serão aceitos com localização válida dentro da área configurada.
+                                                </span>
+                                            </div>
+                                        </label>
+                                        @error('gps_enforcement_enabled') <span class="text-red-500 text-xs block">{{ $message }}</span> @enderror
+                                    </div>
                                 </div>
                             </div>
                             

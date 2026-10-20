@@ -43,6 +43,12 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
     public bool $showTreatmentDetailsModal = false;
     public ?array $viewingTreatment = null;
 
+    // Modal de Cancelamento / Reversão Contextual no Espelho
+    public bool $showTimesheetCancelModal = false;
+    public string $timesheetCancelReason = '';
+    public ?string $timesheetCancelTreatmentId = null;
+    public ?array $timesheetCancelTreatmentData = null;
+
     public function mount(?int $userId = null, ?int $month = null, ?int $year = null): void
     {
         $this->month = $month ?? (int) (request('month') ?? now()->month);
@@ -450,9 +456,38 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
     {
         $this->validateAuthorizedUserId((int) $this->userId);
 
-        $treatment = TreatmentEvent::with(['requester', 'approver', 'rejecter', 'referencePunch'])->find($treatmentId);
+        $treatment = TreatmentEvent::with(['employee.user', 'employee.sector', 'requester', 'approver', 'rejecter', 'canceller', 'referencePunch'])->find($treatmentId);
         if (! $treatment) {
             return;
+        }
+
+        $currentUser = Auth::user();
+        $isPending = ($treatment->status === \App\Domain\PTRP\Enums\TreatmentEventStatus::Pending);
+        $isApproved = ($treatment->status === \App\Domain\PTRP\Enums\TreatmentEventStatus::Approved);
+
+        $canCancel = false;
+        $canRevoke = false;
+
+        if ($isPending) {
+            $isOwn = ($treatment->requested_by === $currentUser->id || ($treatment->employee && $treatment->employee->user_id === $currentUser->id));
+            if ($currentUser->isAdmin()) {
+                $canCancel = true;
+            } elseif ($currentUser->isManager()) {
+                $managedSectorIds = Sector::where('manager_id', $currentUser->id)->pluck('id');
+                $canCancel = $isOwn || ($treatment->employee && $managedSectorIds->contains($treatment->employee->sector_id));
+            } elseif ($currentUser->isEmployee()) {
+                $canCancel = $isOwn;
+            }
+        } elseif ($isApproved) {
+            if ($currentUser->isAdmin()) {
+                $canRevoke = true;
+            } elseif ($currentUser->isManager()) {
+                $isOwn = ($treatment->employee && $treatment->employee->user_id === $currentUser->id);
+                if (! $isOwn) {
+                    $managedSectorIds = Sector::where('manager_id', $currentUser->id)->pluck('id');
+                    $canRevoke = ($treatment->employee && $managedSectorIds->contains($treatment->employee->sector_id));
+                }
+            }
         }
 
         $this->viewingTreatment = [
@@ -463,6 +498,8 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                 \App\Domain\PTRP\Enums\TreatmentEventStatus::Pending => 'Pendente de Análise',
                 \App\Domain\PTRP\Enums\TreatmentEventStatus::Approved => 'Aprovada',
                 \App\Domain\PTRP\Enums\TreatmentEventStatus::Rejected => 'Rejeitada',
+                \App\Domain\PTRP\Enums\TreatmentEventStatus::Cancelled => 'Cancelada',
+                \App\Domain\PTRP\Enums\TreatmentEventStatus::Revoked => 'Revertida',
             },
             'effective_date' => $treatment->effective_at->format('d/m/Y'),
             'effective_time' => $treatment->effective_at->format('H:i'),
@@ -473,9 +510,79 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
             'decided_by' => $treatment->approver?->name ?? $treatment->rejecter?->name,
             'requested_by' => $treatment->requester?->name,
             'has_attachment' => ! empty($treatment->attachment_path),
+            'cancelled_by' => $treatment->canceller?->name,
+            'cancelled_at' => $treatment->cancelled_at ? $treatment->cancelled_at->format('d/m/Y H:i') : null,
+            'cancellation_reason' => $treatment->cancellation_reason,
+            'can_cancel' => $canCancel,
+            'can_revoke' => $canRevoke,
         ];
 
         $this->showTreatmentDetailsModal = true;
+    }
+
+    public function openCancelModalFromTimesheet(string $treatmentId): void
+    {
+        $treatment = TreatmentEvent::with(['employee.user', 'employee.sector'])->find($treatmentId);
+        if (! $treatment) {
+            return;
+        }
+
+        $this->timesheetCancelTreatmentId = $treatment->id;
+        $this->timesheetCancelReason = '';
+        $this->timesheetCancelTreatmentData = [
+            'id' => $treatment->id,
+            'is_approved' => ($treatment->status === \App\Domain\PTRP\Enums\TreatmentEventStatus::Approved),
+            'employee_name' => $treatment->employee?->user?->name ?? 'Colaborador',
+            'effective_date' => $treatment->effective_at->format('d/m/Y H:i'),
+            'type_label' => $treatment->type->label(),
+            'reason_text' => $treatment->reason_text,
+            'status_label' => $treatment->status->label(),
+        ];
+        $this->showTreatmentDetailsModal = false;
+        $this->showTimesheetCancelModal = true;
+    }
+
+    public function confirmCancelFromTimesheet(): void
+    {
+        $this->validate([
+            'timesheetCancelReason' => 'required|string|min:5|max:500',
+        ]);
+
+        if (! $this->timesheetCancelTreatmentId) {
+            return;
+        }
+
+        $treatment = TreatmentEvent::findOrFail($this->timesheetCancelTreatmentId);
+        $isApproved = ($treatment->status === \App\Domain\PTRP\Enums\TreatmentEventStatus::Approved);
+
+        try {
+            app(\App\Domain\PTRP\Actions\CancelTreatmentEventAction::class)->execute(
+                event: $treatment,
+                actor: Auth::user(),
+                reason: $this->timesheetCancelReason,
+            );
+
+            $this->showTimesheetCancelModal = false;
+            $this->timesheetCancelTreatmentId = null;
+            $this->timesheetCancelTreatmentData = null;
+            $this->timesheetCancelReason = '';
+
+            $this->dispatch('app-modal-alert', [
+                'type' => 'success',
+                'title' => $isApproved ? 'Justificativa Revertida!' : 'Solicitação Cancelada!',
+                'message' => $isApproved
+                    ? 'A justificativa foi revertida com sucesso. A apuração da jornada deste mês foi recalculada.'
+                    : 'A solicitação pendente foi cancelada com sucesso.',
+                'buttonText' => 'OK'
+            ]);
+        } catch (\Throwable $e) {
+            $this->dispatch('app-modal-alert', [
+                'type' => 'error',
+                'title' => $isApproved ? 'Erro ao Reverter' : 'Erro ao Cancelar',
+                'message' => $e->getMessage(),
+                'buttonText' => 'Fechar'
+            ]);
+        }
     }
 
     public function closeTreatmentDetailsModal(): void
@@ -1584,7 +1691,9 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                         <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-bold text-xs mt-1
                             {{ $viewingTreatment['status'] === 'approved' ? 'bg-emerald-50 text-emerald-900 border border-emerald-300' : '' }}
                             {{ $viewingTreatment['status'] === 'rejected' ? 'bg-rose-50 text-rose-900 border border-rose-300' : '' }}
-                            {{ $viewingTreatment['status'] === 'pending' ? 'bg-amber-50 text-amber-900 border border-amber-300' : '' }}">
+                            {{ $viewingTreatment['status'] === 'pending' ? 'bg-amber-50 text-amber-900 border border-amber-300' : '' }}
+                            {{ $viewingTreatment['status'] === 'cancelled' ? 'bg-gray-100 text-gray-800 border border-gray-300' : '' }}
+                            {{ $viewingTreatment['status'] === 'revoked' ? 'bg-purple-50 text-purple-900 border border-purple-300' : '' }}">
                             {{ $viewingTreatment['status_label'] }}
                         </span>
                     </div>
@@ -1615,16 +1724,119 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                                 Aprovada formalmente por <strong>{{ $viewingTreatment['decided_by'] ?? 'RH' }}</strong> em {{ $viewingTreatment['decided_at'] }}.
                             </p>
                         </div>
+                    @elseif($viewingTreatment['status'] === 'cancelled')
+                        <div class="p-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-800 space-y-1">
+                            <span class="text-[10px] uppercase font-bold text-gray-600 block tracking-wider">Solicitação Cancelada</span>
+                            <p class="font-semibold text-xs leading-relaxed">
+                                {{ $viewingTreatment['cancellation_reason'] ?: 'Cancelada pelo solicitante.' }}
+                            </p>
+                            @if($viewingTreatment['cancelled_by'])
+                                <p class="text-[11px] text-gray-600 pt-1">
+                                    Cancelado por: <strong>{{ $viewingTreatment['cancelled_by'] }}</strong> em {{ $viewingTreatment['cancelled_at'] }}
+                                </p>
+                            @endif
+                        </div>
+                    @elseif($viewingTreatment['status'] === 'revoked')
+                        <div class="p-3 bg-purple-50 border border-purple-200 rounded-xl text-purple-900 space-y-1">
+                            <span class="text-[10px] uppercase font-bold text-purple-700 block tracking-wider">Justificativa Revertida</span>
+                            <p class="font-semibold text-xs leading-relaxed">
+                                {{ $viewingTreatment['cancellation_reason'] ?: 'Revertida administrativamente.' }}
+                            </p>
+                            @if($viewingTreatment['cancelled_by'])
+                                <p class="text-[11px] text-purple-700 pt-1">
+                                    Revertido por: <strong>{{ $viewingTreatment['cancelled_by'] }}</strong> em {{ $viewingTreatment['cancelled_at'] }}
+                                </p>
+                            @endif
+                            @if($viewingTreatment['decided_by'])
+                                <p class="text-[10px] text-gray-500 pt-1 border-t border-purple-100">
+                                    Aprovação original: <strong>{{ $viewingTreatment['decided_by'] }}</strong> em {{ $viewingTreatment['decided_at'] }}
+                                </p>
+                            @endif
+                        </div>
                     @endif
                 </div>
 
-                <div class="flex justify-end pt-3 border-t border-gray-100">
+                <div class="flex items-center justify-between pt-3 border-t border-gray-100">
+                    <div>
+                        @if(!empty($viewingTreatment['can_cancel']))
+                            <button type="button" 
+                                    wire:click="openCancelModalFromTimesheet('{{ $viewingTreatment['id'] }}')" 
+                                    class="min-h-[44px] px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-xs cursor-pointer transition">
+                                Cancelar Solicitação
+                            </button>
+                        @elseif(!empty($viewingTreatment['can_revoke']))
+                            <button type="button" 
+                                    wire:click="openCancelModalFromTimesheet('{{ $viewingTreatment['id'] }}')" 
+                                    class="min-h-[44px] px-3.5 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl font-bold text-xs cursor-pointer transition">
+                                Reverter Justificativa
+                            </button>
+                        @endif
+                    </div>
                     <button type="button" 
                             wire:click="closeTreatmentDetailsModal" 
                             class="min-h-[44px] px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold cursor-pointer transition">
                         Fechar
                     </button>
                 </div>
+            </div>
+        </div>
+    @endif
+
+    {{-- 9. MODAL DE CONFIRMAÇÃO DE CANCELAMENTO / REVERSÃO --}}
+    @if($showTimesheetCancelModal && $timesheetCancelTreatmentData)
+        <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="timesheet-cancel-title">
+            <div class="bg-white rounded-2xl max-w-lg w-full p-4 sm:p-6 shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150 border border-gray-200">
+                <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <h3 id="timesheet-cancel-title" class="text-base font-bold {{ $timesheetCancelTreatmentData['is_approved'] ? 'text-purple-800' : 'text-gray-900' }}">
+                        {{ $timesheetCancelTreatmentData['is_approved'] ? 'Reverter Justificativa Aprovada' : 'Cancelar Solicitação de Tratamento' }}
+                    </h3>
+                    <button type="button" wire:click="$set('showTimesheetCancelModal', false)" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-600 cursor-pointer" aria-label="Fechar">✕</button>
+                </div>
+
+                <div class="bg-gray-50 rounded-xl p-3.5 space-y-2 border border-gray-100 text-xs text-gray-700">
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-500 font-medium">Funcionário:</span>
+                        <span class="font-bold text-gray-900">{{ $timesheetCancelTreatmentData['employee_name'] }}</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-500 font-medium">Data da ausência:</span>
+                        <span class="font-bold text-gray-900">{{ $timesheetCancelTreatmentData['effective_date'] }}</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-500 font-medium">Tipo da justificativa:</span>
+                        <span class="font-semibold text-gray-800">{{ $timesheetCancelTreatmentData['type_label'] }}</span>
+                    </div>
+                    <div class="flex items-start justify-between gap-2">
+                        <span class="text-gray-500 font-medium whitespace-nowrap">Motivo registrado:</span>
+                        <span class="text-gray-800 text-right">{{ $timesheetCancelTreatmentData['reason_text'] }}</span>
+                    </div>
+                    <div class="flex items-center justify-between pt-1 border-t border-gray-200/60">
+                        <span class="text-gray-500 font-medium">Situação atual:</span>
+                        <span class="px-2 py-0.5 rounded text-[11px] font-bold {{ $timesheetCancelTreatmentData['is_approved'] ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200' }}">
+                            {{ $timesheetCancelTreatmentData['status_label'] }}
+                        </span>
+                    </div>
+                </div>
+
+                <form wire:submit="confirmCancelFromTimesheet" class="space-y-4 text-xs">
+                    <div>
+                        <label class="block font-bold text-gray-700 uppercase mb-1">
+                            Motivo {{ $timesheetCancelTreatmentData['is_approved'] ? 'da Reversão' : 'do Cancelamento' }} (Obrigatório)
+                        </label>
+                        <textarea wire:model="timesheetCancelReason" rows="3" class="w-full px-3 py-2 border rounded-xl" placeholder="Ex: Justificativa registrada em 14/10/2026 por engano. A ausência correta corresponde a 15/10/2026." required></textarea>
+                        @error('timesheetCancelReason') <span class="text-red-500">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-3 border-t">
+                        <button type="button" wire:click="$set('showTimesheetCancelModal', false)" class="px-4 py-2 border rounded-xl font-bold text-gray-600 hover:bg-gray-50">Voltar</button>
+                        <button type="submit" class="px-5 py-2 {{ $timesheetCancelTreatmentData['is_approved'] ? 'bg-purple-700 hover:bg-purple-800' : 'bg-gray-800 hover:bg-gray-900' }} text-white rounded-xl font-bold shadow-sm cursor-pointer">
+                            Confirmar {{ $timesheetCancelTreatmentData['is_approved'] ? 'Reversão' : 'Cancelamento' }}
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     @endif

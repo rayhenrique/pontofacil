@@ -9,6 +9,8 @@ use App\Domain\LaborRules\Enums\NightCalculationStatus;
 use App\Domain\PTRP\Actions\CalculateDailyJourneyAction;
 use App\Enums\LaborRuleApprovalStatus;
 use App\Enums\LegalRegime;
+use App\Enums\ShiftStatus;
+use App\Enums\ShiftType;
 use App\Enums\WorkScheduleModality;
 use App\Models\ClosedPeriod;
 use App\Models\Company;
@@ -17,6 +19,7 @@ use App\Models\Establishment;
 use App\Models\LaborRuleProfile;
 use App\Models\PunchEvent;
 use App\Models\Sector;
+use App\Models\ShiftAssignment;
 use App\Models\User;
 use App\Models\WorkSchedule;
 use Carbon\Carbon;
@@ -622,6 +625,30 @@ class NightWorkCalculationTest extends TestCase
             'sector_id' => $this->sector->id,
             'cpf' => '999.888.777-66',
             'legal_regime' => LegalRegime::CLT,
+        ]);
+
+        $schedule = WorkSchedule::create([
+            'code' => 'NOT-PL',
+            'name' => 'Plantão Noturno',
+            'modality' => WorkScheduleModality::TwelveByThirtySix,
+            'expected_daily_minutes' => 420,
+            'active' => true,
+        ]);
+
+        $employee->update(['work_schedule_id' => $schedule->id]);
+
+        ShiftAssignment::create([
+            'employee_id' => $employee->id,
+            'work_schedule_id' => $schedule->id,
+            'start_at_local' => Carbon::parse('2026-10-12 22:00:00', 'America/Sao_Paulo'),
+            'end_at_local' => Carbon::parse('2026-10-13 05:00:00', 'America/Sao_Paulo'),
+            'start_at_utc' => Carbon::parse('2026-10-13 01:00:00', 'UTC'),
+            'end_at_utc' => Carbon::parse('2026-10-13 08:00:00', 'UTC'),
+            'timezone' => 'America/Sao_Paulo',
+            'shift_type' => ShiftType::Shift12x36,
+            'status' => ShiftStatus::Scheduled,
+            'break_minutes' => 0,
+            'expected_work_minutes' => 420,
         ]);
 
         $date = Carbon::parse('2026-10-12', 'America/Sao_Paulo');

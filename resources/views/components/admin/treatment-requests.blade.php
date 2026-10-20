@@ -10,6 +10,7 @@ use App\Domain\PTRP\Enums\TreatmentEventStatus;
 use App\Domain\PTRP\Enums\TreatmentEventType;
 use App\Domain\PTRP\Actions\ApproveTreatmentEventAction;
 use App\Domain\PTRP\Actions\RejectTreatmentEventAction;
+use App\Domain\PTRP\Actions\CancelTreatmentEventAction;
 use Illuminate\Support\Facades\Auth;
 
 new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] class extends Component
@@ -23,6 +24,12 @@ new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] c
     public $showRejectModal = false;
     public $rejectEventId = '';
     public $rejectionReason = '';
+
+    // Modal Cancelamento / Reversão
+    public $showCancelModal = false;
+    public $cancelEventId = '';
+    public ?TreatmentEvent $cancelEvent = null;
+    public $cancellationReason = '';
 
     public function clearFilters(): void
     {
@@ -97,6 +104,56 @@ new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] c
         }
     }
 
+    public function openCancelModal(string $id)
+    {
+        $event = TreatmentEvent::with(['employee.user', 'employee.sector'])->findOrFail($id);
+        $this->cancelEventId = $id;
+        $this->cancelEvent = $event;
+        $this->cancellationReason = '';
+        $this->showCancelModal = true;
+    }
+
+    public function confirmCancel()
+    {
+        $this->validate([
+            'cancellationReason' => 'required|string|min:5|max:500',
+        ]);
+
+        $event = TreatmentEvent::findOrFail($this->cancelEventId);
+        $isApproved = ($event->status === TreatmentEventStatus::Approved);
+
+        try {
+            app(CancelTreatmentEventAction::class)->execute(
+                event: $event,
+                actor: Auth::user(),
+                reason: $this->cancellationReason,
+            );
+
+            $this->showCancelModal = false;
+            $this->cancelEvent = null;
+            $this->cancelEventId = '';
+
+            $title = $isApproved ? 'Justificativa Revertida!' : 'Solicitação Cancelada!';
+            $message = $isApproved
+                ? 'A justificativa de ausência foi revertida com sucesso. Os efeitos na apuração foram desfeitos e o histórico foi preservado para auditoria fiscal.'
+                : 'A solicitação de tratamento foi cancelada com sucesso.';
+
+            $this->dispatch('app-modal-alert', [
+                'type' => 'success',
+                'title' => $title,
+                'message' => $message,
+                'buttonText' => 'OK'
+            ]);
+        } catch (\Throwable $e) {
+            $this->dispatch('app-modal-alert', [
+                'type' => 'error',
+                'title' => $isApproved ? 'Erro ao Reverter' : 'Erro ao Cancelar',
+                'message' => $e->getMessage(),
+                'buttonText' => 'Fechar'
+            ]);
+        }
+    }
+
     public function with()
     {
         $user = Auth::user();
@@ -128,6 +185,7 @@ new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] c
             'requester',
             'approver',
             'rejecter',
+            'canceller',
             'referencePunch'
         ])->latest('created_at');
 
@@ -256,6 +314,8 @@ new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] c
                     <option value="pending">Apenas Pendentes</option>
                     <option value="approved">Aprovadas</option>
                     <option value="rejected">Recusadas / Rejeitadas</option>
+                    <option value="cancelled">Canceladas</option>
+                    <option value="revoked">Revertidas</option>
                     <option value="all">Todas as Solicitações</option>
                 </select>
             </div>
@@ -387,6 +447,14 @@ new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] c
                                     <p class="text-[11px] text-rose-600 mt-1 bg-rose-50 p-1.5 rounded-lg border border-rose-100">
                                         <strong>Motivo recusa:</strong> {{ $e->rejection_reason }}
                                     </p>
+                                @elseif($e->status === TreatmentEventStatus::Cancelled && $e->cancellation_reason)
+                                    <p class="text-[11px] text-gray-600 mt-1 bg-gray-50 p-1.5 rounded-lg border border-gray-200">
+                                        <strong>Motivo cancelamento:</strong> {{ $e->cancellation_reason }}
+                                    </p>
+                                @elseif($e->status === TreatmentEventStatus::Revoked && $e->cancellation_reason)
+                                    <p class="text-[11px] text-purple-700 mt-1 bg-purple-50 p-1.5 rounded-lg border border-purple-200">
+                                        <strong>Motivo reversão:</strong> {{ $e->cancellation_reason }}
+                                    </p>
                                 @endif
                             </td>
 
@@ -397,6 +465,8 @@ new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] c
                                         TreatmentEventStatus::Pending => 'bg-amber-50 text-amber-800 border-amber-200',
                                         TreatmentEventStatus::Approved => 'bg-emerald-50 text-emerald-800 border-emerald-200',
                                         TreatmentEventStatus::Rejected => 'bg-rose-50 text-rose-800 border-rose-200',
+                                        TreatmentEventStatus::Cancelled => 'bg-gray-100 text-gray-700 border-gray-300',
+                                        TreatmentEventStatus::Revoked => 'bg-purple-50 text-purple-800 border-purple-200',
                                     };
                                 @endphp
                                 <span class="px-2.5 py-1 rounded-full font-bold text-[11px] border {{ $stBadge }}">
@@ -417,26 +487,64 @@ new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] c
                                             ({{ $e->rejecter->isAdmin() ? 'Coordenação de RH' : 'Gestor do Setor' }})
                                         </span>
                                     </div>
+                                @elseif($e->status === TreatmentEventStatus::Cancelled && $e->canceller)
+                                    <div class="mt-1 text-[10px] text-gray-500">
+                                        <span>Cancelado por: <strong>{{ $e->canceller->name }}</strong></span>
+                                        <span class="block text-gray-400">
+                                            {{ $e->cancelled_at?->format('d/m/Y H:i') }}
+                                        </span>
+                                    </div>
+                                @elseif($e->status === TreatmentEventStatus::Revoked)
+                                    <div class="mt-1 text-[10px] text-gray-500 space-y-0.5">
+                                        @if($e->approver)
+                                            <span class="block text-gray-400">Aprovado: {{ $e->approver->name }}</span>
+                                        @endif
+                                        @if($e->canceller)
+                                            <span class="block text-purple-700 font-semibold">Revertido por: <strong>{{ $e->canceller->name }}</strong></span>
+                                            <span class="block text-gray-400">{{ $e->cancelled_at?->format('d/m/Y H:i') }}</span>
+                                        @endif
+                                    </div>
                                 @endif
                             </td>
 
                             <!-- Ações -->
                             <td class="px-4 py-3 text-right whitespace-nowrap">
                                 @if($e->status === TreatmentEventStatus::Pending)
-                                    @if($isManager && $isMySelfRequest)
-                                        <span class="inline-block px-2.5 py-1 rounded-lg bg-gray-100 text-gray-600 text-[10px] font-bold border border-gray-200" title="Pela regra de segregação de funções, o Gestor não pode aprovar solicitações próprias. O RH deve aprovar.">
-                                            Aguardando RH
-                                        </span>
-                                    @else
-                                        <div class="inline-flex items-center gap-1.5">
+                                    <div class="inline-flex items-center gap-1.5">
+                                        @if($isManager && $isMySelfRequest)
+                                            <span class="inline-block px-2.5 py-1 rounded-lg bg-gray-100 text-gray-600 text-[10px] font-bold border border-gray-200" title="Pela regra de segregação de funções, o Gestor não pode aprovar solicitações próprias. O RH deve aprovar.">
+                                                Aguardando RH
+                                            </span>
+                                        @else
                                             <button wire:click="approve('{{ $e->id }}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs shadow-xs transition cursor-pointer">
                                                 Aprovar
                                             </button>
                                             <button wire:click="openRejectModal('{{ $e->id }}')" class="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg font-bold text-xs transition cursor-pointer">
                                                 Recusar
                                             </button>
-                                        </div>
-                                    @endif
+                                        @endif
+
+                                        <button wire:click="openCancelModal('{{ $e->id }}')" class="px-2.5 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-lg font-bold text-xs transition cursor-pointer" title="Cancelar justificativa pendente">
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                @elseif($e->status === TreatmentEventStatus::Approved)
+                                    @php
+                                        $canRevert = $isAdmin || ($isManager && !$isMySelfRequest);
+                                    @endphp
+                                    <div class="inline-flex items-center gap-2">
+                                        @if($canRevert)
+                                            <button wire:click="openCancelModal('{{ $e->id }}')" class="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg font-bold text-xs transition cursor-pointer" title="Reverter justificativa aprovada">
+                                                Reverter justificativa
+                                            </button>
+                                        @else
+                                            <span class="text-[11px] text-gray-400 font-medium">Aprovado em {{ $e->decided_at?->format('d/m/Y') }}</span>
+                                        @endif
+                                    </div>
+                                @elseif($e->status === TreatmentEventStatus::Cancelled)
+                                    <span class="text-[11px] text-gray-400 font-medium">Cancelado em {{ $e->cancelled_at?->format('d/m/Y') }}</span>
+                                @elseif($e->status === TreatmentEventStatus::Revoked)
+                                    <span class="text-[11px] text-purple-600 font-medium">Revertido em {{ $e->cancelled_at?->format('d/m/Y') }}</span>
                                 @else
                                     <span class="text-[11px] text-gray-400 font-medium">Decidido em {{ $e->decided_at?->format('d/m/Y') }}</span>
                                 @endif
@@ -480,6 +588,73 @@ new #[Layout('layouts.app')] #[Title('Solicitações de Tratamento de Ponto')] c
                     <div class="flex justify-end gap-2 pt-3 border-t">
                         <button type="button" wire:click="$set('showRejectModal', false)" class="px-4 py-2 border rounded-xl font-bold text-gray-600 hover:bg-gray-50">Cancelar</button>
                         <button type="submit" class="px-5 py-2 bg-rose-600 text-white rounded-xl font-bold hover:bg-rose-700 shadow-sm">Confirmar Recusa</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endif
+
+    <!-- Modal de Cancelamento / Reversão Contextual -->
+    @if($showCancelModal && $cancelEvent)
+        @php
+            $isApprovedToRevoke = ($cancelEvent->status === TreatmentEventStatus::Approved);
+        @endphp
+        <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+                <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <h3 class="text-base font-bold {{ $isApprovedToRevoke ? 'text-purple-800' : 'text-gray-900' }}">
+                        {{ $isApprovedToRevoke ? 'Reverter Justificativa Aprovada' : 'Cancelar Solicitação de Tratamento' }}
+                    </h3>
+                    <button wire:click="$set('showCancelModal', false)" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-600 cursor-pointer" aria-label="Fechar modal">✕</button>
+                </div>
+
+                <!-- Dados do Evento Original (Preservação e Confirmação Transparente) -->
+                <div class="bg-gray-50 rounded-xl p-3.5 space-y-2 border border-gray-100 text-xs text-gray-700">
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-500 font-medium">Funcionário:</span>
+                        <span class="font-bold text-gray-900">{{ $cancelEvent->employee?->user?->name ?? 'Não identificado' }} ({{ $cancelEvent->employee?->sector?->name ?? 'Setor Padrão' }})</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-500 font-medium">Data da ausência:</span>
+                        <span class="font-bold text-gray-900">{{ $cancelEvent->effective_at->format('d/m/Y H:i') }}</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-500 font-medium">Tipo da justificativa:</span>
+                        <span class="font-semibold text-gray-800">{{ $cancelEvent->type->label() }}</span>
+                    </div>
+                    <div class="flex items-start justify-between gap-2">
+                        <span class="text-gray-500 font-medium whitespace-nowrap">Motivo registrado:</span>
+                        <span class="text-gray-800 text-right">{{ $cancelEvent->reason_text }}</span>
+                    </div>
+                    <div class="flex items-center justify-between pt-1 border-t border-gray-200/60">
+                        <span class="text-gray-500 font-medium">Situação atual:</span>
+                        <span class="px-2 py-0.5 rounded text-[11px] font-bold {{ $isApprovedToRevoke ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200' }}">
+                            {{ $cancelEvent->status->label() }}
+                        </span>
+                    </div>
+                </div>
+
+                @if($isApprovedToRevoke)
+                    <div class="p-3 bg-purple-50 border border-purple-100 rounded-xl text-xs text-purple-900">
+                        <p class="font-bold mb-1">Atenção para Reversão Administrativa:</p>
+                        <p>O registro original e o comprovante permanecerão preservados para auditoria fiscal. A reversão removerá o abono/efeito na apuração de competências abertas e permitirá lançar nova justificativa na data correta.</p>
+                    </div>
+                @endif
+
+                <form wire:submit="confirmCancel" class="space-y-4 text-xs">
+                    <div>
+                        <label class="block font-bold text-gray-700 uppercase mb-1">
+                            Motivo {{ $isApprovedToRevoke ? 'da Reversão' : 'do Cancelamento' }} (Obrigatório)
+                        </label>
+                        <textarea wire:model="cancellationReason" rows="3" class="w-full px-3 py-2 border rounded-xl" placeholder="Ex: Justificativa registrada em 14/10/2026 por engano. A ausência correta corresponde a 15/10/2026." required></textarea>
+                        @error('cancellationReason') <span class="text-red-500">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-3 border-t">
+                        <button type="button" wire:click="$set('showCancelModal', false)" class="px-4 py-2 border rounded-xl font-bold text-gray-600 hover:bg-gray-50">Voltar</button>
+                        <button type="submit" class="px-5 py-2 {{ $isApprovedToRevoke ? 'bg-purple-700 hover:bg-purple-800' : 'bg-gray-800 hover:bg-gray-900' }} text-white rounded-xl font-bold shadow-sm cursor-pointer">
+                            Confirmar {{ $isApprovedToRevoke ? 'Reversão' : 'Cancelamento' }}
+                        </button>
                     </div>
                 </form>
             </div>

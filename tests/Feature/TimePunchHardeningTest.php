@@ -7,16 +7,23 @@ use App\Domain\Compliance\ARP\Enums\ArpEventType;
 use App\Domain\Compliance\Receipt\GeneratePunchReceiptAction;
 use App\Domain\Compliance\Signing\SigningServiceInterface;
 use App\Domain\TimeClock\Actions\RecordPunchEventAction;
+use App\Enums\LegalRegime;
+use App\Enums\ShiftStatus;
+use App\Enums\ShiftType;
 use App\Enums\UserRole;
+use App\Enums\WorkScheduleModality;
 use App\Models\ArpEvent;
 use App\Models\Employee;
 use App\Models\Establishment;
+use App\Models\LaborRuleProfile;
 use App\Models\PunchEvent;
 use App\Models\PunchReceipt;
 use App\Models\Sector;
+use App\Models\ShiftAssignment;
 use App\Models\SystemSetting;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Models\WorkSchedule;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Exceptions;
@@ -39,6 +46,8 @@ class TimePunchHardeningTest extends TestCase
     {
         parent::setUp();
         CurrentCompany::clear();
+
+        LaborRuleProfile::createStandardCltProfile();
 
         SystemSetting::updateOrCreate(['key' => 'qr_code_hash'], ['value' => 'TEST_QR_SECURITY_123']);
         SystemSetting::updateOrCreate(['key' => 'company_latitude'], ['value' => '-9.665800']);
@@ -67,6 +76,7 @@ class TimePunchHardeningTest extends TestCase
             'sector_id' => $this->sector->id,
             'cpf' => '123.456.789-99',
             'job_title' => 'Vigilante',
+            'legal_regime' => LegalRegime::CLT,
             'admission_date' => now()->toDateString(),
         ]);
     }
@@ -193,6 +203,43 @@ class TimePunchHardeningTest extends TestCase
      */
     public function test_night_shift_crossing_midnight_determines_in_and_out_correctly(): void
     {
+        $schedule = WorkSchedule::create([
+            'code' => 'PL-12X36-NOT',
+            'name' => 'Plantão 12x36 Noturno',
+            'modality' => WorkScheduleModality::TwelveByThirtySix,
+            'expected_daily_minutes' => 720,
+            'active' => true,
+        ]);
+        $this->employee->update(['work_schedule_id' => $schedule->id]);
+
+        ShiftAssignment::create([
+            'employee_id' => $this->employee->id,
+            'work_schedule_id' => $schedule->id,
+            'start_at_local' => Carbon::parse('2026-10-10 22:00:00', 'America/Maceio'),
+            'end_at_local' => Carbon::parse('2026-10-11 06:00:00', 'America/Maceio'),
+            'start_at_utc' => Carbon::parse('2026-10-10 22:00:00', 'America/Maceio')->utc(),
+            'end_at_utc' => Carbon::parse('2026-10-11 06:00:00', 'America/Maceio')->utc(),
+            'timezone' => 'America/Maceio',
+            'shift_type' => ShiftType::Shift12x36,
+            'status' => ShiftStatus::Scheduled,
+            'break_minutes' => 60,
+            'expected_work_minutes' => 480,
+        ]);
+
+        ShiftAssignment::create([
+            'employee_id' => $this->employee->id,
+            'work_schedule_id' => $schedule->id,
+            'start_at_local' => Carbon::parse('2026-10-11 22:00:00', 'America/Maceio'),
+            'end_at_local' => Carbon::parse('2026-10-12 06:00:00', 'America/Maceio'),
+            'start_at_utc' => Carbon::parse('2026-10-11 22:00:00', 'America/Maceio')->utc(),
+            'end_at_utc' => Carbon::parse('2026-10-12 06:00:00', 'America/Maceio')->utc(),
+            'timezone' => 'America/Maceio',
+            'shift_type' => ShiftType::Shift12x36,
+            'status' => ShiftStatus::Scheduled,
+            'break_minutes' => 60,
+            'expected_work_minutes' => 480,
+        ]);
+
         Carbon::setTestNow('2026-10-10 22:00:00');
 
         Livewire::actingAs($this->user)
@@ -268,6 +315,31 @@ class TimePunchHardeningTest extends TestCase
      */
     public function test_year_turnover_crossing_midnight(): void
     {
+        $schedule = WorkSchedule::firstOrCreate(
+            ['code' => 'PL-12X36-NOT'],
+            [
+                'name' => 'Plantão 12x36 Noturno',
+                'modality' => WorkScheduleModality::TwelveByThirtySix,
+                'expected_daily_minutes' => 720,
+                'active' => true,
+            ]
+        );
+        $this->employee->update(['work_schedule_id' => $schedule->id]);
+
+        ShiftAssignment::create([
+            'employee_id' => $this->employee->id,
+            'work_schedule_id' => $schedule->id,
+            'start_at_local' => Carbon::parse('2026-12-31 22:00:00', 'America/Maceio'),
+            'end_at_local' => Carbon::parse('2027-01-01 06:00:00', 'America/Maceio'),
+            'start_at_utc' => Carbon::parse('2026-12-31 22:00:00', 'America/Maceio')->utc(),
+            'end_at_utc' => Carbon::parse('2027-01-01 06:00:00', 'America/Maceio')->utc(),
+            'timezone' => 'America/Maceio',
+            'shift_type' => ShiftType::Shift12x36,
+            'status' => ShiftStatus::Scheduled,
+            'break_minutes' => 60,
+            'expected_work_minutes' => 480,
+        ]);
+
         Carbon::setTestNow('2026-12-31 22:00:00');
         Livewire::actingAs($this->user)
             ->test('time-punch')

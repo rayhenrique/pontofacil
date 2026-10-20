@@ -247,7 +247,16 @@ new #[Layout('layouts.app')] #[Title('Ajuste e Correção de Ponto (PTRP)')] cla
                             <p class="text-[11px] text-gray-500 mt-0.5">Motivo: {{ $tr->reason_text }}</p>
                         </div>
                         <div class="flex items-center gap-2">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider {{ $tr->status === TreatmentEventStatus::Approved ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : ($tr->status === TreatmentEventStatus::Rejected ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-amber-50 text-amber-800 border border-amber-200') }}">
+                            @php
+                                $badgeClass = match($tr->status) {
+                                    TreatmentEventStatus::Approved => 'bg-emerald-50 text-emerald-800 border border-emerald-200',
+                                    TreatmentEventStatus::Rejected => 'bg-rose-50 text-rose-800 border border-rose-200',
+                                    TreatmentEventStatus::Cancelled => 'bg-gray-100 text-gray-700 border border-gray-300',
+                                    TreatmentEventStatus::Revoked => 'bg-purple-50 text-purple-800 border border-purple-200',
+                                    default => 'bg-amber-50 text-amber-800 border border-amber-200',
+                                };
+                            @endphp
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider {{ $badgeClass }}">
                                 {{ $tr->status->label() }}
                             </span>
                             @if($tr->approver)

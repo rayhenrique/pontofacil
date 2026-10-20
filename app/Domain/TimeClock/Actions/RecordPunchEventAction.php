@@ -7,6 +7,7 @@ use App\Domain\Compliance\ARP\Enums\ArpEventType;
 use App\Domain\Compliance\Fiscal\Services\AuditChainHashService;
 use App\Domain\Compliance\Fiscal\Services\FiscalHashService;
 use App\Domain\Compliance\Receipt\GeneratePunchReceiptAction;
+use App\Domain\TimeClock\Services\SectorGpsEnforcementService;
 use App\Models\ArpEvent;
 use App\Models\Employee;
 use App\Models\Establishment;
@@ -65,6 +66,19 @@ class RecordPunchEventAction
             if ($existingPunch) {
                 return $existingPunch;
             }
+        }
+
+        // Validação obrigatória da trava de GPS por setor antes de qualquer reserva de NSR ou gravação fiscal
+        $gpsEnforcement = app(SectorGpsEnforcementService::class)->validatePunch(
+            user: $user,
+            latitude: $latitude,
+            longitude: $longitude,
+            accuracy: $accuracy
+        );
+
+        if ($gpsEnforcement !== null) {
+            $locationValid = true;
+            $locationDistanceMeters = $gpsEnforcement['distance'];
         }
 
         $executeTransaction = function () use (

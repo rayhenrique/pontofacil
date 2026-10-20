@@ -35,11 +35,15 @@ class TreatmentEvent extends Model
         'rejected_by',
         'decided_at',
         'rejection_reason',
+        'cancelled_by',
+        'cancelled_at',
+        'cancellation_reason',
     ];
 
     protected $casts = [
         'effective_at' => 'datetime',
         'decided_at' => 'datetime',
+        'cancelled_at' => 'datetime',
         'type' => TreatmentEventType::class,
         'status' => TreatmentEventStatus::class,
         'old_value_json' => 'array',
@@ -111,6 +115,11 @@ class TreatmentEvent extends Model
         return $this->belongsTo(User::class, 'rejected_by');
     }
 
+    public function canceller(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
     public function scopePending(Builder $query): Builder
     {
         return $query->where('status', TreatmentEventStatus::Pending->value);
@@ -124,6 +133,36 @@ class TreatmentEvent extends Model
     public function scopeRejected(Builder $query): Builder
     {
         return $query->where('status', TreatmentEventStatus::Rejected->value);
+    }
+
+    public function scopeCancelled(Builder $query): Builder
+    {
+        return $query->where('status', TreatmentEventStatus::Cancelled->value);
+    }
+
+    public function scopeRevoked(Builder $query): Builder
+    {
+        return $query->where('status', TreatmentEventStatus::Revoked->value);
+    }
+
+    public function isPending(): bool
+    {
+        return $this->status === TreatmentEventStatus::Pending;
+    }
+
+    public function isApproved(): bool
+    {
+        return $this->status === TreatmentEventStatus::Approved;
+    }
+
+    public function isCancelled(): bool
+    {
+        return $this->status === TreatmentEventStatus::Cancelled;
+    }
+
+    public function isRevoked(): bool
+    {
+        return $this->status === TreatmentEventStatus::Revoked;
     }
 
     public function getPayloadAttribute(): ?array
