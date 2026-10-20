@@ -23,6 +23,8 @@ class RequestTreatmentEventAction
         ?array $newValueJson = null,
         ?string $attachmentPath = null,
         ?string $reasonCode = null,
+        ?int $referenceTimeEntryId = null,
+        string $referenceSource = 'punch_event',
     ): TreatmentEvent {
         if (empty(trim($reasonText))) {
             throw new \InvalidArgumentException('A justificativa da solicitação de tratamento é obrigatória.');
@@ -37,12 +39,20 @@ class RequestTreatmentEventAction
         }
 
         // Prevenção contra solicitações duplicadas pendentes no PTRP
-        if ($referencePunchId !== null) {
+        if ($referencePunchId !== null || $referenceTimeEntryId !== null) {
             $duplicate = TreatmentEvent::where(function ($q) use ($employee) {
                 $q->where('employee_id', $employee->id)
                     ->orWhere('employment_id', $employee->id);
             })
-                ->where('reference_punch_id', $referencePunchId)
+                ->where(function ($q) use ($referencePunchId, $referenceTimeEntryId) {
+                    if ($referencePunchId !== null) {
+                        $q->where('reference_punch_id', $referencePunchId);
+                    }
+                    if ($referenceTimeEntryId !== null) {
+                        $q->orWhere('reference_time_entry_id', $referenceTimeEntryId)
+                            ->orWhere('reference_punch_id', (string) $referenceTimeEntryId);
+                    }
+                })
                 ->where('status', TreatmentEventStatus::Pending)
                 ->first();
 
@@ -81,6 +91,8 @@ class RequestTreatmentEventAction
             'employee_id' => $employee->id,
             'employment_id' => $employee->id,
             'reference_punch_id' => $referencePunchId,
+            'reference_time_entry_id' => $referenceTimeEntryId,
+            'reference_source' => $referenceSource,
             'type' => $type,
             'status' => TreatmentEventStatus::Pending,
             'effective_at' => $effectiveAt,

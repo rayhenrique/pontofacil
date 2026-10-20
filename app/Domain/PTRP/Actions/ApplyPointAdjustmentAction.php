@@ -105,7 +105,9 @@ class ApplyPointAdjustmentAction
                 }
 
                 // 4. Mapeamento por Tipo de Ação
-                $referenceId = null;
+                $referencePunchTargetId = null;
+                $referenceTimeEntryTargetId = null;
+                $referenceSource = 'punch_event';
                 $reasonCode = null;
                 $newValueJson = null;
 
@@ -145,7 +147,9 @@ class ApplyPointAdjustmentAction
                             $carbonDate
                         );
 
-                        $referenceId = $resolved['referenceId'];
+                        $referencePunchTargetId = $resolved['referencePunchId'];
+                        $referenceTimeEntryTargetId = $resolved['referenceTimeEntryId'];
+                        $referenceSource = $resolved['referenceSource'];
                         $effectiveAt = $resolved['effectiveAt'];
                         $newValueJson = $resolved['newValueJson'];
                         break;
@@ -176,10 +180,12 @@ class ApplyPointAdjustmentAction
                     effectiveAt: $effectiveAt,
                     reasonText: trim($reason),
                     requestedBy: $actor,
-                    referencePunchId: $referenceId,
+                    referencePunchId: $referencePunchTargetId,
                     newValueJson: $newValueJson,
                     attachmentPath: $attachmentPath,
                     reasonCode: $reasonCode,
+                    referenceTimeEntryId: $referenceTimeEntryTargetId,
+                    referenceSource: $referenceSource,
                 );
 
                 // 6. Aprovação Imediata caso solicitada por usuário com autorização
@@ -203,9 +209,12 @@ class ApplyPointAdjustmentAction
                 return $event;
             });
         } catch (\Throwable $e) {
-            // Se ocorreu falha/rollback e um anexo foi gerado para esta tentativa, exclui para não deixar arquivo órfão
+            // Se ocorreu falha/rollback e um anexo foi gerado para esta tentativa, exclui apenas se não estiver vinculado a outro tratamento válido
             if ($attachmentPath && Storage::disk('local')->exists($attachmentPath)) {
-                Storage::disk('local')->delete($attachmentPath);
+                $isUsedByOther = TreatmentEvent::where('attachment_path', $attachmentPath)->exists();
+                if (! $isUsedByOther) {
+                    Storage::disk('local')->delete($attachmentPath);
+                }
             }
 
             throw $e;
@@ -296,7 +305,9 @@ class ApplyPointAdjustmentAction
                 ));
             }
 
-            $targetRefId = (string) $punch->id;
+            $referencePunchTargetId = (string) $punch->id;
+            $referenceTimeEntryTargetId = null;
+            $referenceSource = 'punch_event';
             $effectiveAt = $punch->occurred_at_local ? $punch->occurred_at_local->copy()->setTimezone($timezone) : $carbonDate;
             $newValueJson = [
                 'original_nsr' => $punch->nsr,
@@ -318,7 +329,9 @@ class ApplyPointAdjustmentAction
                 ));
             }
 
-            $targetRefId = (string) $legacy->id;
+            $referencePunchTargetId = null;
+            $referenceTimeEntryTargetId = (int) $legacy->id;
+            $referenceSource = 'time_entry';
             $effectiveAt = Carbon::parse($legacy->timestamp, $timezone);
             $newValueJson = [
                 'legacy_entry_id' => $legacy->id,
@@ -336,7 +349,15 @@ class ApplyPointAdjustmentAction
             $q->where('employee_id', $employee->id)
                 ->orWhere('employment_id', $employee->id);
         })
-            ->where('reference_punch_id', $targetRefId)
+            ->where(function ($q) use ($referencePunchTargetId, $referenceTimeEntryTargetId) {
+                if ($referencePunchTargetId !== null) {
+                    $q->where('reference_punch_id', $referencePunchTargetId);
+                }
+                if ($referenceTimeEntryTargetId !== null) {
+                    $q->orWhere('reference_time_entry_id', $referenceTimeEntryTargetId)
+                        ->orWhere('reference_punch_id', (string) $referenceTimeEntryTargetId);
+                }
+            })
             ->where('type', TreatmentEventType::PunchDisregarded)
             ->whereIn('status', [TreatmentEventStatus::Pending, TreatmentEventStatus::Approved])
             ->first();
@@ -350,7 +371,10 @@ class ApplyPointAdjustmentAction
         }
 
         return [
-            'referenceId' => $targetRefId,
+            'referenceId' => $referencePunchTargetId ?? (string) $referenceTimeEntryTargetId,
+            'referencePunchId' => $referencePunchTargetId,
+            'referenceTimeEntryId' => $referenceTimeEntryTargetId,
+            'referenceSource' => $referenceSource,
             'effectiveAt' => $effectiveAt,
             'newValueJson' => $newValueJson,
         ];

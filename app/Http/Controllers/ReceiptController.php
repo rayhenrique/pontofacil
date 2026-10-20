@@ -40,6 +40,7 @@ class ReceiptController extends Controller
                     || ($employee && $scopeService->canManageEmployee($authUser, $employee));
                 abort_unless($canAccess, 403, 'Acesso não autorizado ao comprovante.');
             }
+            // Admin e Auditor têm acesso irrestrito para auditoria e fiscalização legal
         }
 
         $pdfBinary = $generator->generate($receipt);
@@ -50,6 +51,9 @@ class ReceiptController extends Controller
             [
                 'Content-Type' => 'application/pdf',
                 'Content-Disposition' => "attachment; filename=\"comprovante_{$receipt->verification_code}.pdf\"",
+                'Cache-Control' => 'no-store, no-cache, must-revalidate, private, max-age=0',
+                'Pragma' => 'no-cache',
+                'X-Content-Type-Options' => 'nosniff',
             ]
         );
     }
@@ -76,9 +80,14 @@ class ReceiptController extends Controller
                     || ($employee && $scopeService->canManageEmployee($authUser, $employee));
                 abort_unless($canAccess, 403, 'Acesso não autorizado ao comprovante.');
             }
+            // Admin e Auditor têm acesso irrestrito para auditoria e fiscalização legal
         }
 
-        return view('receipts.print', compact('receipt'));
+        return response()
+            ->view('receipts.print', compact('receipt'))
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, private, max-age=0')
+            ->header('Pragma', 'no-cache')
+            ->header('X-Content-Type-Options', 'nosniff');
     }
 
     /**
@@ -87,7 +96,11 @@ class ReceiptController extends Controller
     public function exportAfd(Request $request): Response
     {
         $user = Auth::user();
-        abort_unless($user && $user->role === UserRole::Admin, 403, 'Acesso restrito ao Administrador do Sistema.');
+        abort_unless(
+            $user && ($user->role === UserRole::Admin || $user->role === UserRole::Auditor),
+            403,
+            'Acesso restrito à Fiscalização e ao Administrador do Sistema.'
+        );
 
         $establishmentId = $request->query('establishment_id');
         $establishment = $establishmentId

@@ -17,12 +17,39 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        User::create([
-            'name' => 'Admin Ponto Fácil',
-            'email' => 'admin@pontofacil.local',
-            'password' => Hash::make('admin123'),
-            'role' => UserRole::Admin,
-        ]);
+        $isProduction = app()->environment('production');
+
+        if ($isProduction) {
+            // Em produção, contas administrativas NUNCA recebem credenciais padrão/fixas.
+            // Permite provisionamento inicial seguro se credenciais explícitas forem fornecidas via ENV.
+            $initialEmail = env('INITIAL_ADMIN_EMAIL');
+            $initialPassword = env('INITIAL_ADMIN_PASSWORD');
+
+            if ($initialEmail && $initialPassword) {
+                if (strlen($initialPassword) < 12) {
+                    throw new \RuntimeException('INITIAL_ADMIN_PASSWORD em produção deve conter no mínimo 12 caracteres.');
+                }
+
+                User::firstOrCreate(
+                    ['email' => $initialEmail],
+                    [
+                        'name' => env('INITIAL_ADMIN_NAME', 'Administrador do Sistema'),
+                        'password' => Hash::make($initialPassword),
+                        'role' => UserRole::Admin,
+                    ]
+                );
+            }
+        } else {
+            // Ambiente de desenvolvimento e testes: preserva fixtures sem quebrar a suíte existente
+            User::firstOrCreate(
+                ['email' => 'admin@pontofacil.local'],
+                [
+                    'name' => 'Admin Ponto Fácil',
+                    'password' => Hash::make('admin123'),
+                    'role' => UserRole::Admin,
+                ]
+            );
+        }
 
         $settings = [
             ['key' => 'qr_code_hash', 'value' => Str::random(40)],
@@ -32,7 +59,10 @@ class DatabaseSeeder extends Seeder
         ];
 
         foreach ($settings as $setting) {
-            SystemSetting::create($setting);
+            SystemSetting::firstOrCreate(
+                ['key' => $setting['key']],
+                ['value' => $setting['value']]
+            );
         }
 
         CurrentCompany::get();

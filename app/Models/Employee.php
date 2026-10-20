@@ -60,6 +60,19 @@ class Employee extends Model
         'normative_effective_until' => 'date',
     ];
 
+    /**
+     * Retorna o CPF com ofuscação parcial para minimização de dados conforme LGPD (Art. 6º, III).
+     */
+    public function getMaskedCpfAttribute(): string
+    {
+        $digits = preg_replace('/\D/', '', (string) $this->cpf);
+        if (strlen($digits) === 11) {
+            return '***.'.substr($digits, 3, 3).'.'.substr($digits, 6, 3).'-**';
+        }
+
+        return '***.***.***-**';
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

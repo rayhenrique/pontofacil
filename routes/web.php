@@ -25,10 +25,12 @@ Route::middleware('guest')->group(function () {
     Route::livewire('/login', 'auth.login')->name('login');
 });
 
-// Public Verification & Receipt Routes
-Route::livewire('/verificar-comprovante', 'receipt-verification')->name('receipts.verify');
-Route::get('/comprovante/{code}/pdf', [ReceiptController::class, 'downloadPdf'])->name('receipts.pdf');
-Route::get('/comprovante/{code}/imprimir', [ReceiptController::class, 'printHtml'])->name('receipts.print');
+// Public Verification & Receipt Routes (com proteção anti-enumeração)
+Route::middleware('throttle:60,1')->group(function () {
+    Route::livewire('/verificar-comprovante', 'receipt-verification')->name('receipts.verify');
+    Route::get('/comprovante/{code}/pdf', [ReceiptController::class, 'downloadPdf'])->name('receipts.pdf');
+    Route::get('/comprovante/{code}/imprimir', [ReceiptController::class, 'printHtml'])->name('receipts.print');
+});
 
 // Authenticated Routes
 Route::middleware('auth')->group(function () {
@@ -65,13 +67,13 @@ Route::middleware('auth')->group(function () {
         Route::livewire('/treatment-requests', 'admin.treatment-requests')->name('treatment-requests');
     });
 
-    // Visualização Segura de Atestados / Comprovantes de Tratamento (Admin, Gestor do Setor ou Próprio Colaborador)
+    // Visualização Segura de Atestados / Comprovantes de Tratamento (Admin, Auditor, Gestor do Setor ou Próprio Colaborador)
     Route::get('/treatment-attachment/{id}', function (string $id) {
         $event = TreatmentEvent::with('employee.sector')->findOrFail($id);
         $user = Auth::user();
 
         $canView = false;
-        if ($user->isAdmin()) {
+        if ($user->isAdmin() || $user->isAuditor()) {
             $canView = true;
         } elseif ($user->isManager()) {
             $managedSectorIds = Sector::where('manager_id', $user->id)->pluck('id');
@@ -86,17 +88,23 @@ Route::middleware('auth')->group(function () {
             abort(403, 'Acesso não autorizado ao comprovante/atestado médico.');
         }
 
+        $headers = [
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, private, max-age=0',
+            'Pragma' => 'no-cache',
+            'X-Content-Type-Options' => 'nosniff',
+        ];
+
         // Armazenamento privado (local) para novos documentos; fallback para public para registros legados
         /** @var FilesystemAdapter $localDisk */
         $localDisk = Storage::disk('local');
         if ($localDisk->exists($event->attachment_path)) {
-            return $localDisk->response($event->attachment_path);
+            return $localDisk->response($event->attachment_path, headers: $headers);
         }
 
         /** @var FilesystemAdapter $publicDisk */
         $publicDisk = Storage::disk('public');
         if ($publicDisk->exists($event->attachment_path)) {
-            return $publicDisk->response($event->attachment_path);
+            return $publicDisk->response($event->attachment_path, headers: $headers);
         }
 
         abort(404, 'Comprovante/atestado médico não encontrado no armazenamento.');

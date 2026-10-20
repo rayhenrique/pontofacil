@@ -144,7 +144,7 @@ new class extends Component
                                     </div>
                                     <div>
                                         <span class="text-slate-500 block text-[11px]">CPF:</span>
-                                        <span class="font-mono text-slate-800">{{ $emp?->cpf ?? 'Não cadastrado' }}</span>
+                                        <span class="font-mono text-slate-800">{{ $emp?->masked_cpf ?? 'Não cadastrado' }}</span>
                                     </div>
                                 </div>
 

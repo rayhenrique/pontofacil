@@ -132,14 +132,19 @@ class DetermineNextPunchDirectionAction
 
             return 'in';
         } catch (\Throwable $e) {
-            // Em caso de exceção de infraestrutura, registra o incidente e preserva o direito de bater ponto
+            // Em caso de falha técnica inesperada de infraestrutura, registra o incidente estruturado
+            // e NÃO mascara com 'in' artificial para evitar corromper a sequência de saída do colaborador.
             Log::error('punch_direction.determination_unexpected_error', [
                 'user_id' => $user->id,
                 'exception' => get_class($e),
+                'message' => $e->getMessage(),
                 'error_code' => $e->getCode(),
             ]);
 
-            return 'in';
+            throw new \RuntimeException(
+                'Falha técnica inesperada ao determinar a direção da marcação. A operação foi cancelada para proteger a integridade do registro fiscal.',
+                previous: $e
+            );
         }
     }
 }

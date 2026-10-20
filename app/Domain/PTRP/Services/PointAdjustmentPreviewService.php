@@ -70,6 +70,7 @@ class PointAdjustmentPreviewService
         $approvedDisregardedPunchIds = $treatments
             ->where('status', TreatmentEventStatus::Approved)
             ->where('type', TreatmentEventType::PunchDisregarded)
+            ->where('reference_source', 'punch_event')
             ->pluck('reference_punch_id')
             ->filter()
             ->all();
@@ -77,8 +78,27 @@ class PointAdjustmentPreviewService
         $pendingDisregardedPunchIds = $treatments
             ->where('status', TreatmentEventStatus::Pending)
             ->where('type', TreatmentEventType::PunchDisregarded)
+            ->where('reference_source', 'punch_event')
             ->pluck('reference_punch_id')
             ->filter()
+            ->all();
+
+        $approvedDisregardedTimeEntryIds = $treatments
+            ->where('status', TreatmentEventStatus::Approved)
+            ->where('type', TreatmentEventType::PunchDisregarded)
+            ->filter(fn ($t) => $t->reference_source === 'time_entry' || ! empty($t->reference_time_entry_id))
+            ->map(fn ($t) => (int) ($t->reference_time_entry_id ?? $t->reference_punch_id))
+            ->filter()
+            ->values()
+            ->all();
+
+        $pendingDisregardedTimeEntryIds = $treatments
+            ->where('status', TreatmentEventStatus::Pending)
+            ->where('type', TreatmentEventType::PunchDisregarded)
+            ->filter(fn ($t) => $t->reference_source === 'time_entry' || ! empty($t->reference_time_entry_id))
+            ->map(fn ($t) => (int) ($t->reference_time_entry_id ?? $t->reference_punch_id))
+            ->filter()
+            ->values()
             ->all();
 
         $hasApprovedAbsence = $treatments
@@ -144,14 +164,18 @@ class PointAdjustmentPreviewService
             $entryId = (string) $entry->id;
             $timeStr = Carbon::parse($entry->timestamp)->format('H:i');
             $dir = $entry->type === 'in' ? 'in' : 'out';
-            $isDisregarded = in_array($entryId, $approvedDisregardedPunchIds, true);
-            $isBeingProposedToDisregard = ($proposedAction === 'disregard_punch' && (string) $proposedRefPunchId === $entryId);
+            $isDisregarded = in_array((int) $entry->id, $approvedDisregardedTimeEntryIds, true)
+                || in_array($entryId, $approvedDisregardedPunchIds, true);
+            $isPendingDisregard = in_array((int) $entry->id, $pendingDisregardedTimeEntryIds, true)
+                || in_array($entryId, $pendingDisregardedPunchIds, true);
+            $isBeingProposedToDisregard = ($proposedAction === 'disregard_punch'
+                && in_array((string) $proposedRefPunchId, [$entryId, 'legacy:'.$entryId], true));
 
             $availablePunches[] = [
-                'id' => $entryId,
+                'id' => 'legacy:'.$entryId,
                 'time' => $timeStr,
                 'direction' => $dir === 'in' ? 'Entrada' : 'Saída',
-                'label' => sprintf('%s às %s (Registro Histórico)', $dir === 'in' ? 'Entrada' : 'Saída', $timeStr),
+                'label' => sprintf('%s às %s (Registro Histórico #%s)', $dir === 'in' ? 'Entrada' : 'Saída', $timeStr, $entryId),
                 'is_disregarded' => $isDisregarded,
             ];
 
@@ -163,6 +187,10 @@ class PointAdjustmentPreviewService
                 $statusType = 'disregarded';
                 $statusBadge = 'bg-gray-100 text-gray-500 border-gray-200 line-through';
                 $description = sprintf('Registro histórico às %s (Desconsiderado pelo RH)', $timeStr);
+            } elseif ($isPendingDisregard) {
+                $statusType = 'pending_disregard';
+                $statusBadge = 'bg-amber-50 text-amber-800 border-amber-200';
+                $description = sprintf('Registro histórico às %s (Desconsideração aguardando análise)', $timeStr);
             } else {
                 $statusType = 'original';
                 $statusBadge = 'bg-sky-50 text-sky-800 border-sky-200';
@@ -170,7 +198,7 @@ class PointAdjustmentPreviewService
             }
 
             $items[] = [
-                'id' => $entryId,
+                'id' => 'legacy:'.$entryId,
                 'time' => $timeStr,
                 'direction' => $dir,
                 'type' => $statusType,

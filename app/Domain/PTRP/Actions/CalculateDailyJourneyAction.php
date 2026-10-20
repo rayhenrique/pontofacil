@@ -193,7 +193,15 @@ class CalculateDailyJourneyAction
 
         $disregardedPunchIds = $approvedTreatments
             ->where('type', TreatmentEventType::PunchDisregarded)
+            ->filter(fn ($t) => ($t->reference_source ?? 'punch_event') === 'punch_event' && ! empty($t->reference_punch_id))
             ->pluck('reference_punch_id')
+            ->filter()
+            ->all();
+
+        $disregardedTimeEntryIds = $approvedTreatments
+            ->where('type', TreatmentEventType::PunchDisregarded)
+            ->filter(fn ($t) => $t->reference_source === 'time_entry' || ! empty($t->reference_time_entry_id))
+            ->map(fn ($t) => $t->reference_time_entry_id ?? $t->reference_punch_id)
             ->filter()
             ->all();
 
@@ -233,6 +241,12 @@ class CalculateDailyJourneyAction
                     ->get();
 
             foreach ($legacyEntries as $entry) {
+                if (in_array((int) $entry->id, $disregardedTimeEntryIds, true) || in_array((string) $entry->id, $disregardedTimeEntryIds, true)) {
+                    $treatmentNotes[] = sprintf('Marcação histórica #%s (%s) desconsiderada por justificativa aprovada.', $entry->id, Carbon::parse($entry->timestamp)->format('H:i'));
+
+                    continue;
+                }
+
                 $entryTime = Carbon::parse($entry->timestamp);
                 $dir = match ($entry->type) {
                     'clock_in', 'in' => 'in',
@@ -368,7 +382,7 @@ class CalculateDailyJourneyAction
 
             $prevDisregardedIds = $prevTreatments
                 ->where('type', TreatmentEventType::PunchDisregarded)
-                ->pluck('reference_punch_id')
+                ->map(fn ($t) => $t->reference_source === 'time_entry' ? ($t->reference_time_entry_id ?? $t->reference_punch_id) : $t->reference_punch_id)
                 ->filter()
                 ->all();
 
@@ -529,7 +543,7 @@ class CalculateDailyJourneyAction
 
             $nextDisregardedIds = $nextTreatments
                 ->where('type', TreatmentEventType::PunchDisregarded)
-                ->pluck('reference_punch_id')
+                ->map(fn ($t) => $t->reference_source === 'time_entry' ? ($t->reference_time_entry_id ?? $t->reference_punch_id) : $t->reference_punch_id)
                 ->filter()
                 ->all();
 

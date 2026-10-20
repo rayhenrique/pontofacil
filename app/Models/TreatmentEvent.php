@@ -20,6 +20,8 @@ class TreatmentEvent extends Model
         'employee_id',
         'employment_id',
         'reference_punch_id',
+        'reference_time_entry_id',
+        'reference_source',
         'type',
         'status',
         'effective_at',
@@ -70,6 +72,28 @@ class TreatmentEvent extends Model
     public function referencePunch(): BelongsTo
     {
         return $this->belongsTo(PunchEvent::class, 'reference_punch_id', 'id');
+    }
+
+    public function referenceTimeEntry(): BelongsTo
+    {
+        return $this->belongsTo(TimeEntry::class, 'reference_time_entry_id', 'id');
+    }
+
+    public function isForPunchEvent(): bool
+    {
+        return ($this->reference_source ?? 'punch_event') === 'punch_event';
+    }
+
+    public function isForTimeEntry(): bool
+    {
+        return $this->reference_source === 'time_entry' || ! empty($this->reference_time_entry_id);
+    }
+
+    public function targetReferenceId(): string|int|null
+    {
+        return $this->isForTimeEntry()
+            ? ($this->reference_time_entry_id ?? $this->reference_punch_id)
+            : $this->reference_punch_id;
     }
 
     public function requester(): BelongsTo

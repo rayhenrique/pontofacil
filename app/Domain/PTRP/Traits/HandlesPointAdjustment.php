@@ -9,6 +9,7 @@ use App\Models\ClosedPeriod;
 use App\Models\Employee;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 trait HandlesPointAdjustment
@@ -44,6 +45,8 @@ trait HandlesPointAdjustment
     public array $adjSequencePreview = [];
 
     public array $adjAvailablePunches = [];
+
+    public ?string $adjIdempotencyKey = null;
 
     /**
      * Abre o modal unificado de ajuste/correção de ponto com dados pré-preenchidos.
@@ -94,6 +97,7 @@ trait HandlesPointAdjustment
         $this->adjReason = '';
         $this->adjAttachment = null;
         $this->adjIsSubmitting = false;
+        $this->adjIdempotencyKey = (string) Str::uuid();
         $this->adjRefPunchId = $punchId ? (string) $punchId : null;
 
         // Configuração de Aprovação Direta e Segregação de Funções
@@ -136,6 +140,7 @@ trait HandlesPointAdjustment
         $this->showAdjustmentModal = false;
         $this->adjIsSubmitting = false;
         $this->adjAttachment = null;
+        $this->adjIdempotencyKey = null;
         $this->resetErrorBag();
     }
 
@@ -286,11 +291,13 @@ trait HandlesPointAdjustment
                 reasonCategory: $this->adjReasonCategory,
                 attachmentPath: $attachmentPath,
                 autoApprove: $autoApprove,
+                idempotencyKey: $this->adjIdempotencyKey,
             );
 
             $this->showAdjustmentModal = false;
             $this->adjIsSubmitting = false;
             $this->adjAttachment = null;
+            $this->adjIdempotencyKey = null;
 
             $statusText = $event->status->label();
             $title = $autoApprove ? 'Ajuste de Ponto Aprovado!' : 'Solicitação de Ajuste Registrada!';

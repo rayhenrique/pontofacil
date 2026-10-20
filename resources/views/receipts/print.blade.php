@@ -50,6 +50,7 @@
             $event = $receipt->punchEvent;
             $est = $event->establishment;
             $comp = $est->company;
+            $company = $comp;
             $user = $event->user;
             $emp = $event->employee;
             $nsrFormatado = str_pad((string)$event->nsr, 9, '0', STR_PAD_LEFT);
