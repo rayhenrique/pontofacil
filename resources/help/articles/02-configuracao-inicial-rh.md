@@ -129,6 +129,11 @@ Tentar cadastrar servidores antes de criar setores e escalas resultará em campo
    * **Início da Vigência da Escala:** Data a partir da qual o colaborador passa a cumprir essa jornada (ex: data de admissão ou primeiro dia do mês).
 4. Clique em **Salvar Funcionário**.
 
+### Configuração normativa obrigatória para escalas especiais (v2.6.20)
+Antes de atribuir plantões 12x36 ou 24x72 a servidores estatutários municipais/estaduais, entre em **Configurações → Perfis Normativos** (`/admin/labor-rule-profiles`), cadastre e aprove o perfil aplicável e vincule-o ao servidor na data correta. Consulte o [tutorial detalhado](/ajuda?artigo=perfis-normativos-e-autorizacao).
+
+**Ordem recomendada no cadastro:** cadastrar funcionário com dados funcionais; atribuir perfil normativo; então atribuir a escala especial. Não informar uma lei fictícia para liberar a escala.
+
 ### Etapa 10: Configurar o QR Code Institucional ou Setorial
 O PontoFácil adota uma **arquitetura híbrida de QR Code**:
 1. **QR Code Global da Empresa:**
@@ -142,7 +147,7 @@ O PontoFácil adota uma **arquitetura híbrida de QR Code**:
 2. Estando fisicamente no local da sede, clique no botão **Capturar Minha Posição Atual (GPS)** (ou digite a Latitude e Longitude manualmente).
 3. Defina o **Raio Permitido (metros)** (ex: 100 metros ou 200 metros).
 4. Clique em **Salvar Coordenadas**.
-   * *Aviso Legal Importante:* O GPS serve como evidência contextual de auditoria. Marcações fora do raio não são impedidas de serem registradas, mas são sinalizadas com aviso de perímetro para o gestor e RH.
+   * **Comportamento atual:** o setor pode ativar a opção **GPS Obrigatório**. Quando ativada, batidas fora do raio, sem GPS ou com precisão insuficiente **são recusadas**. Quando desativada, a divergência pode ser registrada como aviso/evidência, sem um fluxo formal de decisão do RH. Consulte [GPS e QR por setor](/ajuda?artigo=gps-e-qr-por-setor).
 
 ### Etapa 12: Definir Regras de Compensação / Banco de Horas
 1. Se a organização adotar banco de horas, acesse **Configurações** (`/admin/settings`) e configure a política padrão (Acumular / CARRY_OVER ou Compensação Mensal).
@@ -159,5 +164,5 @@ O PontoFácil adota uma **arquitetura híbrida de QR Code**:
 1. Acesse **Espelho de Ponto** (`/timesheet`).
 2. Selecione o colaborador testado e a competência atual.
 3. Verifique se a marcação de entrada apareceu na linha do dia correspondente com o NSR e horário exato.
-4. Acesse **Central de Comprovantes** (`/comprovantes`) e faça o download do comprovante em PDF para validar a assinatura eletrônica e o código de autenticidade.
-5. A implantação está concluída e o sistema está pronto para uso operacional por toda a equipe.
+4. Acesse **Central de Comprovantes** (`/comprovantes`) e faça o download do comprovante em PDF para conferir o NSR, o conteúdo e o código de verificação. **A assinatura digital ICP-Brasil ainda não está implementada nesta versão.**
+5. Encerre a homologação apenas após testar jornada, acesso, GPS, relatórios, autorização normativa e processos internos. A instalação por si só não equivale à certificação regulatória para produção.
