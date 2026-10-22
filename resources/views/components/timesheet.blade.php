@@ -1351,7 +1351,7 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                                 </span>
                             @elseif(!empty($dayCalc['shift_code']))
                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                    Plantão
+                                    Plantão{{ !empty($dayCalc['identified_shift_turn_label']) ? ' · '.$dayCalc['identified_shift_turn_label'] : '' }}
                                 </span>
                             @elseif(!empty($dayCalc['is_day_off']))
                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">

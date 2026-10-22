@@ -116,7 +116,8 @@ class WorkSchedule extends Model
         }
 
         $modalityKey = match ($modality) {
-            WorkScheduleModality::TwelveByThirtySix => '12x36',
+            WorkScheduleModality::TwelveByThirtySix,
+            WorkScheduleModality::FlexibleTwelveByThirtySix => '12x36',
             WorkScheduleModality::TwentyFourBySeventyTwo => '24x72',
             default => null,
         };
@@ -197,9 +198,15 @@ class WorkSchedule extends Model
         return (int) ($day['expected_minutes'] ?? 0);
     }
 
+    public function isFlexible(): bool
+    {
+        return $this->modality === WorkScheduleModality::FlexibleTwelveByThirtySix
+            || (! empty($this->cycle_data['is_flexible']));
+    }
+
     public function calculateWeeklyMinutes(): int
     {
-        if ($this->modality === WorkScheduleModality::TwelveByThirtySix) {
+        if ($this->modality === WorkScheduleModality::TwelveByThirtySix || $this->modality === WorkScheduleModality::FlexibleTwelveByThirtySix) {
             // Média de 3,5 plantões por semana (42h ou 36h de trabalho efetivo por semana)
             $daily = $this->expected_daily_minutes ?: 720;
 
@@ -232,11 +239,12 @@ class WorkSchedule extends Model
         $daysInMonth = $startDate->daysInMonth;
         $totalMinutes = 0;
 
-        if ($this->modality === WorkScheduleModality::TwelveByThirtySix || $this->modality === WorkScheduleModality::TwentyFourBySeventyTwo) {
+        if ($this->modality === WorkScheduleModality::TwelveByThirtySix || $this->modality === WorkScheduleModality::FlexibleTwelveByThirtySix || $this->modality === WorkScheduleModality::TwentyFourBySeventyTwo) {
             $anchorStr = $this->cycle_data['anchor_date'] ?? null;
             $anchor = $anchorDate ? $anchorDate->copy()->startOfDay() : ($anchorStr ? Carbon::parse($anchorStr)->startOfDay() : $startDate->copy());
-            $cycleLength = $this->modality === WorkScheduleModality::TwelveByThirtySix ? 2 : 4;
-            $workMinutes = (int) ($this->expected_daily_minutes ?: ($this->modality === WorkScheduleModality::TwelveByThirtySix ? 720 : 1440));
+            $is12 = $this->modality === WorkScheduleModality::TwelveByThirtySix || $this->modality === WorkScheduleModality::FlexibleTwelveByThirtySix;
+            $cycleLength = $is12 ? 2 : 4;
+            $workMinutes = (int) ($this->expected_daily_minutes ?: ($is12 ? 720 : 1440));
 
             for ($day = 1; $day <= $daysInMonth; $day++) {
                 $curDate = Carbon::createFromDate($year, $month, $day)->startOfDay();

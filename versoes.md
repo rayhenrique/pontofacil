@@ -1,6 +1,21 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.21 (Atual)
+## v2.6.22 (Atual)
+- **Nova Escala de Plantonista Flexível 12x36 (Diurno e Noturno no Mesmo Mês):**
+  - **Trabalho em Plantões de Dia e de Noite sem Complicação:**
+    - Profissionais da saúde e plantonistas agora podem alternar entre plantões de dia (das 07:00 às 19:00) e de noite (das 19:00 às 07:00 do dia seguinte) durante o mesmo mês sem que o RH precise trocar a escala no sistema toda vez ou cadastrar cada plantão manualmente.
+  - **Reconhecimento Automático pelas Batidas de Ponto:**
+    - Ao bater o ponto, o sistema identifica sozinho se o plantão feito naquele dia foi de dia ou de noite. As horas trabalhadas e os adicionais noturnos devidos são calculados de forma automática e correta.
+  - **Continuidade do Plantão Noturno no Dia Seguinte:**
+    - Para quem faz plantão à noite, ao bater o ponto de manhã cedo (por volta das 07:00 do dia seguinte), o relógio de ponto já sugere diretamente a "Saída" do plantão iniciado na noite anterior, evitando que o trabalhador registre uma nova entrada por engano.
+  - **Acompanhamento do Descanso de 36 Horas:**
+    - O sistema acompanha o intervalo entre os plantões. Se um novo plantão começar antes das 36 horas de descanso recomendadas pela legislação, um aviso informativo é registrado para orientar a chefia e o RH.
+  - **Dias sem Plantão com Total Tranquilidade:**
+    - Se em um dos dias previstos pela escala o profissional não trabalhar (por exemplo, em troca ou ajuste interno de escala), o sistema não lança falta automática indevida, deixando o dia sinalizado para conferência simples da chefia.
+  - **Visualização Clara no Espelho de Ponto e na Gestão de Escalas:**
+    - No espelho de ponto e na tela de escalas, cada plantão ganha uma etiqueta clara informando se foi "Diurno" ou "Noturno", garantindo total transparência para o colaborador e para a equipe de gestão.
+
+## v2.6.21
 - **Correção Inteligente de Marcações e Ajustes de Horário (Espelho de Ponto e Apuração):**
   - **Ajuste Automático do Sentido das Batidas após Inclusão pelo RH:**
     - Quando um colaborador esquecia de bater o ponto na entrada (por exemplo, às 08:00) e registrava apenas a saída para o almoço (12:52) e o retorno (13:00), o sistema registrava esses pontos com o sentido invertido. Agora, assim que o RH aprova a inclusão da batida esquecida das 08:00, o sistema organiza automaticamente toda a sequência do dia: a batida das 12:52 passa a contar como saída para o almoço e a das 13:00 como retorno, calculando as horas trabalhadas e o intervalo com total precisão e eliminando avisos de erro indevidos.

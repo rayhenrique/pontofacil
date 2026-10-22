@@ -4,6 +4,8 @@ namespace App\Domain\WorkSchedule\Actions;
 
 use App\Domain\Calendar\Services\WorkCalendarService;
 use App\Domain\Company\Services\SectorScopeService;
+use App\Domain\PTRP\Actions\ResolveEffectiveJourneySequenceAction;
+use App\Domain\WorkSchedule\Services\FlexibleShiftService;
 use App\Enums\ShiftOrigin;
 use App\Enums\ShiftStatus;
 use App\Enums\ShiftType;
@@ -11,6 +13,7 @@ use App\Enums\WorkScheduleModality;
 use App\Models\ClosedPeriod;
 use App\Models\Employee;
 use App\Models\Establishment;
+use App\Models\PunchEvent;
 use App\Models\ShiftAssignment;
 use App\Models\User;
 use App\Models\WorkSchedule;
@@ -84,6 +87,7 @@ class GenerateCyclicShiftsAction
         // 2. Jornadas fixas usam a atribuição vigente: não gerar plantões artificiais.
         $cyclicModalities = [
             WorkScheduleModality::TwelveByThirtySix,
+            WorkScheduleModality::FlexibleTwelveByThirtySix,
             WorkScheduleModality::TwentyFourBySeventyTwo,
             WorkScheduleModality::SixByOne,
             WorkScheduleModality::CustomCycle,
@@ -173,6 +177,7 @@ class GenerateCyclicShiftsAction
                             'is_day_off' => $shiftData['is_day_off'],
                             'is_night_shift' => $shiftData['is_night_shift'],
                             'crosses_midnight' => $shiftData['crosses_midnight'],
+                            'recognized_turn' => $shiftData['recognized_turn'] ?? $existing->recognized_turn,
                             'notes' => $shiftData['notes'] ?? null,
                         ]);
 
@@ -200,6 +205,7 @@ class GenerateCyclicShiftsAction
                         'is_day_off' => $shiftData['is_day_off'],
                         'is_night_shift' => $shiftData['is_night_shift'],
                         'crosses_midnight' => $shiftData['crosses_midnight'],
+                        'recognized_turn' => $shiftData['recognized_turn'] ?? null,
                         'reason' => 'Geração automatizada de escala cíclica',
                         'assigned_by' => $assignedBy?->id,
                         'notes' => $shiftData['notes'] ?? null,
@@ -231,17 +237,52 @@ class GenerateCyclicShiftsAction
         $modality = $schedule->modality ?? WorkScheduleModality::FixedWeekly;
         $diffDays = (int) $anchor->diffInDays($targetDate, false);
 
-        // 1. Modalidade 12x36
-        if ($modality === WorkScheduleModality::TwelveByThirtySix) {
+        // 1. Modalidade 12x36 e Plantonista Flexível 12x36
+        if ($modality === WorkScheduleModality::TwelveByThirtySix || $modality === WorkScheduleModality::FlexibleTwelveByThirtySix) {
             $cycleIndex = ($diffDays % 2 + 2) % 2;
 
             if ($cycleIndex === 0) {
-                // Dia de plantão 12h
-                $isNight = ! empty($schedule->cycle_data['is_night_shift']) ||
-                    ($schedule->cycle_data['start_time'] ?? '') === '19:00';
+                $isFlexible = ($modality === WorkScheduleModality::FlexibleTwelveByThirtySix) || ! empty($schedule->cycle_data['is_flexible']);
 
-                $startTime = $schedule->cycle_data['start_time'] ?? ($isNight ? '19:00' : '07:00');
-                $endTime = $schedule->cycle_data['end_time'] ?? ($isNight ? '07:00' : '19:00');
+                $recognizedTurn = FlexibleShiftService::TURN_UNDEFINED;
+                $isNight = false;
+                $startTime = $schedule->cycle_data['day_start_time'] ?? $schedule->cycle_data['start_time'] ?? '07:00';
+                $endTime = $schedule->cycle_data['day_end_time'] ?? $schedule->cycle_data['end_time'] ?? '19:00';
+
+                if ($isFlexible) {
+                    $punchesOnDay = PunchEvent::where(function ($q) use ($employee) {
+                        $q->where('employee_id', $employee->id);
+                        if ($employee->user_id) {
+                            $q->orWhere('user_id', $employee->user_id);
+                        }
+                    })
+                        ->where('occurred_at_local', '>=', $targetDate->copy()->startOfDay())
+                        ->where('occurred_at_local', '<', $targetDate->copy()->addDay()->startOfDay())
+                        ->orderBy('occurred_at_local', 'asc')
+                        ->get();
+
+                    if ($punchesOnDay->isNotEmpty()) {
+                        $flexService = app(FlexibleShiftService::class);
+                        $resolvedSequence = app(ResolveEffectiveJourneySequenceAction::class)->execute(
+                            employee: $employee,
+                            date: $targetDate,
+                            rawPunches: $punchesOnDay,
+                            establishment: $establishment
+                        );
+                        $recognizedTurn = $flexService->classifyTurn($resolvedSequence, $schedule, $tz);
+                        if ($recognizedTurn === FlexibleShiftService::TURN_NIGHT) {
+                            $isNight = true;
+                            $startTime = $schedule->cycle_data['night_start_time'] ?? '19:00';
+                            $endTime = $schedule->cycle_data['night_end_time'] ?? '07:00';
+                        }
+                    }
+                } else {
+                    $isNight = ! empty($schedule->cycle_data['is_night_shift']) ||
+                        ($schedule->cycle_data['start_time'] ?? '') === '19:00';
+                    $startTime = $schedule->cycle_data['start_time'] ?? ($isNight ? '19:00' : '07:00');
+                    $endTime = $schedule->cycle_data['end_time'] ?? ($isNight ? '07:00' : '19:00');
+                }
+
                 $breakMinutes = (int) ($schedule->cycle_data['break_minutes'] ?? 60);
 
                 [$startH, $startM] = explode(':', $startTime);
@@ -264,6 +305,15 @@ class GenerateCyclicShiftsAction
                     $calendarNotes[] = "Calendário: {$ev->name} ({$ev->type->label()})";
                 }
 
+                $notesPrefix = $isFlexible
+                    ? ($recognizedTurn === FlexibleShiftService::TURN_UNDEFINED ? 'Plantão Flexível 12×36 (Turno a definir pelas marcações)' : 'Plantão Flexível 12×36 (Turno '.($isNight ? 'Noturno' : 'Diurno').' reconhecido)')
+                    : '';
+                if ($notesPrefix && ! empty($calendarNotes)) {
+                    $calendarNotes = array_merge([$notesPrefix], $calendarNotes);
+                } elseif ($notesPrefix) {
+                    $calendarNotes[] = $notesPrefix;
+                }
+
                 return [[
                     'start_at_local' => $startLocal,
                     'end_at_local' => $endLocal,
@@ -273,6 +323,7 @@ class GenerateCyclicShiftsAction
                     'is_day_off' => false,
                     'is_night_shift' => $isNight,
                     'crosses_midnight' => $crossesMidnight,
+                    'recognized_turn' => $isFlexible ? $recognizedTurn : ($isNight ? 'night' : 'day'),
                     'notes' => implode('. ', $calendarNotes),
                 ]];
             }
@@ -287,6 +338,7 @@ class GenerateCyclicShiftsAction
                     'is_day_off' => true,
                     'is_night_shift' => false,
                     'crosses_midnight' => false,
+                    'recognized_turn' => null,
                     'notes' => 'Folga da escala 12×36 (36h de descanso)',
                 ]];
             }

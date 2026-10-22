@@ -58,6 +58,8 @@ class CalculatedJourney
         public int $justifiedMinutes = 0,
         public bool $isFuture = false,
         public bool $isInProgress = false,
+        public ?string $identifiedShiftTurn = null,
+        public ?string $identifiedShiftTurnLabel = null,
     ) {}
 
     public static function formatMinutes(int $minutes, bool $withSign = false): string
@@ -293,6 +295,8 @@ class CalculatedJourney
             'justified_minutes' => $this->justifiedMinutes,
             'is_future' => $this->isFuture,
             'is_in_progress' => $this->isInProgress,
+            'identified_shift_turn' => $this->identifiedShiftTurn,
+            'identified_shift_turn_label' => $this->identifiedShiftTurnLabel,
             'human_work_statement' => $this->humanWorkStatement(),
             'human_difference' => $this->humanDifference(),
             'attention_reason' => $this->attentionReason(),

@@ -261,6 +261,61 @@ class ConfigureWorkScheduleAction
     }
 
     /**
+     * Modelo E) PLANTONISTA FLEXÍVEL 12x36
+     * - Plantões de 12 horas com alternância entre turnos diurnos e noturnos no mesmo mês.
+     * - Reconhecimento automático pelas marcações de ponto, controle de descanso de 36h e apuração.
+     */
+    public function createFlexible12h(array $data, ?User $actor = null): WorkSchedule
+    {
+        $name = trim($data['name'] ?? 'Plantonista Flexível 12x36');
+        $dayStart = $data['day_start_time'] ?? '07:00';
+        $dayEnd = $data['day_end_time'] ?? '19:00';
+        $nightStart = $data['night_start_time'] ?? '19:00';
+        $nightEnd = $data['night_end_time'] ?? '07:00';
+        $breakMinutes = (int) ($data['break_minutes'] ?? 60);
+        $anchorDate = $data['anchor_date'] ?? Carbon::today()->format('Y-m-d');
+        $autoDetect = (bool) ($data['auto_detect_turn'] ?? true);
+
+        $dailyWorkMin = 720 - $breakMinutes;
+        $weeklyAverageMin = (int) round($dailyWorkMin * 3.5); // 3,5 plantões na semana em média
+
+        return WorkSchedule::create([
+            'code' => $data['code'] ?? 'FLEX12-'.Str::upper(Str::random(6)),
+            'name' => $name,
+            'description' => $data['description'] ?? sprintf(
+                'Plantonista Flexível 12x36 (Diurno: %s–%s / Noturno: %s–%s, descanso 36h)',
+                $dayStart,
+                $dayEnd,
+                $nightStart,
+                $nightEnd
+            ),
+            'modality' => WorkScheduleModality::FlexibleTwelveByThirtySix,
+            'cycle_days' => 2,
+            'expected_daily_minutes' => $dailyWorkMin,
+            'expected_weekly_minutes' => $weeklyAverageMin,
+            'tolerance_minutes' => (int) ($data['tolerance_minutes'] ?? 5),
+            'daily_tolerance_minutes' => (int) ($data['daily_tolerance_minutes'] ?? 10),
+            'requires_legal_authorization' => false,
+            'cycle_data' => [
+                'is_flexible' => true,
+                'day_start_time' => $dayStart,
+                'day_end_time' => $dayEnd,
+                'night_start_time' => $nightStart,
+                'night_end_time' => $nightEnd,
+                'start_time' => $dayStart,
+                'end_time' => $dayEnd,
+                'duration_hours' => 12,
+                'rest_hours' => 36,
+                'break_minutes' => $breakMinutes,
+                'auto_detect_turn' => $autoDetect,
+                'anchor_date' => $anchorDate,
+            ],
+            'schedule_data' => [],
+            'active' => true,
+        ]);
+    }
+
+    /**
      * Calcula prévia em tempo real das cargas diária, semanal e mensal prevista no calendário real.
      * Não presume 200h.
      */
@@ -386,6 +441,30 @@ class ConfigureWorkScheduleAction
                     $cur = Carbon::createFromDate($targetYear, $targetMonth, $d)->startOfDay();
                     $diff = (int) $anchor->diffInDays($cur, false);
                     if ((($diff % 4 + 4) % 4) === 0) {
+                        $workDaysInMonth++;
+                        $monthlyExpectedMinutes += $dailyMinutes;
+                    }
+                }
+            })(),
+
+            'flexible_12h' => (function () use (
+                $data, $daysInMonth, $targetYear, $targetMonth, $startDate,
+                &$dailyMinutes, &$weeklyMinutes, &$monthlyExpectedMinutes, &$workDaysInMonth,
+                &$crossesMidnight, &$isNight
+            ) {
+                $bMin = (int) ($data['break_minutes'] ?? 60);
+                $dailyMinutes = 720 - $bMin;
+                $weeklyMinutes = (int) round($dailyMinutes * 3.5);
+                $crossesMidnight = true; // Turnos noturnos atravessam meia-noite
+                $isNight = false; // Alternância diurno/noturno automática
+
+                $anchorStr = $data['anchor_date'] ?? null;
+                $anchor = $anchorStr ? Carbon::parse($anchorStr)->startOfDay() : $startDate->copy();
+
+                for ($d = 1; $d <= $daysInMonth; $d++) {
+                    $cur = Carbon::createFromDate($targetYear, $targetMonth, $d)->startOfDay();
+                    $diff = (int) $anchor->diffInDays($cur, false);
+                    if ((($diff % 2 + 2) % 2) === 0) {
                         $workDaysInMonth++;
                         $monthlyExpectedMinutes += $dailyMinutes;
                     }

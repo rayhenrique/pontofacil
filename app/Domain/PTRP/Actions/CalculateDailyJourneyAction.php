@@ -13,7 +13,10 @@ use App\Domain\PTRP\Enums\TreatmentEventType;
 use App\Domain\PTRP\Policies\LaborPolicy;
 use App\Domain\Settlement\DTOs\WorkTimeApuracaoResult;
 use App\Domain\Settlement\Services\WorkTimeSettlementService;
+use App\Domain\WorkSchedule\Services\FlexibleShiftService;
 use App\Domain\WorkSchedule\Services\ShiftMidnightService;
+use App\Enums\ShiftOrigin;
+use App\Enums\ShiftStatus;
 use App\Enums\ShiftType;
 use App\Enums\WorkScheduleModality;
 use App\Models\Employee;
@@ -28,6 +31,7 @@ use App\Models\WorkTimeSettlementPolicy;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 class CalculateDailyJourneyAction
 {
@@ -144,7 +148,10 @@ class CalculateDailyJourneyAction
         $calendarService = app(WorkCalendarService::class);
         $calendarDay = $calendarService->resolveDay($date, $establishment, $scheduledMinutes, $expectedPeriods, $prefetch?->calendarEvents);
 
-        $is12x36 = ($shift?->shift_type === ShiftType::Shift12x36) || ($workSchedule?->modality === WorkScheduleModality::TwelveByThirtySix);
+        $is12x36 = ($shift?->shift_type === ShiftType::Shift12x36)
+            || ($workSchedule?->modality === WorkScheduleModality::TwelveByThirtySix)
+            || ($workSchedule?->modality === WorkScheduleModality::FlexibleTwelveByThirtySix)
+            || ($shift !== null && $shift->isFlexible());
 
         if ($hasSchedule) {
             if ($is12x36 && (($shift && ! $shift->is_day_off) || ($workSchedule && $scheduledMinutes > 0))) {
@@ -234,6 +241,90 @@ class CalculateDailyJourneyAction
         }
         foreach ($approvedTreatments->where('type', TreatmentEventType::ManualPunchAdded) as $manual) {
             $treatmentNotes[] = sprintf('Batida manual inserida às %s (%s).', $manual->effective_at->format('H:i'), $manual->reason_text);
+        }
+
+        // 7.1. Se for plantonista flexível 12x36, executar reconhecimento automático do turno
+        $isFlexibleSchedule = ($workSchedule?->modality === WorkScheduleModality::FlexibleTwelveByThirtySix)
+            || ($shift !== null && $shift->isFlexible());
+
+        $identifiedShiftTurn = null;
+        $identifiedShiftTurnLabel = null;
+
+        if ($isFlexibleSchedule) {
+            $flexService = app(FlexibleShiftService::class);
+            $classifiedTurn = $flexService->classifyTurn($effectivePunches, $workSchedule, $tz);
+            $identifiedShiftTurn = $classifiedTurn;
+
+            if ($classifiedTurn === FlexibleShiftService::TURN_DAY) {
+                $identifiedShiftTurnLabel = 'Diurno';
+                $treatmentNotes[] = 'Turno identificado: Diurno (07:00 às 19:00).';
+                if ($shift) {
+                    $flexService->syncTurnToShift($shift, FlexibleShiftService::TURN_DAY, $localDay, $workSchedule);
+                    $shift->refresh();
+                    $scheduledMinutes = 720 - $shift->break_minutes;
+                } else {
+                    $scheduledMinutes = 720 - (int) ($workSchedule?->cycle_data['break_minutes'] ?? 60);
+                }
+            } elseif ($classifiedTurn === FlexibleShiftService::TURN_NIGHT) {
+                $identifiedShiftTurnLabel = 'Noturno';
+                $treatmentNotes[] = 'Turno identificado: Noturno (19:00 às 07:00 do dia seguinte).';
+                if ($shift) {
+                    $flexService->syncTurnToShift($shift, FlexibleShiftService::TURN_NIGHT, $localDay, $workSchedule);
+                    $shift->refresh();
+                    $scheduledMinutes = 720 - $shift->break_minutes;
+                } else {
+                    $nightStartStr = $workSchedule?->cycle_data['night_start_time'] ?? '19:00';
+                    $nightEndStr = $workSchedule?->cycle_data['night_end_time'] ?? '07:00';
+                    [$nSH, $nSM] = explode(':', $nightStartStr);
+                    [$nEH, $nEM] = explode(':', $nightEndStr);
+
+                    $startLocal = $localDay->copy()->setTime((int) $nSH, (int) $nSM, 0);
+                    $endLocal = $localDay->copy()->addDay()->setTime((int) $nEH, (int) $nEM, 0);
+                    $breakMin = (int) ($workSchedule?->cycle_data['break_minutes'] ?? 60);
+
+                    $activeAssignment = $employee->workScheduleAssignments()
+                        ->where('effective_from', '<=', $localDay->format('Y-m-d'))
+                        ->where(function ($q) use ($localDay) {
+                            $q->whereNull('effective_until')
+                                ->orWhere('effective_until', '>=', $localDay->format('Y-m-d'));
+                        })
+                        ->first();
+
+                    $shift = ShiftAssignment::create([
+                        'shift_code' => (string) Str::uuid(),
+                        'employee_id' => $employee->id,
+                        'work_schedule_assignment_id' => $activeAssignment?->id,
+                        'work_schedule_id' => $workSchedule?->id,
+                        'start_at_utc' => $startLocal->copy()->setTimezone('UTC'),
+                        'end_at_utc' => $endLocal->copy()->setTimezone('UTC'),
+                        'start_at_local' => $startLocal,
+                        'end_at_local' => $endLocal,
+                        'timezone' => $tz,
+                        'break_minutes' => $breakMin,
+                        'expected_work_minutes' => 720 - $breakMin,
+                        'shift_type' => ShiftType::Shift12x36,
+                        'origin' => ShiftOrigin::GeneratedCycle,
+                        'status' => ShiftStatus::Scheduled,
+                        'is_day_off' => false,
+                        'is_night_shift' => true,
+                        'crosses_midnight' => true,
+                        'recognized_turn' => FlexibleShiftService::TURN_NIGHT,
+                        'reason' => 'Reconhecimento automático de plantão flexível noturno',
+                        'notes' => 'Plantão Flexível 12×36 — Turno Noturno reconhecido automaticamente pelas marcações.',
+                    ]);
+                    $scheduledMinutes = 720 - $breakMin;
+                    $shiftAssignmentId = $shift->id;
+                    $shiftCode = $shift->shift_code;
+                }
+            } elseif ($classifiedTurn === FlexibleShiftService::TURN_PENDING) {
+                $identifiedShiftTurnLabel = 'Pendente de Classificação';
+                $treatmentNotes[] = 'Plantonista Flexível: marcações fora das janelas de referência de turno — jornada pendente de classificação para conferência administrativa.';
+                if ($shift) {
+                    $flexService->syncTurnToShift($shift, FlexibleShiftService::TURN_PENDING, $localDay, $workSchedule);
+                }
+            } elseif ($classifiedTurn === FlexibleShiftService::TURN_UNDEFINED) {
+                $identifiedShiftTurnLabel = 'A Definir';
+            }
         }
 
         $isCurrentShiftMidnight = $this->shiftMidnightService->isAuthorizedCrossMidnightShift($shift, $employee);
@@ -494,7 +585,7 @@ class CalculateDailyJourneyAction
             $allNextCandidates = [];
             foreach ($nextPunches as $np) {
                 $npId = (string) $np->id;
-                if (in_array($npId, $nextDisregardedIds, true) || in_array((int) $npId, $nextDisregardedIds, true)) {
+                if (in_array($npId, $nextDisregardedIds, true) || (ctype_digit($npId) && in_array((int) $npId, $nextDisregardedIds, true))) {
                     continue;
                 }
 
@@ -736,6 +827,44 @@ class CalculateDailyJourneyAction
 
         $treatmentNotes = array_values(array_unique($treatmentNotes));
 
+        $is12x36 = ($shift?->shift_type === ShiftType::Shift12x36)
+            || ($workSchedule?->modality === WorkScheduleModality::TwelveByThirtySix)
+            || ($workSchedule?->modality === WorkScheduleModality::FlexibleTwelveByThirtySix)
+            || ($shift !== null && $shift->isFlexible());
+
+        // 10.1. Controle de descanso de 36 horas entre plantões (CLT e Portaria 671)
+        if ($is12x36 && count($punchesToCalculate) > 0) {
+            $firstTodayPunch = $punchesToCalculate[0];
+            $todayEntryTime = $firstTodayPunch['timestamp'] instanceof CarbonInterface
+                ? $firstTodayPunch['timestamp']
+                : Carbon::parse($firstTodayPunch['timestamp'] ?? ($dateStr.' '.$firstTodayPunch['time']), $tz);
+
+            // Localizar o último plantão anterior do colaborador
+            $lastPriorShift = ShiftAssignment::where('employee_id', $employee->id)
+                ->whereIn('status', [ShiftStatus::Scheduled, ShiftStatus::Confirmed, ShiftStatus::Completed])
+                ->where('is_day_off', false)
+                ->where('end_at_local', '<', $todayEntryTime)
+                ->where('id', '!=', $shift?->id ?? 0)
+                ->orderBy('end_at_local', 'desc')
+                ->first();
+
+            if ($lastPriorShift) {
+                $restHours = round($lastPriorShift->end_at_local->diffInMinutes($todayEntryTime, false) / 60, 2);
+
+                if ($restHours < 0) {
+                    $treatmentNotes[] = sprintf(
+                        'Alerta de conflito: sobreposição com o plantão anterior encerrado às %s.',
+                        $lastPriorShift->end_at_local->format('d/m/Y H:i')
+                    );
+                } elseif ($restHours < 36) {
+                    $treatmentNotes[] = sprintf(
+                        'Alerta de descanso interjornada: intervalo de %sh apurado desde o término do plantão anterior (mínimo de 36h exigido pelo ciclo 12x36).',
+                        $restHours
+                    );
+                }
+            }
+        }
+
         // 11. Apuração comparativa com a escala e aplicação da tolerância legal (Art. 58 CLT)
         $ordinaryMinutes = 0;
         $overtimeMinutes = 0;
@@ -749,8 +878,6 @@ class CalculateDailyJourneyAction
         if ($expectedBreakMinutes > 0 && $breakMinutes > 0 && $breakMinutes < $expectedBreakMinutes) {
             $missingBreakMinutes = $expectedBreakMinutes - $breakMinutes;
         }
-
-        $is12x36 = ($shift?->shift_type === ShiftType::Shift12x36) || ($workSchedule?->modality === WorkScheduleModality::TwelveByThirtySix);
 
         if ($isFutureDay) {
             // Jornada futura da competência aberta: prevista, mas ainda não apurada.
@@ -803,6 +930,10 @@ class CalculateDailyJourneyAction
                 if ($justifiedAbsence) {
                     $absenceMinutes = 0;
                     $treatmentNotes[] = 'Ausência integral abonada/justificada: '.$justifiedAbsence->reason_text;
+                } elseif ($isFlexibleSchedule && ($identifiedShiftTurn === FlexibleShiftService::TURN_UNDEFINED || $identifiedShiftTurn === null)) {
+                    $absenceMinutes = 0;
+                    $scheduledMinutes = 0;
+                    $treatmentNotes[] = 'Plantonista Flexível: sem marcações no dia previsto pelo ciclo — jornada pendente de conferência administrativa (sem lançamento de falta presumida).';
                 } else {
                     $absenceMinutes = $scheduledMinutes;
                 }
@@ -984,6 +1115,8 @@ class CalculateDailyJourneyAction
             justifiedMinutes: $classificacaoResult->justifiedMinutes ?? 0,
             isFuture: $isFutureDay,
             isInProgress: $isInProgressDay,
+            identifiedShiftTurn: $identifiedShiftTurn,
+            identifiedShiftTurnLabel: $identifiedShiftTurnLabel,
         );
     }
 }

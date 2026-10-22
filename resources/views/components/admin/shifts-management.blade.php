@@ -72,6 +72,15 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
     public $p24_break_minutes = 120;
     public $p24_anchor_date = '';
 
+    // Plantonista Flexível 12x36
+    public $flex_day_start = '07:00';
+    public $flex_day_end = '19:00';
+    public $flex_night_start = '19:00';
+    public $flex_night_end = '07:00';
+    public $flex_break_minutes = 60;
+    public $flex_anchor_date = '';
+    public $flex_auto_detect = true;
+
     // Aplicação a Colaboradores
     public array $apply_employee_ids = [];
     public $apply_effective_from = '';
@@ -396,6 +405,16 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             return sprintf('Ciclo 12×36 %s (%s às %s)', $isNight ? 'noturno' : 'diurno', $start, $end);
         }
 
+        if ($modality === \App\Enums\WorkScheduleModality::FlexibleTwelveByThirtySix) {
+            return sprintf(
+                'Plantonista Flexível 12×36 (Diurno: %s-%s | Noturno: %s-%s)',
+                $schedule->cycle_data['day_start_time'] ?? '07:00',
+                $schedule->cycle_data['day_end_time'] ?? '19:00',
+                $schedule->cycle_data['night_start_time'] ?? '19:00',
+                $schedule->cycle_data['night_end_time'] ?? '07:00'
+            );
+        }
+
         if ($modality === \App\Enums\WorkScheduleModality::TwentyFourBySeventyTwo) {
             $start = $schedule->cycle_data['start_time'] ?? '07:00';
             $end = $schedule->cycle_data['end_time'] ?? '07:00';
@@ -471,6 +490,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
         } elseif (is_string($scheduleOrModality)) {
             $modality = match ($scheduleOrModality) {
                 'shift_12h' => \App\Enums\WorkScheduleModality::TwelveByThirtySix,
+                'flexible_12h' => \App\Enums\WorkScheduleModality::FlexibleTwelveByThirtySix,
                 'shift_24h' => \App\Enums\WorkScheduleModality::TwentyFourBySeventyTwo,
                 default => null,
             };
@@ -478,6 +498,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
 
         if (! $modality || ! in_array($modality, [
             \App\Enums\WorkScheduleModality::TwelveByThirtySix,
+            \App\Enums\WorkScheduleModality::FlexibleTwelveByThirtySix,
             \App\Enums\WorkScheduleModality::TwentyFourBySeventyTwo,
         ], true)) {
             return [
@@ -532,7 +553,12 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             ];
         }
 
-        $modalityKey = $modality === \App\Enums\WorkScheduleModality::TwelveByThirtySix ? '12x36' : '24x72';
+        $modalityKey = match ($modality) {
+            \App\Enums\WorkScheduleModality::TwelveByThirtySix,
+            \App\Enums\WorkScheduleModality::FlexibleTwelveByThirtySix => '12x36',
+            \App\Enums\WorkScheduleModality::TwentyFourBySeventyTwo => '24x72',
+            default => 'regular',
+        };
         if (! $profile->isModalityAllowed($modalityKey)) {
             return [
                 'status' => 'unauthorized',
@@ -568,6 +594,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             $schedule = $employee?->getWorkScheduleForDate($startOfMonth);
             $isCyclic = $schedule && in_array($schedule->modality, [
                 \App\Enums\WorkScheduleModality::TwelveByThirtySix,
+                \App\Enums\WorkScheduleModality::FlexibleTwelveByThirtySix,
                 \App\Enums\WorkScheduleModality::TwentyFourBySeventyTwo,
                 \App\Enums\WorkScheduleModality::SixByOne,
                 \App\Enums\WorkScheduleModality::CustomCycle,
@@ -782,6 +809,16 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                 $this->p24_break_minutes = 120;
                 $this->p24_anchor_date = $today;
             })(),
+            'flexible_12h' => (function () use ($today) {
+                $this->sched_name = 'Plantonista Flexível 12x36';
+                $this->flex_day_start = '07:00';
+                $this->flex_day_end = '19:00';
+                $this->flex_night_start = '19:00';
+                $this->flex_night_end = '07:00';
+                $this->flex_break_minutes = 60;
+                $this->flex_anchor_date = $today;
+                $this->flex_auto_detect = true;
+            })(),
             default => null,
         };
     }
@@ -816,6 +853,15 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                 'end_time' => $this->p24_end_time,
                 'break_minutes' => (int) $this->p24_break_minutes,
                 'anchor_date' => $this->p24_anchor_date ?: Carbon::today()->format('Y-m-d'),
+            ],
+            'flexible_12h' => [
+                'day_start_time' => $this->flex_day_start,
+                'day_end_time' => $this->flex_day_end,
+                'night_start_time' => $this->flex_night_start,
+                'night_end_time' => $this->flex_night_end,
+                'break_minutes' => (int) $this->flex_break_minutes,
+                'anchor_date' => $this->flex_anchor_date ?: Carbon::today()->format('Y-m-d'),
+                'auto_detect_turn' => (bool) $this->flex_auto_detect,
             ],
             default => [],
         };
@@ -886,6 +932,19 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                     'daily_tolerance_minutes' => (int) $this->sched_daily_tolerance,
                 ], Auth::user()),
 
+                'flexible_12h' => $action->createFlexible12h([
+                    'name' => $this->sched_name,
+                    'day_start_time' => $this->flex_day_start,
+                    'day_end_time' => $this->flex_day_end,
+                    'night_start_time' => $this->flex_night_start,
+                    'night_end_time' => $this->flex_night_end,
+                    'break_minutes' => (int) $this->flex_break_minutes,
+                    'anchor_date' => $this->flex_anchor_date ?: Carbon::today()->format('Y-m-d'),
+                    'auto_detect_turn' => (bool) $this->flex_auto_detect,
+                    'tolerance_minutes' => (int) $this->sched_tolerance,
+                    'daily_tolerance_minutes' => (int) $this->sched_daily_tolerance,
+                ], Auth::user()),
+
                 default => throw new \Exception('Modelo não reconhecido'),
             };
 
@@ -948,6 +1007,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
         // Modelos cíclicos para geração de plantões (fixos usam atribuição vigente).
         $cyclicSchedules = $workSchedules->filter(fn (WorkSchedule $schedule) => in_array($schedule->modality, [
             \App\Enums\WorkScheduleModality::TwelveByThirtySix,
+            \App\Enums\WorkScheduleModality::FlexibleTwelveByThirtySix,
             \App\Enums\WorkScheduleModality::TwentyFourBySeventyTwo,
             \App\Enums\WorkScheduleModality::SixByOne,
             \App\Enums\WorkScheduleModality::CustomCycle,
@@ -1381,7 +1441,15 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                                         @if($shift->crosses_midnight)
                                             <span class="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700">Cruza Meia-Noite</span>
                                         @endif
+                                        @if($shift->isFlexible())
+                                            <span class="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold {{ $shift->turnBadgeClasses() }}">
+                                                Turno: {{ $shift->recognizedTurnLabel() }}
+                                            </span>
+                                        @endif
                                     </div>
+                                    @if($shift->notes)
+                                        <div class="text-[10px] text-slate-400 truncate max-w-xs mt-0.5" title="{{ $shift->notes }}">{{ $shift->notes }}</div>
+                                    @endif
                                 @endif
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap">
@@ -1578,7 +1646,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                 <!-- SELETOR DE MODELOS INTUITIVOS -->
                 <div>
                     <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Selecione o Modelo de Jornada</label>
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
                         <button type="button" wire:click="$set('template', 'administrative')"
                             class="p-3 text-left rounded-2xl border-2 transition flex flex-col justify-between {{ $template === 'administrative' ? 'border-indigo-600 bg-indigo-50/60 ring-2 ring-indigo-600/20' : 'border-slate-200 hover:border-slate-300 bg-white' }}">
                             <div class="flex items-center justify-between">
@@ -1612,6 +1680,18 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                             <div class="mt-3">
                                 <div class="text-xs font-bold text-slate-900">Plantão 12x36</div>
                                 <div class="text-[10px] text-slate-500 mt-0.5 leading-tight">12h de serviço x 36h descanso. Exige norma autorizada para o regime.</div>
+                            </div>
+                        </button>
+
+                        <button type="button" wire:click="$set('template', 'flexible_12h')"
+                            class="p-3 text-left rounded-2xl border-2 transition flex flex-col justify-between {{ $template === 'flexible_12h' ? 'border-teal-600 bg-teal-50/60 ring-2 ring-teal-600/20' : 'border-slate-200 hover:border-slate-300 bg-white' }}">
+                            <div class="flex items-center justify-between">
+                                <span class="w-7 h-7 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-xs">Flex</span>
+                                @if($template === 'flexible_12h')<span class="w-2 h-2 rounded-full bg-teal-600"></span>@endif
+                            </div>
+                            <div class="mt-3">
+                                <div class="text-xs font-bold text-slate-900">Plantonista Flexível 12x36</div>
+                                <div class="text-[10px] text-slate-500 mt-0.5 leading-tight">Alterna diurnos e noturnos no mês. Reconhecimento automático e descanso 36h.</div>
                             </div>
                         </button>
 
@@ -1797,6 +1877,77 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                             <label class="block text-xs font-semibold text-slate-700 mb-1">Data-Âncora do Primeiro Plantão</label>
                             <input type="date" wire:model.live="p24_anchor_date" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
                             <span class="text-[10px] text-slate-500">Define o primeiro dia de plantão (24h de serviço seguidas de 72h de descanso legal).</span>
+                        </div>
+                    </div>
+                    @endif
+
+                    @if($template === 'flexible_12h')
+                    <!-- MODELO E: PLANTONISTA FLEXÍVEL 12X36 -->
+                    <div class="p-4 bg-slate-50/80 rounded-2xl border border-slate-200 space-y-4">
+                        <div class="text-xs font-bold text-slate-800 uppercase flex items-center justify-between">
+                            <span class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-teal-600"></span>
+                                Parâmetros do Plantonista Flexível 12x36
+                            </span>
+                            <span class="text-[10px] px-2 py-0.5 bg-teal-100 text-teal-800 rounded-md font-semibold">Reconhecimento Inteligente</span>
+                        </div>
+
+                        <div class="p-3 bg-teal-50/60 rounded-xl border border-teal-100 text-xs text-teal-900 leading-relaxed">
+                            <strong>Como funciona:</strong> O colaborador mantém escala única 12x36. O sistema identifica se o plantão realizado foi <strong>Diurno</strong> (07h às 19h) ou <strong>Noturno</strong> (19h às 07h do dia seguinte) diretamente pelas batidas de ponto, apura os adicionais noturnos corretos e valida o descanso de 36 horas entre plantões.
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <!-- Referência Diurna -->
+                            <div class="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
+                                <div class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-amber-500"></span> Referência Diurna
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label class="block text-[11px] font-semibold text-slate-600 mb-1">Início Diurno</label>
+                                        <input type="time" wire:model.live="flex_day_start" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-semibold text-slate-600 mb-1">Término Diurno</label>
+                                        <input type="time" wire:model.live="flex_day_end" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Referência Noturna -->
+                            <div class="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
+                                <div class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-indigo-600"></span> Referência Noturna
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label class="block text-[11px] font-semibold text-slate-600 mb-1">Início Noturno</label>
+                                        <input type="time" wire:model.live="flex_night_start" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-semibold text-slate-600 mb-1">Término (dia seg.)</label>
+                                        <input type="time" wire:model.live="flex_night_end" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Data-Âncora do Primeiro Plantão</label>
+                                <input type="date" wire:model.live="flex_anchor_date" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                                <span class="text-[10px] text-slate-500">Define o primeiro dia de plantão para alternância do ciclo 12x36.</span>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Intervalo Intrajornada (minutos)</label>
+                                <input type="number" wire:model.live="flex_break_minutes" min="0" max="120" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl" required>
+                                <span class="text-[10px] text-slate-500">Padrão CLT: 60 minutos (deduzido para 11h de trabalho efetivo).</span>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 pt-1">
+                            <input type="checkbox" id="flex_auto_detect" wire:model.live="flex_auto_detect" class="rounded text-teal-600 focus:ring-teal-500">
+                            <label for="flex_auto_detect" class="text-xs text-slate-700">Reconhecer automaticamente o turno (diurno/noturno) pelas batidas de ponto efetivas do colaborador</label>
                         </div>
                     </div>
                     @endif

@@ -9,6 +9,7 @@ enum WorkScheduleModality: string
     case FiveByTwo = '5x2';
     case SixByOne = '6x1';
     case TwelveByThirtySix = '12x36';
+    case FlexibleTwelveByThirtySix = 'flexible_12x36';
     case TwentyFourBySeventyTwo = '24x72';
     case CustomCycle = 'custom_cycle';
     case VariableShifts = 'variable_shifts';
@@ -21,6 +22,7 @@ enum WorkScheduleModality: string
             self::FiveByTwo => '5×2 (5 dias trabalho / 2 folga)',
             self::SixByOne => '6×1 (6 dias trabalho / 1 folga)',
             self::TwelveByThirtySix => '12×36 (12h trabalho / 36h descanso)',
+            self::FlexibleTwelveByThirtySix => 'Plantonista Flexível 12×36 (Alternância Diurno/Noturno)',
             self::TwentyFourBySeventyTwo => '24×72 (Plantão 24h / 72h descanso)',
             self::CustomCycle => 'Ciclo Personalizado',
             self::VariableShifts => 'Escala Variável por Plantões',
@@ -31,6 +33,7 @@ enum WorkScheduleModality: string
     {
         return in_array($this, [
             self::TwelveByThirtySix,
+            self::FlexibleTwelveByThirtySix,
             self::TwentyFourBySeventyTwo,
         ], true);
     }
@@ -39,7 +42,7 @@ enum WorkScheduleModality: string
     {
         return match ($this) {
             self::FixedWeekly, self::AlternatingWeekly, self::FiveByTwo, self::SixByOne => 7,
-            self::TwelveByThirtySix => 2,
+            self::TwelveByThirtySix, self::FlexibleTwelveByThirtySix => 2,
             self::TwentyFourBySeventyTwo => 4,
             self::CustomCycle, self::VariableShifts => 30,
         };

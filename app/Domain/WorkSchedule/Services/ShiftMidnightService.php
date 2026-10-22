@@ -4,6 +4,7 @@ namespace App\Domain\WorkSchedule\Services;
 
 use App\Domain\Company\Services\CurrentCompany;
 use App\Enums\LegalRegime;
+use App\Enums\ShiftOrigin;
 use App\Enums\ShiftStatus;
 use App\Enums\ShiftType;
 use App\Enums\WorkScheduleModality;
@@ -15,6 +16,7 @@ use App\Models\ShiftAssignment;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class ShiftMidnightService
 {
@@ -84,6 +86,7 @@ class ShiftMidnightService
 
             $isSchedulePlantao = in_array($modality, [
                 WorkScheduleModality::TwelveByThirtySix,
+                WorkScheduleModality::FlexibleTwelveByThirtySix,
                 WorkScheduleModality::TwentyFourBySeventyTwo,
                 WorkScheduleModality::VariableShifts,
                 WorkScheduleModality::CustomCycle,
@@ -155,9 +158,93 @@ class ShiftMidnightService
             ->orderBy('start_at_local', 'desc')
             ->get();
 
+        // Se houver plantão flexível na véspera que ainda não foi sincronizado para noturno,
+        // checar se houve batida de entrada noturna (>= 17:00) na véspera
+        foreach ($prevShifts as $s) {
+            if ($s->isFlexible() && $s->recognized_turn !== 'night' && ! $s->crosses_midnight) {
+                $hasNightPunchYesterday = PunchEvent::where(function ($q) use ($employee) {
+                    $q->where('employee_id', $employee->id);
+                    if ($employee->user_id) {
+                        $q->orWhere('user_id', $employee->user_id);
+                    }
+                })
+                    ->where('occurred_at_local', '>=', $prevDayStart->copy()->setTime(17, 0, 0))
+                    ->where('occurred_at_local', '<', $dayStart)
+                    ->where('direction', 'in')
+                    ->exists();
+
+                if ($hasNightPunchYesterday) {
+                    app(FlexibleShiftService::class)->syncTurnToShift($s, FlexibleShiftService::TURN_NIGHT, $prevDayStart);
+                    $s->refresh();
+                }
+            }
+        }
+
         $authorizedPrevShifts = $prevShifts->filter(
             fn ($s) => $this->isAuthorizedCrossMidnightShift($s, $employee)
         );
+
+        // Se não houver plantão formal pré-gerado na véspera, verificar se o colaborador possui
+        // atribuição vigente de escala flexível e entrada noturna registrada na véspera
+        if ($authorizedPrevShifts->isEmpty()) {
+            $wsYesterday = $employee->getWorkScheduleForDate($prevDayStart);
+            if ($wsYesterday && app(FlexibleShiftService::class)->isFlexibleSchedule($wsYesterday)) {
+                $yesterdayNightPunch = PunchEvent::where(function ($q) use ($employee) {
+                    $q->where('employee_id', $employee->id);
+                    if ($employee->user_id) {
+                        $q->orWhere('user_id', $employee->user_id);
+                    }
+                })
+                    ->where('occurred_at_local', '>=', $prevDayStart->copy()->setTime(17, 0, 0))
+                    ->where('occurred_at_local', '<', $dayStart)
+                    ->where('direction', 'in')
+                    ->first();
+
+                if ($yesterdayNightPunch !== null) {
+                    $nightStartStr = $wsYesterday->cycle_data['night_start_time'] ?? '19:00';
+                    $nightEndStr = $wsYesterday->cycle_data['night_end_time'] ?? '07:00';
+                    [$nSH, $nSM] = explode(':', $nightStartStr);
+                    [$nEH, $nEM] = explode(':', $nightEndStr);
+
+                    $startLocal = $prevDayStart->copy()->setTime((int) $nSH, (int) $nSM, 0);
+                    $endLocal = $dayStart->copy()->setTime((int) $nEH, (int) $nEM, 0);
+                    $breakMin = (int) ($wsYesterday->cycle_data['break_minutes'] ?? 60);
+
+                    $activeAssignment = $employee->workScheduleAssignments()
+                        ->where('effective_from', '<=', $prevDayStart->format('Y-m-d'))
+                        ->where(function ($q) use ($prevDayStart) {
+                            $q->whereNull('effective_until')
+                                ->orWhere('effective_until', '>=', $prevDayStart->format('Y-m-d'));
+                        })
+                        ->first();
+
+                    $dynamicShift = ShiftAssignment::create([
+                        'shift_code' => (string) Str::uuid(),
+                        'employee_id' => $employee->id,
+                        'work_schedule_assignment_id' => $activeAssignment?->id,
+                        'work_schedule_id' => $wsYesterday->id,
+                        'start_at_utc' => $startLocal->copy()->setTimezone('UTC'),
+                        'end_at_utc' => $endLocal->copy()->setTimezone('UTC'),
+                        'start_at_local' => $startLocal,
+                        'end_at_local' => $endLocal,
+                        'timezone' => $tz,
+                        'break_minutes' => $breakMin,
+                        'expected_work_minutes' => 720 - $breakMin,
+                        'shift_type' => ShiftType::Shift12x36,
+                        'origin' => ShiftOrigin::GeneratedCycle,
+                        'status' => ShiftStatus::Scheduled,
+                        'is_day_off' => false,
+                        'is_night_shift' => true,
+                        'crosses_midnight' => true,
+                        'recognized_turn' => FlexibleShiftService::TURN_NIGHT,
+                        'reason' => 'Reconhecimento automático de plantão flexível noturno',
+                        'notes' => 'Plantão Flexível 12×36 — Turno Noturno reconhecido automaticamente pelas marcações.',
+                    ]);
+
+                    $authorizedPrevShifts = collect([$dynamicShift]);
+                }
+            }
+        }
 
         if ($authorizedPrevShifts->count() > 1) {
             Log::warning('shift_midnight.ambiguous_overlapping_prev_shifts', [

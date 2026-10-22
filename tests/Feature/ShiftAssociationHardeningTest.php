@@ -22,6 +22,7 @@ use App\Models\WorkSchedule;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -343,8 +344,10 @@ class ShiftAssociationHardeningTest extends TestCase
         $profile = LaborRuleProfile::createStandardCltProfile();
         $config = $profile->configuration;
         $config['allowed_modalities'][] = '24x72';
-        $profile->configuration = $config;
-        $profile->save();
+        DB::table('labor_rule_profiles')
+            ->where('id', $profile->id)
+            ->update(['configuration' => json_encode($config)]);
+        $profile->refresh();
 
         $schedule = WorkSchedule::create([
             'company_id' => $this->company->id,

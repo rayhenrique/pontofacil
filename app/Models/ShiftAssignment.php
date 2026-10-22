@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\ShiftOrigin;
 use App\Enums\ShiftStatus;
 use App\Enums\ShiftType;
+use App\Enums\WorkScheduleModality;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -31,6 +32,7 @@ class ShiftAssignment extends Model
         'is_day_off',
         'is_night_shift',
         'crosses_midnight',
+        'recognized_turn',
         'reason',
         'assigned_by',
         'swapped_with_employee_id',
@@ -128,6 +130,47 @@ class ShiftAssignment extends Model
     public function overlapsWith(CarbonInterface $start, CarbonInterface $end): bool
     {
         return $this->start_at_utc->lt($end) && $this->end_at_utc->gt($start);
+    }
+
+    /**
+     * Indica se este plantão pertence a uma escala de plantonista flexível 12x36.
+     */
+    public function isFlexible(): bool
+    {
+        $schedule = $this->relationLoaded('workSchedule') ? $this->workSchedule : $this->workSchedule()->first();
+
+        return $schedule?->modality === WorkScheduleModality::FlexibleTwelveByThirtySix
+            || (! empty($schedule?->cycle_data['is_flexible']));
+    }
+
+    /**
+     * Rótulo descritivo do turno reconhecido ou planejado.
+     */
+    public function recognizedTurnLabel(): string
+    {
+        return match ($this->recognized_turn) {
+            'day' => 'Diurno',
+            'night' => 'Noturno',
+            'pending_classification' => 'Pendente de Classificação',
+            'undefined' => 'A Definir',
+            default => $this->is_night_shift ? 'Noturno' : ($this->is_day_off ? 'Folga' : 'Diurno'),
+        };
+    }
+
+    /**
+     * Classes Tailwind de estilo para o badge de turno.
+     */
+    public function turnBadgeClasses(): string
+    {
+        return match ($this->recognized_turn) {
+            'day' => 'bg-sky-50 text-sky-800 border-sky-300',
+            'night' => 'bg-indigo-900 text-indigo-100 border-indigo-700',
+            'pending_classification' => 'bg-amber-100 text-amber-900 border-amber-300',
+            'undefined' => 'bg-slate-100 text-slate-700 border-slate-300',
+            default => $this->is_night_shift
+                ? 'bg-indigo-900 text-indigo-100 border-indigo-700'
+                : 'bg-sky-50 text-sky-800 border-sky-300',
+        };
     }
 
     public function scopeActive(Builder $query): Builder
