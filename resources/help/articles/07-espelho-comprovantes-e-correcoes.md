@@ -76,10 +76,15 @@ Após o envio, a solicitação entra com status **Pendente** (`pending`) para an
 
 1. No próprio Espelho de Ponto, os dias com solicitações em análise exibem um ícone de documento em amarelo.
 2. Ao clicar para ver os detalhes da solicitação:
-   * **Se Aprovada:** O status muda para verde (`approved`), o nome de quem aprovou e o horário da decisão são gravados, e o espelho de ponto recalcula a jornada com as horas ajustadas.
+   * **Se Aprovada:** O status muda para aprovado, o responsável e a data da decisão são gravados, e o motor considera o tratamento no recálculo da jornada. **Verifique a sequência completa:** incluir uma entrada esquecida ainda pode deixar as demais batidas classificadas incorretamente, pois a reclassificação automática em cadeia está pendente.
    * **Se Rejeitada:** O status muda para vermelho (`rejected`), e o motivo formal da recusa informado pelo avaliador é disponibilizado para leitura do colaborador.
 
 ---
+
+## Cancelar solicitação pendente ou reverter tratamento aprovado
+Quando uma justificativa foi registrada na data errada, utilize a ação **Cancelar** (pendente) ou **Reverter** (aprovada), se disponível ao seu perfil. Informe o motivo e registre uma nova solicitação na data correta. O histórico fica auditável; competências fechadas exigem procedimento de reabertura autorizado. Tratamentos rejeitados não podem ser revertidos por esse fluxo.
+
+A inclusão ou reversão de marcações **não altera nem exclui os eventos brutos**. Consulte a [solução de problemas](/ajuda?artigo=solucao-de-problemas-operacionais) para o exemplo de entrada esquecida às 08:00.
 
 ## 4. Central de Comprovantes de Ponto
 
@@ -93,7 +98,7 @@ Conforme a Portaria 671/2021 MTP, todo trabalhador tem o direito de receber o co
    * Número Sequencial de Registro (**NSR**).
    * Código alfanumérico de autenticidade (ex: `PF-2026-8942-01`).
    * Hash criptográfico SHA-256 do registro fiscal.
-4. Clique em **Baixar PDF** para salvar o comprovante assinado eletronicamente no seu aparelho.
+4. Clique em **Baixar PDF** para salvar o comprovante gerado. **A assinatura digital ICP-Brasil fica para uma implementação futura**, portanto não o descreva como digitalmente assinado nesta versão.
 
 ---
 
