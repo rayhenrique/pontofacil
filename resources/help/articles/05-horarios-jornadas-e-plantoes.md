@@ -26,6 +26,13 @@ O PontoFácil disponibiliza um configurador moderno baseado em **quatro modelos 
 
 ---
 
+## Pré-requisito para plantões especiais: autorização normativa
+Na **v2.6.20**, atribuições de **12x36 e 24x72** verificam o perfil normativo do servidor. Para estatutários municipais e estaduais, é necessário configurar o perfil aplicável, aprová-lo e vinculá-lo ao servidor antes da atribuição. Os avisos *Pendente de configuração*, *Fora da vigência* e *Não autorizada* indicam qual validação falta.
+
+Consulte [Perfis Normativos — passo a passo](/ajuda?artigo=perfis-normativos-e-autorizacao).
+
+**Importante:** a nova norma deve ter respaldo real. A referência normativa digitada no cadastro do servidor não basta, por si só, para autorizar 12x36/24x72.
+
 ## 2. Passo a Passo de Configuração por Modelo
 
 Para criar qualquer nova escala, acesse **Horários & Escalas** (`/admin/shifts`) e clique no botão **Nova Escala / Jornada**.
