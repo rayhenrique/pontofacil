@@ -64,6 +64,15 @@ Quando o regime selecionado for estatutário (municipal, estadual ou outro), o f
 
 ---
 
+## Perfil Normativo Aplicável (novidade v2.6.20)
+O RH agora pode escolher o **Perfil Normativo Aplicável** e sua data de vigência no cadastro do servidor. Os perfis são criados e aprovados em `/admin/labor-rule-profiles`. Para escalas 12x36 e 24x72, um perfil aprovado, compatível e vigente deve autorizar a modalidade. Gestores não podem conceder perfis normativos.
+
+**Atenção à ordem na tela atual:** ao salvar perfil e escala especial pela primeira vez em uma única operação, a atribuição da escala pode ser validada antes da gravação do novo vínculo normativo. Para evitar a mensagem de perfil ausente, salve primeiro o servidor e seu perfil; atribua a escala em seguida.
+
+O PontoFácil ainda usa **um setor de lotação principal** por cadastro de funcionário; o suporte a atuação regular em vários setores está planejado, não implementado.
+
+Consulte [Perfis Normativos](/ajuda?artigo=perfis-normativos-e-autorizacao).
+
 ## 3. Alteração de Escala e Atribuição com Vigência
 
 A vida funcional de um servidor pode exigir mudança de setor ou de horário de trabalho (por exemplo, de uma jornada de 40h administrativa para um plantão de 12h ou horário corrido de 6h).
