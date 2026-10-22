@@ -4,7 +4,7 @@ return [
     [
         'term' => 'REP-P (Registrador Eletrônico de Ponto por Programa)',
         'acronym' => 'REP-P',
-        'definition' => 'Sistema de registro eletrônico de ponto composto por software executado em servidor dedicado, responsável por coletar as batidas de ponto, gerar comprovantes assinados e gravar as marcações no Arquivo Fonte de Dados (AFD).',
+        'definition' => 'Sistema de registro eletrônico de ponto composto por software executado em servidor dedicado, responsável por coletar as batidas de ponto, gerar comprovantes e gravar as marcações no Arquivo Fonte de Dados (AFD).',
     ],
     [
         'term' => 'PTRP (Programa de Tratamento de Registro de Ponto)',
@@ -34,7 +34,7 @@ return [
     [
         'term' => 'Equivalência Legal Noturna',
         'acronym' => 'Hora Noturna',
-        'definition' => 'Fórmula legal que considera a hora noturna (trabalhada entre 22h e 05h) como tendo 52 minutos e 30 segundos (redução ficta de 1,1428x). No PontoFácil, as horas físicas e a equivalência noturna são sempre apresentadas em colunas distintas.',
+        'definition' => 'Fórmula legal que considera a hora noturna da CLT (em regra entre 22h e 05h) como tendo 52 minutos e 30 segundos; outros regimes exigem configuração normativa específica (redução ficta de 1,1428x). No PontoFácil, as horas físicas e a equivalência noturna são sempre apresentadas em colunas distintas.',
     ],
     [
         'term' => 'Carga Prevista da Competência',
