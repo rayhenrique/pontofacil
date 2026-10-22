@@ -458,6 +458,100 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
         return 'Atual';
     }
 
+    /**
+     * Retorna a situação de conformidade normativa para um colaborador e uma escala/modalidade.
+     */
+    public function checkNormativeAuthorization(Employee $employee, WorkSchedule|string $scheduleOrModality, ?string $effectiveDate = null): array
+    {
+        $targetDate = $effectiveDate ? Carbon::parse($effectiveDate) : Carbon::today();
+
+        $modality = null;
+        if ($scheduleOrModality instanceof WorkSchedule) {
+            $modality = $scheduleOrModality->modality;
+        } elseif (is_string($scheduleOrModality)) {
+            $modality = match ($scheduleOrModality) {
+                'shift_12h' => \App\Enums\WorkScheduleModality::TwelveByThirtySix,
+                'shift_24h' => \App\Enums\WorkScheduleModality::TwentyFourBySeventyTwo,
+                default => null,
+            };
+        }
+
+        if (! $modality || ! in_array($modality, [
+            \App\Enums\WorkScheduleModality::TwelveByThirtySix,
+            \App\Enums\WorkScheduleModality::TwentyFourBySeventyTwo,
+        ], true)) {
+            return [
+                'status' => 'exempt',
+                'label' => 'Jornada Regular',
+                'badge' => 'bg-slate-100 text-slate-700 border-slate-200',
+                'message' => 'Escala regular sem exigência de perfil normativo especial.',
+                'can_proceed' => true,
+            ];
+        }
+
+        $regime = $employee->legal_regime;
+        $profile = $employee->getLaborRuleProfileForDate($targetDate);
+
+        if (! $profile) {
+            return [
+                'status' => 'pending',
+                'label' => 'Pendente de Configuração',
+                'badge' => 'bg-amber-100 text-amber-800 border-amber-300',
+                'message' => "Este funcionário está cadastrado como {$regime?->label()} e não possui um perfil normativo aprovado que autorize a modalidade nesta data.",
+                'can_proceed' => false,
+            ];
+        }
+
+        if (! $profile->isApproved()) {
+            return [
+                'status' => 'pending',
+                'label' => 'Perfil em Rascunho',
+                'badge' => 'bg-amber-100 text-amber-800 border-amber-300',
+                'message' => "O perfil '{$profile->name}' está em situação de rascunho e ainda não foi aprovado pelo RH.",
+                'can_proceed' => false,
+            ];
+        }
+
+        if ($profile->isRevoked()) {
+            return [
+                'status' => 'unauthorized',
+                'label' => 'Perfil Revogado',
+                'badge' => 'bg-rose-100 text-rose-800 border-rose-300',
+                'message' => "O perfil '{$profile->name}' foi revogado e não autoriza novas atribuições de escala.",
+                'can_proceed' => false,
+            ];
+        }
+
+        if (! $profile->isEffectiveAt($targetDate)) {
+            return [
+                'status' => 'out_of_validity',
+                'label' => 'Fora da Vigência',
+                'badge' => 'bg-orange-100 text-orange-800 border-orange-300',
+                'message' => "O perfil normativo '{$profile->name}' não é válido para a data de vigência selecionada ({$targetDate->format('d/m/Y')}).",
+                'can_proceed' => false,
+            ];
+        }
+
+        $modalityKey = $modality === \App\Enums\WorkScheduleModality::TwelveByThirtySix ? '12x36' : '24x72';
+        if (! $profile->isModalityAllowed($modalityKey)) {
+            return [
+                'status' => 'unauthorized',
+                'label' => 'Não Autorizada',
+                'badge' => 'bg-rose-100 text-rose-800 border-rose-300',
+                'message' => "O perfil aprovado '{$profile->name}' não autoriza a modalidade {$modality->label()}.",
+                'can_proceed' => false,
+            ];
+        }
+
+        return [
+            'status' => 'authorized',
+            'label' => 'Autorizada',
+            'badge' => 'bg-emerald-100 text-emerald-800 border-emerald-300',
+            'message' => "Autorizado via perfil '{$profile->name}' (Aprovado).",
+            'can_proceed' => true,
+        ];
+    }
+
     public function openGenerateModal()
     {
         $startOfMonth = Carbon::createFromDate($this->year, $this->month, 1);
@@ -1760,7 +1854,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700 mb-1">Início da Vigência (Obrigatório se atribuir)</label>
-                                <input type="date" wire:model="apply_effective_from" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl">
+                                <input type="date" wire:model.live="apply_effective_from" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl">
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700 mb-1">Fim da Vigência (Em aberto se vazio)</label>
@@ -1773,7 +1867,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                             <div class="max-h-36 overflow-y-auto border border-slate-200 rounded-xl bg-white p-2 divide-y divide-slate-100">
                                 @forelse($employees as $emp)
                                 <label class="flex items-center gap-2 py-1 px-1.5 hover:bg-slate-50 rounded-lg text-xs cursor-pointer">
-                                    <input type="checkbox" wire:model="apply_employee_ids" value="{{ $emp->id }}" class="rounded text-indigo-600 focus:ring-indigo-500">
+                                    <input type="checkbox" wire:model.live="apply_employee_ids" value="{{ $emp->id }}" class="rounded text-indigo-600 focus:ring-indigo-500">
                                     <span class="font-medium text-slate-800">{{ $emp->user->name ?? 'Colaborador #'.$emp->id }}</span>
                                     <span class="text-[10px] text-slate-400">Matrícula: {{ $emp->registration_number ?? 'S/N' }}</span>
                                 </label>
@@ -1782,6 +1876,58 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                                 @endforelse
                             </div>
                         </div>
+
+                        @if(in_array($template, ['shift_12h', 'shift_24h']) && !empty($apply_employee_ids))
+                            <div class="p-3 rounded-xl border border-slate-200 bg-white space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-bold text-slate-800 uppercase flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                                        Conformidade Normativa para Escala Especial
+                                    </span>
+                                    <span class="text-[10px] text-slate-500 font-medium">Portaria 671 / MTP</span>
+                                </div>
+
+                                <div class="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                                    @php $hasUnauthorizedSchedule = false; @endphp
+                                    @foreach($apply_employee_ids as $empId)
+                                        @php
+                                            $empObj = $employees->firstWhere('id', (int) $empId) ?? \App\Models\Employee::find($empId);
+                                        @endphp
+                                        @if($empObj)
+                                            @php
+                                                $authStatus = $this->checkNormativeAuthorization($empObj, $template, $apply_effective_from);
+                                                if (!$authStatus['can_proceed']) {
+                                                    $hasUnauthorizedSchedule = true;
+                                                }
+                                            @endphp
+                                            <div class="p-2 rounded-lg bg-slate-50 border border-slate-200 text-xs flex flex-col gap-0.5">
+                                                <div class="flex items-center justify-between">
+                                                    <span class="font-semibold text-slate-800">{{ $empObj->user->name ?? 'Colaborador #'.$empObj->id }}</span>
+                                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold border {{ $authStatus['badge'] }}">
+                                                        {{ $authStatus['label'] }}
+                                                    </span>
+                                                </div>
+                                                <p class="text-[11px] text-slate-600">{{ $authStatus['message'] }}</p>
+                                            </div>
+                                        @endif
+                                    @endforeach
+                                </div>
+
+                                @if($hasUnauthorizedSchedule)
+                                    <div class="rounded-lg bg-amber-50 border border-amber-200 p-2 text-xs text-amber-900 flex items-start gap-1.5">
+                                        <svg class="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                        <div>
+                                            Colaboradores com pendência normativa não terão a escala especial atribuída.
+                                            @if(Auth::user()->role === \App\Enums\UserRole::Admin)
+                                                <a href="{{ route('admin.labor-rule-profiles') }}" target="_blank" class="font-bold underline text-indigo-700 hover:text-indigo-900 block mt-0.5">
+                                                    Configurar perfis normativos no RH →
+                                                </a>
+                                            @endif
+                                        </div>
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
                     </div>
 
                     <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
@@ -1862,7 +2008,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                 <form wire:submit="assignSchedule" class="space-y-4">
                     <div>
                         <label class="block text-xs font-bold text-slate-700 mb-1" for="assign-schedule">Horário *</label>
-                        <select id="assign-schedule" wire:model="assign_schedule_id" class="block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500" required>
+                        <select id="assign-schedule" wire:model.live="assign_schedule_id" class="block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500" required>
                             <option value="">Selecione o horário</option>
                             @foreach($workSchedules as $ws)
                                 <option value="{{ $ws->id }}">{{ $ws->name }} ({{ $ws->modality?->label() ?? 'Semanal' }})</option>
@@ -1875,7 +2021,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                         <div class="max-h-40 overflow-y-auto border border-slate-200 rounded-xl bg-white p-2 divide-y divide-slate-100">
                             @forelse($employees as $emp)
                             <label class="flex items-center gap-2 py-1.5 px-1.5 hover:bg-slate-50 rounded-lg text-xs cursor-pointer min-h-[44px]">
-                                <input type="checkbox" wire:model="assign_employee_ids" value="{{ $emp->id }}" class="rounded text-indigo-600 focus:ring-indigo-500">
+                                <input type="checkbox" wire:model.live="assign_employee_ids" value="{{ $emp->id }}" class="rounded text-indigo-600 focus:ring-indigo-500">
                                 <span class="font-medium text-slate-800">{{ $emp->user->name ?? 'Colaborador #'.$emp->id }}</span>
                                 <span class="text-[10px] text-slate-400">{{ $emp->sector->name ?? '' }}</span>
                             </label>
@@ -1885,10 +2031,70 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                         </div>
                         @error('assign_employee_ids') <span class="text-xs font-semibold text-rose-600 mt-1 block">{{ $message }}</span> @enderror
                     </div>
+
+                    @php
+                        $selectedSchedule = $assign_schedule_id ? \App\Models\WorkSchedule::find($assign_schedule_id) : null;
+                        $isSpecialSchedule = $selectedSchedule && in_array($selectedSchedule->modality, [
+                            \App\Enums\WorkScheduleModality::TwelveByThirtySix,
+                            \App\Enums\WorkScheduleModality::TwentyFourBySeventyTwo,
+                        ]);
+                    @endphp
+
+                    @if($isSpecialSchedule && !empty($assign_employee_ids))
+                        <div class="p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-slate-800 uppercase flex items-center gap-1.5">
+                                    <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                                    Conformidade Normativa dos Servidores
+                                </span>
+                                <span class="text-[10px] text-slate-500 font-medium">Portaria 671 / MTP</span>
+                            </div>
+
+                            <div class="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                                @php $hasUnauthorized = false; @endphp
+                                @foreach($assign_employee_ids as $empId)
+                                    @php
+                                        $empObj = $employees->firstWhere('id', (int) $empId) ?? \App\Models\Employee::find($empId);
+                                    @endphp
+                                    @if($empObj)
+                                        @php
+                                            $authStatus = $this->checkNormativeAuthorization($empObj, $selectedSchedule, $assign_effective_from);
+                                            if (!$authStatus['can_proceed']) {
+                                                $hasUnauthorized = true;
+                                            }
+                                        @endphp
+                                        <div class="p-2 rounded-lg bg-white border border-slate-200 text-xs flex flex-col gap-0.5">
+                                            <div class="flex items-center justify-between">
+                                                <span class="font-semibold text-slate-800">{{ $empObj->user->name ?? 'Colaborador #'.$empObj->id }}</span>
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-bold border {{ $authStatus['badge'] }}">
+                                                    {{ $authStatus['label'] }}
+                                                </span>
+                                            </div>
+                                            <p class="text-[11px] text-slate-600">{{ $authStatus['message'] }}</p>
+                                        </div>
+                                    @endif
+                                @endforeach
+                            </div>
+
+                            @if($hasUnauthorized)
+                                <div class="rounded-lg bg-amber-50 border border-amber-200 p-2 text-xs text-amber-900 flex items-start gap-1.5">
+                                    <svg class="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                    <div>
+                                        A escala selecionada exige perfil normativo aprovado e vigente. Servidores sem perfil configurado serão recusados.
+                                        @if(Auth::user()->role === \App\Enums\UserRole::Admin)
+                                            <a href="{{ route('admin.labor-rule-profiles') }}" target="_blank" class="font-bold underline text-indigo-700 hover:text-indigo-900 block mt-0.5">
+                                                Configurar perfis normativos no RH →
+                                            </a>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endif
+                        </div>
+                    @endif
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label class="block text-xs font-bold text-slate-700 mb-1" for="assign-from">Início da vigência *</label>
-                            <input id="assign-from" type="date" wire:model="assign_effective_from" class="block w-full px-2.5 py-2 text-xs font-mono border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500" required>
+                            <input id="assign-from" type="date" wire:model.live="assign_effective_from" class="block w-full px-2.5 py-2 text-xs font-mono border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500" required>
                             @error('assign_effective_from') <span class="text-xs font-semibold text-rose-600 mt-1 block">{{ $message }}</span> @enderror
                         </div>
                         <div>

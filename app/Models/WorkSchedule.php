@@ -106,9 +106,13 @@ class WorkSchedule extends Model
     {
         $modality = $this->modality;
         $modalityName = $modality?->label() ?? 'Especial';
+        $targetDate = $date ?? Carbon::today();
+        $dateStr = $targetDate->format('d/m/Y');
 
         if ($this->requires_legal_authorization && ! $this->isAuthorizedForRegime($employee->legal_regime)) {
-            return "A escala '{$this->name}' ({$modalityName}) requer autorização normativa específica não habilitada para o regime do colaborador.";
+            $regimeLabel = $employee->legal_regime?->label() ?? 'não informado';
+
+            return "A escala '{$this->name}' ({$modalityName}) requer autorização normativa específica não habilitada para o regime do colaborador ({$regimeLabel}).";
         }
 
         $modalityKey = match ($modality) {
@@ -121,14 +125,33 @@ class WorkSchedule extends Model
             return null;
         }
 
-        $profile = $employee->getLaborRuleProfileForDate($date);
+        $profile = $employee->getLaborRuleProfileForDate($targetDate);
 
         if ($profile === null) {
-            return "A escala '{$this->name}' ({$modalityName}) exige perfil normativo aprovado para o regime do colaborador. Peça ao RH para configurar a norma aplicável — o registro de ponto segue liberado.";
+            $regimeName = $employee->legal_regime?->label() ?? 'não informado';
+
+            // Diagnóstico detalhado caso haja um perfil diretamente atribuído com pendências
+            $assigned = $employee->labor_rule_profile_id ? $employee->laborRuleProfile : null;
+            if ($assigned) {
+                if ($assigned->isDraft()) {
+                    return "A escala '{$this->name}' ({$modalityName}) exige perfil normativo aprovado. O perfil '{$assigned->name}' atribuído ao colaborador está em rascunho e ainda não foi aprovado pelo RH em Configurações → Perfis Normativos.";
+                }
+                if ($assigned->isRevoked()) {
+                    return "A escala '{$this->name}' ({$modalityName}) exige perfil normativo ativo. O perfil '{$assigned->name}' foi revogado e não autoriza novas atribuições em Configurações → Perfis Normativos.";
+                }
+                if (! $assigned->isEffectiveAt($targetDate)) {
+                    return "A escala '{$this->name}' ({$modalityName}) exige perfil normativo vigente. O perfil '{$assigned->name}' não é válido para a data selecionada ({$dateStr}) em Configurações → Perfis Normativos.";
+                }
+                if ($assigned->legal_regime !== $employee->legal_regime) {
+                    return "A escala '{$this->name}' ({$modalityName}) exige perfil compatível. O perfil '{$assigned->name}' é do regime {$assigned->legal_regime?->label()}, incompatível com o colaborador ({$regimeName}) em Configurações → Perfis Normativos.";
+                }
+            }
+
+            return "Este funcionário está cadastrado como {$regimeName} e não possui um perfil normativo aprovado que autorize o plantão {$modalityKey} nesta data ({$dateStr}). Peça ao RH para configurar a norma aplicável em Configurações → Perfis Normativos — o registro de ponto segue liberado.";
         }
 
         if (! $profile->isModalityAllowed($modalityKey)) {
-            return "A escala '{$this->name}' ({$modalityName}) não está autorizada no perfil normativo '{$profile->name}' vigente para o regime do colaborador.";
+            return "A escala '{$this->name}' ({$modalityName}) não está autorizada no perfil normativo '{$profile->name}' vigente para o regime do colaborador. Peça ao RH para configurar a norma em Configurações → Perfis Normativos.";
         }
 
         return null;

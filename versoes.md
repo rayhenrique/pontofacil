@@ -1,6 +1,27 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.19 (Atual)
+## v2.6.20 (Atual)
+- **Gerenciamento de Perfis Normativos e Autorização de Escalas Especiais (PTRP / Portaria 671):**
+  - **Interface Administrativa Completa para Perfis Normativos (`LaborRuleProfile`):**
+    - Criada tela de gestão de perfis normativos no painel administrativo (`Configurações → Perfis Normativos`), permitindo ao RH/Admin cadastrar, revisar em rascunho, homologar/aprovar, revogar e versionar regras jurídicas aplicáveis aos colaboradores.
+    - Suporte a filtros por regime jurídico (CLT, Estatutário Federal, Estadual, Municipal ou Outro), situação (Rascunho, Aprovado, Revogado), vigência (Vigentes, Futuros, Vencidos) e busca textual por nome, código, ente federativo ou ato legal.
+    - Métricas em tempo real no topo da página (Total, Aprovados, Em Rascunho, Revogados e Ente Federativo ativo).
+    - Modal de visualização detalhada de configurações: percentual de adicional noturno, horário inicial/final noturno, hora reduzida ficta (52m30s), extensão noturna, compensações em 12x36 e modalidades autorizadas.
+  - **Imutabilidade e Versionamento de Perfis Homologados:**
+    - Perfis aprovados e em vigência possuem proteção de integridade e não podem sofrer mutação in-place retroativa de seus parâmetros operacionais.
+    - Implementado mecanismo de versionamento formal (`createNextVersion`): o RH cria uma nova versão (`version + 1`) em rascunho com vínculo de linhagem (`parent_profile_id`), permitindo ajustes sem corromper apurações e espelhos de competências anteriores.
+    - Revogação auditável obrigatória: perfis revogados exigem justificativa formal de auditoria com data e responsável (`revoked_by`, `revoked_at`, `revocation_reason`), impedindo novas atribuições de escalas mas preservando o histórico legal de apurações passadas.
+  - **Vínculo Temporal de Perfis aos Colaboradores:**
+    - Criada a tabela e modelo `employee_labor_rule_profile_assignments` com versionamento temporal por vigência (`effective_from`, `effective_until`), rastreabilidade de operador (`assigned_by`), motivo e notas de auditoria.
+    - Na tela de cadastro e edição de funcionários (`admin.employees`), disponibilizado o seletor "Perfil Normativo Aplicável", listando apenas perfis aprovados e compatíveis com o regime jurídico selecionado, com avisos contextuais quando não houver perfil cadastrado.
+    - Segregação de funções estrita: gestores de setor (`UserRole::Manager`) visualizam em modo somente leitura e são terminantemente impedidos de alterar ou conceder perfis normativos a si mesmos ou aos seus subordinados (403 Forbidden).
+  - **Autorização Inteligente e Feedback em Tempo Real na Gestão de Escalas (`admin.shifts-management`):**
+    - Integrada verificação de conformidade normativa em tempo real no modal de atribuição de escalas (`showAssignModal`) e de configuração de modelos (`showScheduleModal`).
+    - Exibição de crachá de conformidade para cada servidor selecionado: *Autorizada* (verde), *Pendente de Configuração* (âmbar), *Perfil em Rascunho* (âmbar), *Perfil Revogado* (rosa), *Fora da Vigência* (laranja) e *Não Autorizada* (rosa).
+    - Feedback claro e contextual orientando o administrador a `Configurações → Perfis Normativos` quando um colaborador estatutário precisar de autorização formal para plantões 12x36 ou 24x72.
+    - Preservação estrita das regras da CLT urbana padrão (arts. 59-A e 73) e Servidor Federal (Lei 8.112/1990 e Lei 15.367/2026), que mantêm seus perfis oficiais automáticos.
+
+## v2.6.19
 - **Cancelamento e Reversão Auditável de Justificativas e Trava Opcional de GPS por Setor:**
   - **Reversão Administrativa e Cancelamento no PTRP:** Implementação de ação centralizada e transacional (`CancelTreatmentEventAction`) para cancelamento de solicitações pendentes e reversão administrativa de justificativas de ausência já homologadas.
     - *Solicitações Pendentes:* Solicitante pode cancelar a própria pendência; Gestor cancela colaboradores dos seus setores subordinados; Coordenação de RH possui visão e autorização global.

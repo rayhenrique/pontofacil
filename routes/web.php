@@ -118,6 +118,7 @@ Route::middleware('auth')->group(function () {
         Route::livewire('/audit', 'admin.audit')->name('audit');
         Route::livewire('/time-bank', 'admin.time-bank')->name('time-bank');
         Route::livewire('/settlement-policies', 'admin.settlement-policies')->name('settlement-policies');
+        Route::livewire('/labor-rule-profiles', 'admin.labor-rule-profiles')->name('labor-rule-profiles');
         Route::livewire('/settings', 'admin.settings')->name('settings');
         Route::livewire('/calendar', 'admin.calendar')->name('calendar');
         Route::get('/exportar-afd', [ReceiptController::class, 'exportAfd'])->name('export-afd');

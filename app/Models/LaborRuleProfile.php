@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\LaborRuleApprovalStatus;
 use App\Enums\LegalRegime;
+use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -18,12 +19,18 @@ class LaborRuleProfile extends Model
         'code',
         'legal_regime',
         'jurisdiction',
+        'entity_name',
         'legal_reference',
         'effective_from',
         'effective_until',
         'approval_status',
         'approved_by',
         'approved_at',
+        'revoked_by',
+        'revoked_at',
+        'revocation_reason',
+        'change_reason',
+        'parent_profile_id',
         'version',
         'description',
         'configuration',
@@ -35,6 +42,7 @@ class LaborRuleProfile extends Model
         'effective_from' => 'date',
         'effective_until' => 'date',
         'approved_at' => 'datetime',
+        'revoked_at' => 'datetime',
         'version' => 'integer',
         'configuration' => 'array',
     ];
@@ -50,12 +58,33 @@ class LaborRuleProfile extends Model
     {
         static::saving(function (LaborRuleProfile $profile) {
             $profile->validateLegalConsistency();
+            $profile->validateApprovedImmutability();
         });
     }
 
     public function approvedByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function revokedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'revoked_by');
+    }
+
+    public function parentProfile(): BelongsTo
+    {
+        return $this->belongsTo(LaborRuleProfile::class, 'parent_profile_id');
+    }
+
+    public function childVersions(): HasMany
+    {
+        return $this->hasMany(LaborRuleProfile::class, 'parent_profile_id')->orderBy('version', 'asc');
+    }
+
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(EmployeeLaborRuleProfileAssignment::class);
     }
 
     public function employees(): HasMany
@@ -113,9 +142,101 @@ class LaborRuleProfile extends Model
         }
     }
 
+    /**
+     * Garante imutabilidade de parâmetros normativos em perfis já aprovados e vigentes.
+     * Alterações exigem geração de nova versão (version + 1).
+     *
+     * @throws ValidationException
+     */
+    public function validateApprovedImmutability(): void
+    {
+        if (! $this->exists) {
+            return;
+        }
+
+        $originalStatus = $this->getOriginal('approval_status');
+        $originalStatusVal = $originalStatus instanceof LaborRuleApprovalStatus ? $originalStatus->value : (string) $originalStatus;
+
+        if ($originalStatusVal === LaborRuleApprovalStatus::Approved->value) {
+            $immutableFields = ['legal_regime', 'jurisdiction', 'legal_reference', 'configuration', 'version', 'parent_profile_id'];
+            foreach ($immutableFields as $field) {
+                if ($this->isDirty($field)) {
+                    throw ValidationException::withMessages([
+                        $field => 'Perfis normativos já aprovados e vigentes não podem ser alterados retroativamente. Crie uma nova versão para manter a integridade histórica.',
+                    ]);
+                }
+            }
+        }
+    }
+
     public function isApproved(): bool
     {
         return $this->approval_status === LaborRuleApprovalStatus::Approved;
+    }
+
+    public function isDraft(): bool
+    {
+        return $this->approval_status === LaborRuleApprovalStatus::Draft;
+    }
+
+    public function isRevoked(): bool
+    {
+        return $this->approval_status === LaborRuleApprovalStatus::Revoked;
+    }
+
+    public function approve(User $user): void
+    {
+        $this->approval_status = LaborRuleApprovalStatus::Approved;
+        $this->approved_by = $user->id;
+        $this->approved_at = Carbon::now();
+        $this->save();
+    }
+
+    public function revoke(User $user, string $reason): void
+    {
+        if (empty(trim($reason))) {
+            throw ValidationException::withMessages([
+                'revocation_reason' => 'O motivo da revogação do perfil normativo é obrigatório para fins de auditoria.',
+            ]);
+        }
+
+        $this->approval_status = LaborRuleApprovalStatus::Revoked;
+        $this->revoked_by = $user->id;
+        $this->revoked_at = Carbon::now();
+        $this->revocation_reason = trim($reason);
+        $this->save();
+    }
+
+    public function createNextVersion(array $changes, User $user, ?string $changeReason = null): self
+    {
+        $nextVersion = $this->version + 1;
+        $baseCode = preg_replace('/-v\d+.*$/', '', $this->code);
+        $newCode = $baseCode.'-v'.$nextVersion;
+
+        $counter = 1;
+        while (self::where('code', $newCode)->exists()) {
+            $newCode = $baseCode.'-v'.$nextVersion.'-'.$counter;
+            $counter++;
+        }
+
+        $mergedConfig = array_merge($this->configuration ?? [], $changes['configuration'] ?? []);
+
+        return self::create([
+            'name' => $changes['name'] ?? $this->name,
+            'code' => $newCode,
+            'legal_regime' => $changes['legal_regime'] ?? $this->legal_regime,
+            'jurisdiction' => $changes['jurisdiction'] ?? $this->jurisdiction,
+            'entity_name' => $changes['entity_name'] ?? $this->entity_name,
+            'legal_reference' => $changes['legal_reference'] ?? $this->legal_reference,
+            'description' => $changes['description'] ?? $this->description,
+            'effective_from' => $changes['effective_from'] ?? Carbon::today()->format('Y-m-d'),
+            'effective_until' => $changes['effective_until'] ?? null,
+            'approval_status' => LaborRuleApprovalStatus::Draft,
+            'version' => $nextVersion,
+            'parent_profile_id' => $this->id,
+            'change_reason' => $changeReason ?? ($changes['change_reason'] ?? "Revisão baseada na versão {$this->version}"),
+            'configuration' => $mergedConfig,
+        ]);
     }
 
     public function isEffectiveAt(CarbonInterface|string $date): bool
@@ -200,11 +321,19 @@ class LaborRuleProfile extends Model
             'code' => $this->code,
             'legal_regime' => $this->legal_regime?->value ?? (string) $this->legal_regime,
             'jurisdiction' => $this->jurisdiction,
+            'entity_name' => $this->entity_name,
             'legal_reference' => $this->legal_reference,
             'version' => $this->version,
             'effective_from' => $this->effective_from->format('Y-m-d'),
             'effective_until' => $this->effective_until?->format('Y-m-d'),
             'approval_status' => $this->approval_status?->value ?? (string) $this->approval_status,
+            'approved_by' => $this->approved_by,
+            'approved_at' => $this->approved_at?->format('Y-m-d H:i:s'),
+            'revoked_by' => $this->revoked_by,
+            'revoked_at' => $this->revoked_at?->format('Y-m-d H:i:s'),
+            'revocation_reason' => $this->revocation_reason,
+            'change_reason' => $this->change_reason,
+            'parent_profile_id' => $this->parent_profile_id,
             'configuration' => $this->configuration ?? [],
         ];
     }
@@ -212,6 +341,16 @@ class LaborRuleProfile extends Model
     public function scopeApproved(Builder $query): Builder
     {
         return $query->where('approval_status', LaborRuleApprovalStatus::Approved->value);
+    }
+
+    public function scopeDraft(Builder $query): Builder
+    {
+        return $query->where('approval_status', LaborRuleApprovalStatus::Draft->value);
+    }
+
+    public function scopeRevoked(Builder $query): Builder
+    {
+        return $query->where('approval_status', LaborRuleApprovalStatus::Revoked->value);
     }
 
     public function scopeActiveAt(Builder $query, CarbonInterface|string $date): Builder
@@ -230,6 +369,15 @@ class LaborRuleProfile extends Model
         $val = $regime instanceof LegalRegime ? $regime->value : $regime;
 
         return $query->where('legal_regime', $val);
+    }
+
+    public function scopeForEntity(Builder $query, ?string $entity): Builder
+    {
+        if (empty($entity)) {
+            return $query;
+        }
+
+        return $query->where('entity_name', $entity);
     }
 
     /**

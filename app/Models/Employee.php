@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @property Carbon|null $normative_effective_from
@@ -93,6 +94,11 @@ class Employee extends Model
         return $this->belongsTo(LaborRuleProfile::class);
     }
 
+    public function laborRuleProfileAssignments(): HasMany
+    {
+        return $this->hasMany(EmployeeLaborRuleProfileAssignment::class)->orderBy('effective_from', 'desc');
+    }
+
     public function workScheduleAssignments(): HasMany
     {
         return $this->hasMany(WorkScheduleAssignment::class)->orderBy('effective_from', 'desc');
@@ -139,22 +145,164 @@ class Employee extends Model
     }
 
     /**
+     * Atribui um perfil normativo ao colaborador de forma versionada no tempo,
+     * garantindo integridade de histórico, validade do regime e ausência de sobreposições conflitantes.
+     *
+     * @throws ValidationException
+     */
+    public function assignLaborRuleProfile(
+        LaborRuleProfile $profile,
+        CarbonInterface|string $effectiveFrom,
+        CarbonInterface|string|null $effectiveUntil = null,
+        string $reason = 'Atribuição de perfil normativo',
+        ?User $assignedBy = null,
+        ?string $notes = null,
+    ): EmployeeLaborRuleProfileAssignment {
+        if (! $profile->isApproved()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'labor_rule_profile_id' => ['Apenas perfis normativos aprovados podem ser atribuídos a colaboradores.'],
+            ]);
+        }
+
+        $from = $effectiveFrom instanceof CarbonInterface ? $effectiveFrom->copy()->startOfDay() : Carbon::parse($effectiveFrom)->startOfDay();
+        $until = $effectiveUntil ? ($effectiveUntil instanceof CarbonInterface ? $effectiveUntil->copy()->startOfDay() : Carbon::parse($effectiveUntil)->startOfDay()) : null;
+
+        if ($until && $until->lt($from)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'effective_until' => ['A data final de vigência não pode ser anterior à data de início.'],
+            ]);
+        }
+
+        $regimeVal = $this->legal_regime instanceof LegalRegime ? $this->legal_regime->value : (string) $this->legal_regime;
+        $profileRegimeVal = $profile->legal_regime instanceof LegalRegime ? $profile->legal_regime->value : (string) $profile->legal_regime;
+
+        if ($regimeVal !== $profileRegimeVal) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'labor_rule_profile_id' => [
+                    "Incompatibilidade jurídica: o perfil '{$profile->name}' pertence ao regime {$profile->legal_regime?->label()}, incompatível com o regime {$this->legal_regime?->label()} do colaborador.",
+                ],
+            ]);
+        }
+
+        return DB::transaction(function () use ($profile, $from, $until, $reason, $assignedBy, $notes) {
+            $fromStr = $from->format('Y-m-d');
+            $untilStr = $until?->format('Y-m-d');
+
+            $existingAssignments = EmployeeLaborRuleProfileAssignment::where('employee_id', $this->id)
+                ->orderBy('effective_from', 'asc')
+                ->get();
+
+            foreach ($existingAssignments as $existing) {
+                $existingFromStr = $existing->effective_from->format('Y-m-d');
+                $existingUntilStr = $existing->effective_until?->format('Y-m-d');
+
+                if ($existingUntilStr === null) {
+                    if ($fromStr > $existingFromStr) {
+                        $closingDate = $from->copy()->subDay()->format('Y-m-d');
+                        $existing->update(['effective_until' => $closingDate]);
+
+                        continue;
+                    }
+
+                    if ($fromStr === $existingFromStr) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            'effective_from' => ['Já existe uma atribuição de perfil normativo iniciando exatamente nesta mesma data.'],
+                        ]);
+                    }
+
+                    if ($untilStr && $untilStr < $existingFromStr) {
+                        continue;
+                    }
+
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'effective_from' => ['Conflito de vigência: a data informada colide com uma atribuição de perfil aberta.'],
+                    ]);
+                }
+
+                if ($existing->conflictsWith($fromStr, $untilStr)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'effective_from' => [
+                            "Conflito de vigência: o colaborador já possui o perfil '{$existing->laborRuleProfile?->name}' atribuído entre {$existing->effective_from->format('d/m/Y')} e {$existing->effective_until->format('d/m/Y')}.",
+                        ],
+                    ]);
+                }
+            }
+
+            $assignment = EmployeeLaborRuleProfileAssignment::create([
+                'employee_id' => $this->id,
+                'labor_rule_profile_id' => $profile->id,
+                'effective_from' => $fromStr,
+                'effective_until' => $untilStr,
+                'reason' => $reason,
+                'assigned_by' => $assignedBy?->id,
+                'notes' => $notes,
+            ]);
+
+            $todayStr = Carbon::today()->format('Y-m-d');
+            if ($fromStr <= $todayStr && ($untilStr === null || $untilStr >= $todayStr)) {
+                $this->update(['labor_rule_profile_id' => $profile->id]);
+            }
+
+            return $assignment;
+        });
+    }
+
+    /**
      * Resolve o perfil de regras jurídicas aplicável para a data especificada.
      * Estatutários estaduais e municipais NÃO herdam automaticamente regras federais ou CLT.
      */
     public function getLaborRuleProfileForDate(?CarbonInterface $date = null): ?LaborRuleProfile
     {
         $targetDate = $date ?? Carbon::today();
+        $dateStr = $targetDate->format('Y-m-d');
 
-        // 1. Se houver perfil atribuído diretamente ao colaborador:
+        // 1. Prioridade máxima: atribuição versionada no tempo (employee_labor_rule_profile_assignments)
+        if ($this->relationLoaded('laborRuleProfileAssignments')) {
+            $assignment = $this->laborRuleProfileAssignments
+                ->first(function ($assignment) use ($dateStr) {
+                    $effectiveFrom = $assignment->effective_from instanceof CarbonInterface
+                        ? $assignment->effective_from->format('Y-m-d')
+                        : (string) $assignment->effective_from;
+
+                    $effectiveUntil = $assignment->effective_until instanceof CarbonInterface
+                        ? $assignment->effective_until->format('Y-m-d')
+                        : ($assignment->effective_until ? (string) $assignment->effective_until : null);
+
+                    return $effectiveFrom <= $dateStr && ($effectiveUntil === null || $effectiveUntil >= $dateStr);
+                });
+
+            if ($assignment && $assignment->laborRuleProfile) {
+                $profile = $assignment->laborRuleProfile;
+                if ($this->isProfileCompatible($profile, $targetDate)) {
+                    return $profile;
+                }
+            }
+        } else {
+            $assignment = $this->laborRuleProfileAssignments()
+                ->where('effective_from', '<=', $dateStr)
+                ->where(function ($query) use ($dateStr) {
+                    $query->whereNull('effective_until')
+                        ->orWhere('effective_until', '>=', $dateStr);
+                })
+                ->first();
+
+            if ($assignment && $assignment->laborRuleProfile) {
+                $profile = $assignment->laborRuleProfile;
+                if ($this->isProfileCompatible($profile, $targetDate)) {
+                    return $profile;
+                }
+            }
+        }
+
+        // 2. Se houver perfil atribuído diretamente ao colaborador (campo legado/sincronizado):
         if ($this->labor_rule_profile_id) {
             $assigned = $this->laborRuleProfile;
-            if ($assigned && $assigned->isApproved() && $assigned->isEffectiveAt($targetDate)) {
+            if ($assigned && $this->isProfileCompatible($assigned, $targetDate)) {
                 return $assigned;
             }
         }
 
-        // 2. Regime CLT: fallback para o perfil padrão da CLT urbana
+        // 3. Regime CLT: fallback para o perfil padrão oficial da CLT urbana
         if ($this->legal_regime === LegalRegime::CLT) {
             return LaborRuleProfile::where('legal_regime', LegalRegime::CLT->value)
                 ->approved()
@@ -162,7 +310,7 @@ class Employee extends Model
                 ->first() ?? LaborRuleProfile::createStandardCltProfile();
         }
 
-        // 3. Servidor Federal: fallback para o perfil padrão da Lei 8.112/1990
+        // 4. Servidor Federal: fallback para o perfil padrão da Lei 8.112/1990
         if ($this->legal_regime === LegalRegime::FederalStatutory) {
             return LaborRuleProfile::where('legal_regime', LegalRegime::FederalStatutory->value)
                 ->approved()
@@ -170,16 +318,58 @@ class Employee extends Model
                 ->first() ?? LaborRuleProfile::createFederalStatutoryProfile();
         }
 
-        // 4. Estatutários estaduais ou municipais: NÃO herdam automaticamente
-        // Somente se houver perfil explicitamente cadastrado e aprovado para o regime
-        if ($this->legal_regime?->isStatutory()) {
-            return LaborRuleProfile::where('legal_regime', $this->legal_regime->value)
+        // 5. Estatutários estaduais, municipais ou outros regimes:
+        // NÃO herdam automaticamente e NÃO selecionam arbitrariamente se houver múltiplos perfis
+        if ($this->legal_regime?->isStatutory() || $this->legal_regime === LegalRegime::Other) {
+            $candidatesQuery = LaborRuleProfile::where('legal_regime', $this->legal_regime->value)
                 ->approved()
-                ->activeAt($targetDate)
-                ->first();
+                ->activeAt($targetDate);
+
+            if (! empty($this->normative_entity)) {
+                $candidatesQuery->where(function ($q) {
+                    $q->whereNull('entity_name')
+                        ->orWhere('entity_name', $this->normative_entity);
+                });
+            }
+
+            $candidates = $candidatesQuery->get();
+
+            // Se houver mais de uma norma aplicável, exige atribuição explícita para evitar uso indevido de norma alheia
+            if ($candidates->count() === 1) {
+                $candidate = $candidates->first();
+                if ($this->isProfileCompatible($candidate, $targetDate)) {
+                    return $candidate;
+                }
+            }
         }
 
         return null;
+    }
+
+    /**
+     * Valida critérios de compatibilidade entre o colaborador e o perfil normativo.
+     */
+    public function isProfileCompatible(LaborRuleProfile $profile, CarbonInterface|string $targetDate): bool
+    {
+        if (! $profile->isApproved() || ! $profile->isEffectiveAt($targetDate)) {
+            return false;
+        }
+
+        $empRegime = $this->legal_regime instanceof LegalRegime ? $this->legal_regime->value : (string) $this->legal_regime;
+        $profileRegime = $profile->legal_regime instanceof LegalRegime ? $profile->legal_regime->value : (string) $profile->legal_regime;
+
+        if ($empRegime !== $profileRegime) {
+            return false;
+        }
+
+        // Se o colaborador tem ente definido e o perfil tem ente definido, devem coincidir
+        if (! empty($this->normative_entity) && ! empty($profile->entity_name)) {
+            if (mb_strtolower(trim($this->normative_entity)) !== mb_strtolower(trim($profile->entity_name))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

@@ -51,6 +51,7 @@
             'admin.calendar*',
             'admin.time-bank*',
             'admin.settlement-policies*',
+            'admin.labor-rule-profiles*',
             'admin.adjustment*',
             'admin.fiscalizacao*',
             'admin.audit*',
@@ -196,6 +197,10 @@
                                             <a href="{{ route('admin.time-bank') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.time-bank*') || request()->routeIs('admin.settlement-policies*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:bg-indigo-800/60 hover:text-white' }}">
                                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                                 Banco de Horas
+                                            </a>
+                                            <a href="{{ route('admin.labor-rule-profiles') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.labor-rule-profiles*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:bg-indigo-800/60 hover:text-white' }}">
+                                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>
+                                                Perfis Normativos
                                             </a>
                                             <a href="{{ route('admin.adjustment') }}" @click="mobileMenuOpen = false" class="min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.adjustment*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:bg-indigo-800/60 hover:text-white' }}">
                                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
@@ -391,6 +396,10 @@
                                             <a href="{{ route('admin.time-bank') }}" :title="sidebarCollapsed ? 'Banco de Horas' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[40px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.time-bank*') || request()->routeIs('admin.settlement-policies*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:text-white hover:bg-indigo-800/60' }}">
                                                 <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                                 <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Banco de Horas</span>
+                                            </a>
+                                            <a href="{{ route('admin.labor-rule-profiles') }}" :title="sidebarCollapsed ? 'Perfis Normativos' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[40px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.labor-rule-profiles*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:text-white hover:bg-indigo-800/60' }}">
+                                                <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>
+                                                <span x-show="!sidebarCollapsed" x-transition.opacity class="truncate">Perfis Normativos</span>
                                             </a>
                                             <a href="{{ route('admin.adjustment') }}" :title="sidebarCollapsed ? 'Ajuste Manual' : ''" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'" class="min-h-[40px] flex items-center py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.adjustment*') ? 'bg-indigo-800 text-white font-semibold' : 'text-indigo-200 hover:text-white hover:bg-indigo-800/60' }}">
                                                 <svg :class="sidebarCollapsed ? 'mr-0' : 'mr-3'" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>

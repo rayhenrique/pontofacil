@@ -5,6 +5,7 @@ use App\Enums\LegalRegime;
 use App\Enums\UserRole;
 use App\Enums\WorkloadModality;
 use App\Models\Employee;
+use App\Models\LaborRuleProfile;
 use App\Models\Sector;
 use App\Models\User;
 use App\Models\WorkSchedule;
@@ -70,6 +71,11 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
 
     public $normative_notes = '';
 
+    // Perfil Normativo
+    public $labor_rule_profile_id = '';
+
+    public $labor_rule_profile_effective_from = '';
+
     // Escala versionada
     public $work_schedule_id = '';
 
@@ -121,6 +127,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
             'employeeId', 'name', 'cpf', 'email', 'phone', 'sector_id',
             'normative_entity', 'normative_reference', 'normative_act_number',
             'normative_effective_from', 'normative_effective_until', 'normative_notes',
+            'labor_rule_profile_id',
         ]);
 
         $this->job_title = 'Servidor Público';
@@ -136,6 +143,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
         $this->is_variable_workload = false;
         $this->normative_jurisdiction = 'municipal';
 
+        $this->labor_rule_profile_effective_from = Carbon::today()->format('Y-m-d');
         $this->schedule_effective_from = Carbon::today()->format('Y-m-d');
         $this->schedule_reason = 'Atribuição cadastral inicial de escala';
 
@@ -225,7 +233,11 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
         $this->normative_effective_until = $employee->normative_effective_until ? Carbon::parse($employee->normative_effective_until)->format('Y-m-d') : '';
         $this->normative_notes = $employee->normative_notes ?? '';
 
-        // Escala
+        // Escala e Perfil Normativo
+        $currentProfile = $employee->getLaborRuleProfileForDate();
+        $this->labor_rule_profile_id = $currentProfile ? (string) $currentProfile->id : (string) ($employee->labor_rule_profile_id ?? '');
+        $this->labor_rule_profile_effective_from = Carbon::today()->format('Y-m-d');
+
         $currentSchedule = $employee->getWorkScheduleForDate();
         $this->work_schedule_id = $currentSchedule ? (string) $currentSchedule->id : (string) ($employee->work_schedule_id ?? '');
         $this->initial_work_schedule_id = $this->work_schedule_id;
@@ -267,6 +279,8 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
             'zone' => 'required|string|max:50',
             'work_schedule_id' => 'nullable|exists:work_schedules,id',
             'schedule_effective_from' => 'nullable|date',
+            'labor_rule_profile_id' => 'nullable|exists:labor_rule_profiles,id',
+            'labor_rule_profile_effective_from' => 'nullable|date',
             'normative_effective_from' => 'nullable|date',
             'normative_effective_until' => 'nullable|date|after_or_equal:normative_effective_from',
         ], [
@@ -320,7 +334,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
         $targetEmployee = null;
 
         try {
-            DB::transaction(function () use ($employee, $dailyMinutes, $weeklyMinutes, $monthlyMinutes, &$targetEmployee) {
+            DB::transaction(function () use ($user, $employee, $dailyMinutes, $weeklyMinutes, $monthlyMinutes, &$targetEmployee) {
                 $employeeData = [
                     'sector_id' => $this->sector_id,
                     'cpf' => $this->cpf,
@@ -384,11 +398,42 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                         );
                     }
                 }
+
+                // Aplicação do Perfil Normativo (Controlado exclusivamente pelo RH/Admin)
+                if ($user->role === UserRole::Admin) {
+                    if (! empty($this->labor_rule_profile_id)) {
+                        $profile = LaborRuleProfile::find($this->labor_rule_profile_id);
+                        if ($profile) {
+                            $effFrom = ! empty($this->labor_rule_profile_effective_from)
+                                ? Carbon::parse($this->labor_rule_profile_effective_from)
+                                : Carbon::today();
+
+                            $targetEmployee->assignLaborRuleProfile(
+                                profile: $profile,
+                                effectiveFrom: $effFrom,
+                                effectiveUntil: null,
+                                reason: $employee ? 'Atualização cadastral de perfil normativo' : 'Atribuição cadastral inicial de perfil normativo',
+                                assignedBy: $user,
+                                notes: 'Vínculo normativo configurado via cadastro de funcionário'
+                            );
+                        }
+                    } elseif ($employee && $employee->labor_rule_profile_id) {
+                        $targetEmployee->update(['labor_rule_profile_id' => null]);
+                    }
+                }
             });
         } catch (ValidationException $e) {
             foreach ($e->errors() as $key => $messages) {
-                $field = str_contains($key, 'effective_from') ? 'schedule_effective_from' : 'work_schedule_id';
-                $this->addError($field, $messages[0] ?? 'Erro ao atribuir escala.');
+                if (str_contains($key, 'labor_rule_profile') || str_contains($key, 'profile')) {
+                    $field = 'labor_rule_profile_id';
+                } elseif (str_contains($key, 'effective_from') && ! empty($this->labor_rule_profile_id) && empty($this->work_schedule_id)) {
+                    $field = 'labor_rule_profile_effective_from';
+                } elseif (str_contains($key, 'effective_from')) {
+                    $field = 'schedule_effective_from';
+                } else {
+                    $field = $key;
+                }
+                $this->addError($field, $messages[0] ?? 'Erro ao salvar registro.');
             }
 
             return;
@@ -402,6 +447,7 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
             'monthly_workload_hours', 'workload_modality', 'is_variable_workload',
             'normative_entity', 'normative_reference', 'normative_act_number',
             'normative_effective_from', 'normative_effective_until', 'normative_notes',
+            'labor_rule_profile_id', 'labor_rule_profile_effective_from',
             'work_schedule_id', 'initial_work_schedule_id', 'schedule_effective_from',
         ]);
         $this->showModal = false;
@@ -506,11 +552,19 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
 
         $employees = $query->orderByDesc('id')->paginate(15);
 
+        $legalRegimeEnum = LegalRegime::tryFrom($this->legal_regime);
+        $compatibleProfiles = LaborRuleProfile::query()
+            ->approved()
+            ->when($legalRegimeEnum, fn ($q) => $q->forRegime($legalRegimeEnum))
+            ->orderBy('name')
+            ->get();
+
         return [
             'employees' => $employees,
             'sectors' => $managedSectors,
             'workSchedules' => $workSchedules,
             'legalRegimes' => $legalRegimes,
+            'compatibleProfiles' => $compatibleProfiles,
             'isManager' => $isManager,
             'managedSectorsCount' => $isManager ? $managedSectors->count() : null,
             'hasActiveFilters' => $this->search !== '' || $this->sectorFilter !== '' || $this->regimeFilter !== '',
@@ -988,6 +1042,84 @@ new #[Layout('layouts.app')] #[Title('Gerenciar Funcionários')] class extends C
                                     </div>
                                 </div>
                                 @endif
+
+                                <!-- SUB-BLOCO PERFIL NORMATIVO APLICÁVEL (RH / PTRP) -->
+                                <div class="bg-white rounded-xl border border-slate-200 p-3.5 space-y-3">
+                                    <div class="flex items-center justify-between">
+                                        <h5 class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                            <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                            </svg>
+                                            Perfil Normativo Aplicável (RH / PTRP)
+                                        </h5>
+                                        @if(!$isManager)
+                                            <a href="{{ route('admin.labor-rule-profiles') }}" target="_blank" class="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
+                                                Gerenciar Perfis
+                                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                            </a>
+                                        @endif
+                                    </div>
+
+                                    @if($isManager)
+                                        <div class="rounded-lg bg-amber-50 border border-amber-200 p-2.5 text-xs text-amber-800">
+                                            <span class="font-semibold">Acesso Restrito:</span> O perfil normativo e legal é controlado exclusivamente pelo RH. Gestores de setor não têm autorização para conceder ou alterar permissões legais.
+                                        </div>
+                                    @else
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            <div>
+                                                <label class="block text-[11px] font-semibold text-gray-600 uppercase mb-0.5">Perfil Homologado / Aprovado</label>
+                                                <select wire:model.live="labor_rule_profile_id" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg bg-white font-medium">
+                                                    <option value="">Padrão geral do regime (se houver norma federal/CLT)</option>
+                                                    @foreach($compatibleProfiles as $prof)
+                                                        <option value="{{ $prof->id }}">
+                                                            {{ $prof->name }} (v{{ $prof->version }}) — {{ $prof->jurisdiction === 'municipal' ? 'Municipal' : ($prof->jurisdiction === 'state' ? 'Estadual' : 'Federal') }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                                @error('labor_rule_profile_id') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+                                            </div>
+
+                                            <div>
+                                                <label class="block text-[11px] font-semibold text-gray-600 uppercase mb-0.5">Início da Vigência do Perfil</label>
+                                                <input type="date" wire:model="labor_rule_profile_effective_from" class="block w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg font-mono">
+                                                @error('labor_rule_profile_effective_from') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+                                            </div>
+                                        </div>
+
+                                        @if($compatibleProfiles->isEmpty())
+                                            <div class="rounded-lg bg-amber-50 border border-amber-200 p-2.5 text-xs text-amber-900 flex items-start gap-2">
+                                                <svg class="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                                <div>
+                                                    <span class="font-semibold">Nenhum perfil aprovado para este regime:</span> Para regimes estatutários municipais/estaduais, escalas especiais (12x36 ou 24x72) exigem que o RH aprove uma norma específica em <a href="{{ route('admin.labor-rule-profiles') }}" class="underline font-bold text-amber-800 hover:text-amber-950">Configurações → Perfis Normativos</a>.
+                                                </div>
+                                            </div>
+                                        @endif
+
+                                        @if($labor_rule_profile_id)
+                                            @php
+                                                $selectedProfileModel = $compatibleProfiles->firstWhere('id', (int) $labor_rule_profile_id);
+                                            @endphp
+                                            @if($selectedProfileModel)
+                                                <div class="rounded-lg bg-slate-50 border border-slate-200 p-2.5 text-xs text-slate-700 space-y-1">
+                                                    <div class="flex items-center justify-between">
+                                                        <span class="font-bold text-slate-800">{{ $selectedProfileModel->name }}</span>
+                                                        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">Aprovado v{{ $selectedProfileModel->version }}</span>
+                                                    </div>
+                                                    <p class="text-[11px] text-slate-600">Ref: {{ $selectedProfileModel->legal_reference ?? 'Sem referência informada' }}</p>
+                                                    <div class="flex flex-wrap gap-1.5 pt-1">
+                                                        <span class="text-[10px] text-slate-500 font-semibold">Modalidades Autorizadas:</span>
+                                                        @php $mods = $selectedProfileModel->configuration['allowed_modalities'] ?? ['standard']; @endphp
+                                                        @foreach($mods as $modKey)
+                                                            <span class="px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-semibold">
+                                                                {{ $modKey === '12x36' ? 'Plantão 12x36' : ($modKey === '24x72' ? 'Plantão 24x72' : ($modKey === '6x1' ? 'Escala 6x1' : 'Padrão')) }}
+                                                            </span>
+                                                        @endforeach
+                                                    </div>
+                                                </div>
+                                            @endif
+                                        @endif
+                                    @endif
+                                </div>
 
                                 <!-- SUB-BLOCO CARGA HORÁRIA ESTRUTURADA -->
                                 <div class="bg-white rounded-xl border border-slate-200 p-3.5 space-y-3">
