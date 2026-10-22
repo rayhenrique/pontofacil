@@ -115,6 +115,7 @@ class HelpCenterService
     {
         return [
             'todos' => 'Todos os Assuntos',
+            'visao-geral' => 'Início, Índice e Solução de Problemas',
             'registro' => 'Registro de Ponto',
             'configuracao' => 'Configuração Inicial',
             'escalas' => 'Horários e Escalas',
