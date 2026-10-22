@@ -2,6 +2,7 @@
 
 namespace App\Domain\PTRP\Services;
 
+use App\Domain\PTRP\Actions\ResolveEffectiveJourneySequenceAction;
 use App\Domain\PTRP\Enums\TreatmentEventStatus;
 use App\Domain\PTRP\Enums\TreatmentEventType;
 use App\Domain\WorkSchedule\Services\ShiftMidnightService;
@@ -151,7 +152,10 @@ class PointAdjustmentPreviewService
             $items[] = [
                 'id' => $punchId,
                 'time' => $timeStr,
+                'timestamp' => $punch->occurred_at_local,
+                'is_manual' => false,
                 'direction' => $punch->direction ?? 'in',
+                'original_direction' => $punch->direction ?? 'in',
                 'type' => $statusType,
                 'description' => $description,
                 'badge_class' => $statusBadge,
@@ -162,7 +166,8 @@ class PointAdjustmentPreviewService
         // Inserir registros legados (se aplicável)
         foreach ($legacyEntries as $entry) {
             $entryId = (string) $entry->id;
-            $timeStr = Carbon::parse($entry->timestamp)->format('H:i');
+            $entryTs = Carbon::parse($entry->timestamp);
+            $timeStr = $entryTs->format('H:i');
             $dir = $entry->type === 'in' ? 'in' : 'out';
             $isDisregarded = in_array((int) $entry->id, $approvedDisregardedTimeEntryIds, true)
                 || in_array($entryId, $approvedDisregardedPunchIds, true);
@@ -200,7 +205,10 @@ class PointAdjustmentPreviewService
             $items[] = [
                 'id' => 'legacy:'.$entryId,
                 'time' => $timeStr,
+                'timestamp' => $entryTs,
+                'is_manual' => false,
                 'direction' => $dir,
+                'original_direction' => $dir,
                 'type' => $statusType,
                 'description' => $description,
                 'badge_class' => $statusBadge,
@@ -217,7 +225,10 @@ class PointAdjustmentPreviewService
             $items[] = [
                 'id' => (string) $tr->id,
                 'time' => $timeStr,
+                'timestamp' => $tr->effective_at,
+                'is_manual' => true,
                 'direction' => $dir,
+                'original_direction' => $dir,
                 'type' => $isApproved ? 'approved_manual' : 'pending_manual',
                 'description' => $isApproved
                     ? sprintf('Batida manual aprovada (%s)', $tr->reason_text)
@@ -235,11 +246,15 @@ class PointAdjustmentPreviewService
             $timeFormatted = Carbon::hasFormat($proposedTime, 'H:i')
                 ? Carbon::createFromFormat('H:i', $proposedTime)->format('H:i')
                 : $proposedTime;
+            $proposedTs = Carbon::parse("{$dateStr} {$timeFormatted}", $timezone);
 
             $items[] = [
                 'id' => 'proposed_new',
                 'time' => $timeFormatted,
+                'timestamp' => $proposedTs,
+                'is_manual' => true,
                 'direction' => $dir,
+                'original_direction' => $dir,
                 'type' => 'proposed_addition',
                 'description' => sprintf('PROPOSTA: Inclusão de %s manual às %s', $dir === 'in' ? 'entrada' : 'saída', $timeFormatted),
                 'badge_class' => 'bg-indigo-600 text-white border-indigo-700 shadow-sm font-bold',
@@ -260,6 +275,7 @@ class PointAdjustmentPreviewService
 
         // 3. Montar Resumo / Diagnóstico Direcional da Sequência
         $effectiveItems = array_values(array_filter($items, fn ($i) => ! empty($i['effective'])));
+        app(ResolveEffectiveJourneySequenceAction::class)->recalculateEffectiveDirections($effectiveItems);
         $effectiveCount = count($effectiveItems);
 
         $hasAbsence = $hasApprovedAbsence || ($proposedAction === 'justify_absence');

@@ -3,6 +3,7 @@
 namespace App\Domain\TimeClock\Actions;
 
 use App\Domain\Company\Services\CurrentCompany;
+use App\Domain\PTRP\Actions\ResolveEffectiveJourneySequenceAction;
 use App\Domain\WorkSchedule\Services\ShiftMidnightService;
 use App\Models\Employee;
 use App\Models\Establishment;
@@ -16,9 +17,11 @@ use Illuminate\Support\Facades\Log;
 class DetermineNextPunchDirectionAction
 {
     public function __construct(
-        protected ?ShiftMidnightService $shiftMidnightService = null
+        protected ?ShiftMidnightService $shiftMidnightService = null,
+        protected ?ResolveEffectiveJourneySequenceAction $sequenceResolver = null
     ) {
         $this->shiftMidnightService ??= app(ShiftMidnightService::class);
+        $this->sequenceResolver ??= app(ResolveEffectiveJourneySequenceAction::class);
     }
 
     /**
@@ -30,7 +33,9 @@ class DetermineNextPunchDirectionAction
      * 2. JORNADA COMUM (administrativo, corrido, 5x2, 6x1, etc.):
      *    - A primeira batida de um novo dia civil sempre inicia uma nova sequência ('in').
      *    - Não usa a última entrada do dia anterior para gerar saída automática.
-     *    - Determina a próxima direção apenas pelas marcações do dia local [dayStart, dayEnd).
+     *    - Determina a próxima direção a partir da sequência efetiva reconstruída no PTRP,
+     *      considerando inclusões manuais aprovadas e desconsiderações já autorizadas.
+     *    - Não utiliza solicitações pendentes como fatos consumados.
      *
      * 3. PLANTÃO AUTORIZADO ATRAVESSANDO MEIA-NOITE (12x36, 24x72, etc.):
      *    - Continua a sequência ininterrupta do mesmo plantão.
@@ -61,18 +66,25 @@ class DetermineNextPunchDirectionAction
                     $coveringShift = $this->shiftMidnightService->findCoveringAuthorizedShift($employee, $localTime, $est);
 
                     if ($coveringShift !== null) {
-                        $lastShiftPunch = PunchEvent::where(function ($q) use ($user, $employee) {
-                            $q->where('user_id', $user->id)
-                                ->orWhere('employee_id', $employee->id);
-                        })
-                            ->where('occurred_at_local', '>=', $coveringShift->start_at_local)
-                            ->where('occurred_at_local', '<=', $localTime)
-                            ->orderBy('occurred_at_local', 'desc')
-                            ->orderBy('id', 'desc')
-                            ->first();
+                        $shiftStart = Carbon::parse($coveringShift->start_at_local)->setTimezone($tz);
+                        $resolvedShiftPunches = $this->sequenceResolver->execute(
+                            employee: $employee,
+                            date: $shiftStart,
+                            coveringShift: $coveringShift,
+                            establishment: $est,
+                            cutoffTime: $localTime,
+                        );
 
-                        if ($lastShiftPunch !== null) {
-                            return ($lastShiftPunch->direction === 'in') ? 'out' : 'in';
+                        $activeShiftPunches = array_values(array_filter(
+                            $resolvedShiftPunches,
+                            fn ($p) => empty($p['is_disregarded']) && empty($p['is_duplicate']) && empty($p['is_previous_day_exit'])
+                        ));
+
+                        if (! empty($activeShiftPunches)) {
+                            $lastShiftPunch = end($activeShiftPunches);
+                            $lastDir = $lastShiftPunch['effective_direction'] ?? $lastShiftPunch['direction'] ?? 'in';
+
+                            return ($lastDir === 'in') ? 'out' : 'in';
                         }
 
                         return 'in';
@@ -89,40 +101,56 @@ class DetermineNextPunchDirectionAction
                 }
             }
 
-            // Cenário B: Jornada Comum (determinar próxima direção apenas pelas marcações do dia local)
-            $lastTodayPunch = PunchEvent::where(function ($q) use ($user, $employee) {
-                $q->where('user_id', $user->id);
-                if ($employee !== null) {
-                    $q->orWhere('employee_id', $employee->id);
+            // Cenário B: Jornada Comum — Determinar próxima direção a partir da sequência efetiva do dia
+            if ($employee !== null) {
+                $resolvedDayPunches = $this->sequenceResolver->execute(
+                    employee: $employee,
+                    date: $localTime,
+                    establishment: $est,
+                    cutoffTime: $localTime,
+                );
+
+                $activeTodayPunches = array_values(array_filter(
+                    $resolvedDayPunches,
+                    fn ($p) => empty($p['is_disregarded']) && empty($p['is_duplicate']) && empty($p['is_previous_day_exit'])
+                ));
+
+                if (! empty($activeTodayPunches)) {
+                    $lastTodayPunch = end($activeTodayPunches);
+                    $lastDir = $lastTodayPunch['effective_direction'] ?? $lastTodayPunch['direction'] ?? 'in';
+
+                    return ($lastDir === 'in') ? 'out' : 'in';
                 }
-            })
-                ->where('occurred_at_local', '>=', $dayStart)
-                ->where('occurred_at_local', '<', $dayEnd)
-                ->where('occurred_at_local', '<=', $localTime)
-                ->orderBy('occurred_at_local', 'desc')
-                ->orderBy('id', 'desc')
-                ->first();
+            } else {
+                // Fallback para usuário sem vínculo funcional Employee
+                $lastTodayPunch = PunchEvent::where('user_id', $user->id)
+                    ->where('occurred_at_local', '>=', $dayStart)
+                    ->where('occurred_at_local', '<', $dayEnd)
+                    ->where('occurred_at_local', '<=', $localTime)
+                    ->orderBy('occurred_at_local', 'desc')
+                    ->orderBy('id', 'desc')
+                    ->first();
 
-            if ($lastTodayPunch !== null) {
-                return ($lastTodayPunch->direction === 'in') ? 'out' : 'in';
-            }
+                if ($lastTodayPunch !== null) {
+                    return ($lastTodayPunch->direction === 'in') ? 'out' : 'in';
+                }
 
-            // Fallback para histórico legado em TimeEntry apenas do dia local
-            $lastLegacyToday = TimeEntry::where('user_id', $user->id)
-                ->where('timestamp', '>=', $dayStart)
-                ->where('timestamp', '<', $dayEnd)
-                ->where('timestamp', '<=', $localTime)
-                ->orderBy('timestamp', 'desc')
-                ->first();
+                $lastLegacyToday = TimeEntry::where('user_id', $user->id)
+                    ->where('timestamp', '>=', $dayStart)
+                    ->where('timestamp', '<', $dayEnd)
+                    ->where('timestamp', '<=', $localTime)
+                    ->orderBy('timestamp', 'desc')
+                    ->first();
 
-            if ($lastLegacyToday !== null) {
-                $dir = match ($lastLegacyToday->type) {
-                    'clock_in', 'in' => 'in',
-                    'clock_out', 'out' => 'out',
-                    default => 'in',
-                };
+                if ($lastLegacyToday !== null) {
+                    $dir = match ($lastLegacyToday->type) {
+                        'clock_in', 'in' => 'in',
+                        'clock_out', 'out' => 'out',
+                        default => 'in',
+                    };
 
-                return ($dir === 'in') ? 'out' : 'in';
+                    return ($dir === 'in') ? 'out' : 'in';
+                }
             }
 
             // Primeira batida legítima do dia inicia nova sequência

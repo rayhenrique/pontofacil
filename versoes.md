@@ -1,6 +1,20 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.20 (Atual)
+## v2.6.21 (Atual)
+- **Correção Inteligente de Marcações e Ajustes de Horário (Espelho de Ponto e Apuração):**
+  - **Ajuste Automático do Sentido das Batidas após Inclusão pelo RH:**
+    - Quando um colaborador esquecia de bater o ponto na entrada (por exemplo, às 08:00) e registrava apenas a saída para o almoço (12:52) e o retorno (13:00), o sistema registrava esses pontos com o sentido invertido. Agora, assim que o RH aprova a inclusão da batida esquecida das 08:00, o sistema organiza automaticamente toda a sequência do dia: a batida das 12:52 passa a contar como saída para o almoço e a das 13:00 como retorno, calculando as horas trabalhadas e o intervalo com total precisão e eliminando avisos de erro indevidos.
+  - **Identificação Automática da Próxima Batida no Relógio de Ponto:**
+    - O sistema agora reconhece as inclusões de ponto já aprovadas na hora em que o funcionário for bater o próximo ponto. Se a entrada das 08:00 foi aprovada, ao bater o ponto no fim do expediente (às 17:00) o relógio já sugere automaticamente "Saída", sem exigir que o funcionário ou o RH precisem fazer novas correções manuais.
+  - **Transparência e Selo Visual no Espelho de Ponto:**
+    - No espelho de ponto, as batidas que tiveram seu sentido ajustado após a aprovação de uma correção ganham um aviso visual explicativo (*"Reclassificada"*), informando de forma transparente o sentido original em que foram batidas e o motivo do ajuste, garantindo total clareza para o trabalhador e conformidade com as regras trabalhistas.
+  - **Proteção contra Toques Acidentais Duplos:**
+    - Se o colaborador clicar duas vezes seguidas no botão de bater ponto por engano (em menos de 2 minutos), o sistema mantém o comprovante arquivado para fins de segurança, mas desconsidera o segundo toque no cálculo de horas para não desorganizar as batidas do restante do dia.
+  - **Atualização Automática da Conferência Mensal:**
+    - Sempre que uma batida de ponto for incluída, ajustada ou cancelada em um mês aberto, a conferência do espelho de ponto é atualizada automaticamente, avisando ao gestor que houve alteração para que ele possa conferir novamente antes de fechar a folha.
+
+
+## v2.6.20
 - **Gerenciamento de Perfis Normativos e Autorização de Escalas Especiais (PTRP / Portaria 671):**
   - **Interface Administrativa Completa para Perfis Normativos (`LaborRuleProfile`):**
     - Criada tela de gestão de perfis normativos no painel administrativo (`Configurações → Perfis Normativos`), permitindo ao RH/Admin cadastrar, revisar em rascunho, homologar/aprovar, revogar e versionar regras jurídicas aplicáveis aos colaboradores.

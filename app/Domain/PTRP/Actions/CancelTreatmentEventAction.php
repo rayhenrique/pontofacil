@@ -4,6 +4,7 @@ namespace App\Domain\PTRP\Actions;
 
 use App\Domain\PTRP\Enums\TreatmentEventStatus;
 use App\Models\ClosedPeriod;
+use App\Models\MonthlyAttendanceReview;
 use App\Models\Sector;
 use App\Models\TreatmentEvent;
 use App\Models\User;
@@ -126,6 +127,20 @@ class CancelTreatmentEventAction
                 'cancelled_at' => now(),
                 'cancellation_reason' => $trimmedReason,
             ]);
+
+            // Se o tratamento revertido estava aprovado e a competência estiver aberta, invalida a conferência anterior
+            if (! $isPending) {
+                $empId = $lockedEvent->employee_id ?? $lockedEvent->employment_id;
+                if ($empId && ! ClosedPeriod::isClosed($lockedEvent->effective_at->year, $lockedEvent->effective_at->month)) {
+                    MonthlyAttendanceReview::where('employee_id', $empId)
+                        ->where('year', $lockedEvent->effective_at->year)
+                        ->where('month', $lockedEvent->effective_at->month)
+                        ->update([
+                            'fingerprint' => null,
+                            'has_unresolved_occurrences' => true,
+                        ]);
+                }
+            }
 
             Log::info($isPending ? 'treatment.cancelled' : 'treatment.revoked', [
                 'event_id' => $lockedEvent->id,

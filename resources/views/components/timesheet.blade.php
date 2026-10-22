@@ -1545,6 +1545,12 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                                     </span>
                                 @endif
 
+                                @if(!empty($entry->is_direction_reclassified))
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200" title="{{ $entry->reclassification_reason ?? 'Sentido reclassificado administrativamente pelo PTRP' }}">
+                                        Reclassificada (Original: {{ ($entry->original_direction ?? '') === 'in' ? 'Entrada' : 'Saída' }})
+                                    </span>
+                                @endif
+
                                 {{-- Status da Marcação no PTRP --}}
                                 @if(!empty($entry->is_disregarded))
                                     <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-gray-200 text-gray-700">

@@ -4,6 +4,7 @@ namespace App\Domain\PTRP\Actions;
 
 use App\Domain\PTRP\Enums\TreatmentEventStatus;
 use App\Models\ClosedPeriod;
+use App\Models\MonthlyAttendanceReview;
 use App\Models\Sector;
 use App\Models\TreatmentEvent;
 use App\Models\User;
@@ -57,6 +58,18 @@ class ApproveTreatmentEventAction
             'approved_by' => $approvedBy->id,
             'decided_at' => now(),
         ]);
+
+        // Invalida a conferência anterior da competência aberta para exigir nova apuração e revisão
+        $empId = $event->employee_id ?? $event->employment_id;
+        if ($empId && ! ClosedPeriod::isClosed($event->effective_at->year, $event->effective_at->month)) {
+            MonthlyAttendanceReview::where('employee_id', $empId)
+                ->where('year', $event->effective_at->year)
+                ->where('month', $event->effective_at->month)
+                ->update([
+                    'fingerprint' => null,
+                    'has_unresolved_occurrences' => true,
+                ]);
+        }
 
         Log::info('treatment.approved', [
             'event_id' => $event->id,

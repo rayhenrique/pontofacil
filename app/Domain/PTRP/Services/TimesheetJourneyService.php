@@ -626,6 +626,27 @@ class TimesheetJourneyService
                 ]);
             }
 
+            // Sincronizar os sentidos efetivos e metadados de reclassificação a partir da apuração canônica
+            $effPunchesMap = collect($calculated->effectivePunches)->keyBy(fn ($p) => (string) ($p['id'] ?? ''));
+            foreach ($entries as $entry) {
+                $eff = $effPunchesMap->get((string) $entry->id);
+                if ($eff) {
+                    $entry->effective_direction = $eff['effective_direction'] ?? $entry->type;
+                    $entry->original_direction = $eff['original_direction'] ?? $entry->type;
+                    $entry->is_direction_reclassified = ! empty($eff['is_direction_reclassified']);
+                    $entry->reclassification_reason = $eff['reclassification_reason'] ?? null;
+                    $entry->type = $entry->effective_direction;
+                    $entry->direction = $entry->effective_direction;
+                    $entry->is_duplicate = ! empty($eff['is_duplicate']);
+                } else {
+                    $entry->effective_direction = $entry->type;
+                    $entry->original_direction = $entry->type;
+                    $entry->is_direction_reclassified = false;
+                    $entry->reclassification_reason = null;
+                    $entry->direction = $entry->type;
+                }
+            }
+
             $groupedEntries[$dateStr] = $entries->sortBy('timestamp')->values();
         }
 
@@ -917,10 +938,18 @@ class TimesheetJourneyService
     {
         return collect($effectivePunches)->map(function ($p) use ($dateStr) {
             $timestamp = isset($p['timestamp']) ? Carbon::parse($p['timestamp']) : Carbon::parse($dateStr.' '.($p['time'] ?? '00:00'));
+            $effDir = $p['effective_direction'] ?? $p['type'] ?? 'in';
+            $origDir = $p['original_direction'] ?? $effDir;
 
             return (object) [
                 'id' => (string) ($p['id'] ?? uniqid()),
-                'type' => $p['type'] ?? 'in',
+                'type' => $effDir,
+                'direction' => $effDir,
+                'effective_direction' => $effDir,
+                'original_direction' => $origDir,
+                'is_direction_reclassified' => ! empty($p['is_direction_reclassified']),
+                'reclassification_reason' => $p['reclassification_reason'] ?? null,
+                'is_duplicate' => ! empty($p['is_duplicate']),
                 'timestamp' => $timestamp,
                 'is_manual' => ($p['source'] ?? '') === 'ptrp_manual',
                 'latitude' => null,

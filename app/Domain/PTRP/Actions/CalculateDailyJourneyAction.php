@@ -32,9 +32,11 @@ use Illuminate\Support\Collection;
 class CalculateDailyJourneyAction
 {
     public function __construct(
-        protected ?ShiftMidnightService $shiftMidnightService = null
+        protected ?ShiftMidnightService $shiftMidnightService = null,
+        protected ?ResolveEffectiveJourneySequenceAction $sequenceResolver = null
     ) {
         $this->shiftMidnightService ??= app(ShiftMidnightService::class);
+        $this->sequenceResolver ??= app(ResolveEffectiveJourneySequenceAction::class);
     }
 
     /**
@@ -210,87 +212,29 @@ class CalculateDailyJourneyAction
             ->first();
 
         // 7. Construir lista de batidas efetivas (Efetivo = Bruto - Desconsideradas + Inclusões Manuais)
-        $effectivePunches = [];
+        $legacyEntriesResolved = ($prefetch !== null && $prefetch->legacyResolved)
+            ? $prefetch->legacyEntries
+            : null;
 
+        $effectivePunches = $this->sequenceResolver->execute(
+            employee: $employee,
+            date: $localDay,
+            rawPunches: $rawPunches,
+            legacyEntries: $legacyEntriesResolved,
+            approvedTreatments: $approvedTreatments,
+            coveringShift: $shift,
+            establishment: $establishment
+        );
+
+        // Anotar justificativas fiscais e tratamentos de ponto no espelho
         foreach ($rawPunches as $punch) {
-            if (in_array($punch->id, $disregardedPunchIds)) {
+            if (in_array((string) $punch->id, $disregardedPunchIds, true)) {
                 $treatmentNotes[] = sprintf('Marcação #%s (%s) desconsiderada por justificativa aprovada.', $punch->nsr, $punch->occurred_at_local->format('H:i'));
-
-                continue;
-            }
-
-            $effectivePunches[] = [
-                'id' => $punch->id,
-                'nsr' => $punch->nsr,
-                'time' => $punch->occurred_at_local->format('H:i'),
-                'timestamp' => $punch->occurred_at_local,
-                'type' => $punch->direction ?? 'punch',
-                'direction' => $punch->direction ?? 'in',
-                'source' => 'rep_p',
-            ];
-        }
-
-        // Fallback para histórico legado em TimeEntry se não houver registros em PunchEvent
-        if ($rawPunches->isEmpty() && $employee->user_id) {
-            $legacyEntries = ($prefetch !== null && $prefetch->legacyResolved)
-                ? $prefetch->legacyEntries
-                : TimeEntry::where('user_id', $employee->user_id)
-                    ->where('timestamp', '>=', $dayStart)
-                    ->where('timestamp', '<', $dayEnd)
-                    ->orderBy('timestamp', 'asc')
-                    ->get();
-
-            foreach ($legacyEntries as $entry) {
-                if (in_array((int) $entry->id, $disregardedTimeEntryIds, true) || in_array((string) $entry->id, $disregardedTimeEntryIds, true)) {
-                    $treatmentNotes[] = sprintf('Marcação histórica #%s (%s) desconsiderada por justificativa aprovada.', $entry->id, Carbon::parse($entry->timestamp)->format('H:i'));
-
-                    continue;
-                }
-
-                $entryTime = Carbon::parse($entry->timestamp);
-                $dir = match ($entry->type) {
-                    'clock_in', 'in' => 'in',
-                    'clock_out', 'out' => 'out',
-                    default => 'punch',
-                };
-                $effectivePunches[] = [
-                    'id' => (string) $entry->id,
-                    'nsr' => 0,
-                    'time' => $entryTime->format('H:i'),
-                    'timestamp' => $entryTime,
-                    'type' => $dir,
-                    'direction' => $dir,
-                    'source' => 'time_entry_projection',
-                ];
             }
         }
-
-        // Adicionar batidas manuais tratadas
         foreach ($approvedTreatments->where('type', TreatmentEventType::ManualPunchAdded) as $manual) {
-            $dir = $manual->new_value_json['direction'] ?? 'manual';
-            $effectivePunches[] = [
-                'id' => $manual->id,
-                'nsr' => 0,
-                'time' => $manual->effective_at->format('H:i'),
-                'timestamp' => $manual->effective_at,
-                'type' => $dir,
-                'direction' => $dir,
-                'source' => 'ptrp_manual',
-                'reason' => $manual->reason_text,
-            ];
             $treatmentNotes[] = sprintf('Batida manual inserida às %s (%s).', $manual->effective_at->format('H:i'), $manual->reason_text);
         }
-
-        // Ordenar cronologicamente por timestamp real (nunca apenas HH:mm)
-        usort($effectivePunches, function ($a, $b) {
-            $tA = $a['timestamp'] instanceof CarbonInterface ? $a['timestamp']->getTimestamp() : Carbon::parse($a['timestamp'])->getTimestamp();
-            $tB = $b['timestamp'] instanceof CarbonInterface ? $b['timestamp']->getTimestamp() : Carbon::parse($b['timestamp'])->getTimestamp();
-            if ($tA === $tB) {
-                return ((int) ($a['nsr'] ?? 0)) <=> ((int) ($b['nsr'] ?? 0));
-            }
-
-            return $tA <=> $tB;
-        });
 
         $isCurrentShiftMidnight = $this->shiftMidnightService->isAuthorizedCrossMidnightShift($shift, $employee);
 
@@ -568,6 +512,8 @@ class CalculateDailyJourneyAction
                     'timestamp' => $npTime,
                     'type' => $dir,
                     'direction' => $dir,
+                    'original_direction' => $dir,
+                    'effective_direction' => $dir,
                     'source' => 'rep_p_next_day_shift',
                     'is_next_day_exit' => true,
                 ];
@@ -588,6 +534,8 @@ class CalculateDailyJourneyAction
                     'timestamp' => $manualNext->effective_at,
                     'type' => $dir,
                     'direction' => $dir,
+                    'original_direction' => $dir,
+                    'effective_direction' => $dir,
                     'source' => 'ptrp_manual_next_day_shift',
                     'reason' => $manualNext->reason_text,
                     'is_next_day_exit' => true,
@@ -677,6 +625,24 @@ class CalculateDailyJourneyAction
             return $tA <=> $tB;
         });
 
+        // Recalcular sentidos efetivos finais da jornada após segregação de plantão anterior e continuidade
+        $this->sequenceResolver->recalculateEffectiveDirections($punchesToCalculate);
+
+        // Sincronizar de volta para a coleção $effectivePunches mantendo as marcações auditáveis
+        $punchesById = collect($punchesToCalculate)->keyBy('id');
+        foreach ($effectivePunches as &$ep) {
+            if (isset($punchesById[$ep['id']])) {
+                $calc = $punchesById[$ep['id']];
+                $ep['effective_direction'] = $calc['effective_direction'] ?? ($ep['direction'] ?? 'in');
+                $ep['is_direction_reclassified'] = $calc['is_direction_reclassified'] ?? false;
+                $ep['reclassification_reason'] = $calc['reclassification_reason'] ?? null;
+                $ep['type'] = $calc['effective_direction'] ?? ($ep['type'] ?? 'in');
+                $ep['direction'] = $calc['effective_direction'] ?? ($ep['direction'] ?? 'in');
+                $ep['is_duplicate'] = $calc['is_duplicate'] ?? false;
+            }
+        }
+        unset($ep);
+
         $workedMinutes = 0;
         $breakMinutes = 0;
         $workedIntervals = [];
@@ -687,7 +653,13 @@ class CalculateDailyJourneyAction
         $lastExitTime = null;
 
         foreach ($punchesToCalculate as $p) {
-            $dir = $p['direction'] ?? $p['type'] ?? 'punch';
+            if (! empty($p['is_duplicate'])) {
+                $treatmentNotes[] = sprintf('Marcação repetida às %s em curto intervalo preservada para fins fiscais e desconsiderada do cômputo.', $p['time']);
+
+                continue;
+            }
+
+            $dir = $p['effective_direction'] ?? $p['direction'] ?? $p['type'] ?? 'punch';
             if ($dir === 'clock_in') {
                 $dir = 'in';
             } elseif ($dir === 'clock_out') {
