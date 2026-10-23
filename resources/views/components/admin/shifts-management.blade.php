@@ -1,22 +1,25 @@
 <?php
 
 use App\Domain\Company\Services\SectorScopeService;
+use App\Domain\WorkSchedule\Actions\AssignWorkScheduleAction;
+use App\Domain\WorkSchedule\Actions\ConfigureWorkScheduleAction;
 use App\Domain\WorkSchedule\Actions\GenerateCyclicShiftsAction;
 use App\Domain\WorkSchedule\Actions\SwapShiftsAction;
 use App\Domain\WorkSchedule\Actions\ValidateShiftConflictsAction;
+use App\Domain\WorkSchedule\Services\FlexibleShiftService;
 use App\Enums\ShiftStatus;
 use App\Enums\ShiftType;
 use App\Enums\UserRole;
+use App\Enums\WorkScheduleModality;
 use App\Models\ClosedPeriod;
 use App\Models\Employee;
 use App\Models\Sector;
 use App\Models\ShiftAssignment;
 use App\Models\WorkSchedule;
+use App\Models\WorkScheduleAssignment;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Auth;
-use App\Domain\WorkSchedule\Actions\ConfigureWorkScheduleAction;
-use App\Domain\WorkSchedule\Actions\AssignWorkScheduleAction;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -42,6 +45,8 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
     public $template = 'administrative'; // 'administrative', 'continuous', 'shift_12h', 'shift_24h'
 
     public $sched_name = 'Jornada Administrativa 40h';
+    public $sched_description = '';
+    public $sched_active = true;
     public $sched_tolerance = 5;
     public $sched_daily_tolerance = 10;
 
@@ -114,6 +119,8 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
     public $edit_break_minutes = 60;
 
     public $edit_reason = '';
+    public $edit_recognized_turn = null;
+    public $is_editing_flexible = false;
 
     // Modal de Permuta / Troca
     public $showSwapModal = false;
@@ -322,7 +329,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
         $this->scopeService()->authorizeScheduleModels(Auth::user());
 
         if ($schedule->active) {
-            $hasCurrentAssignments = \App\Models\WorkScheduleAssignment::where('work_schedule_id', $schedule->id)
+            $hasCurrentAssignments = WorkScheduleAssignment::where('work_schedule_id', $schedule->id)
                 ->activeAt(Carbon::today())
                 ->exists();
 
@@ -345,7 +352,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
 
     public function openEndAssignmentModal($assignmentId): void
     {
-        $assignment = \App\Models\WorkScheduleAssignment::with('employee')->findOrFail($assignmentId);
+        $assignment = WorkScheduleAssignment::with('employee')->findOrFail($assignmentId);
         $this->scopeService()->authorizeEmployee(Auth::user(), $assignment->employee);
         $this->ending_assignment_id = $assignment->id;
         $this->end_effective_until = Carbon::today()->format('Y-m-d');
@@ -362,11 +369,11 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             return;
         }
 
-        $assignment = \App\Models\WorkScheduleAssignment::with('employee')->findOrFail($this->ending_assignment_id);
+        $assignment = WorkScheduleAssignment::with('employee')->findOrFail($this->ending_assignment_id);
         $this->scopeService()->authorizeEmployee(Auth::user(), $assignment->employee);
 
         $until = Carbon::parse($this->end_effective_until)->startOfDay();
-        $from = $assignment->effective_from->copy()->startOfDay();
+        $from = Carbon::parse($assignment->effective_from)->startOfDay();
 
         if ($until->lt($from)) {
             $this->addError('end_effective_until', 'A data de encerramento não pode ser anterior ao início da vigência.');
@@ -397,7 +404,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
     {
         $modality = $schedule->modality;
 
-        if ($modality === \App\Enums\WorkScheduleModality::TwelveByThirtySix) {
+        if ($modality === WorkScheduleModality::TwelveByThirtySix) {
             $isNight = ! empty($schedule->cycle_data['is_night_shift']);
             $start = $schedule->cycle_data['start_time'] ?? ($isNight ? '19:00' : '07:00');
             $end = $schedule->cycle_data['end_time'] ?? ($isNight ? '07:00' : '19:00');
@@ -405,7 +412,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             return sprintf('Ciclo 12×36 %s (%s às %s)', $isNight ? 'noturno' : 'diurno', $start, $end);
         }
 
-        if ($modality === \App\Enums\WorkScheduleModality::FlexibleTwelveByThirtySix) {
+        if ($modality === WorkScheduleModality::FlexibleTwelveByThirtySix) {
             return sprintf(
                 'Plantonista Flexível 12×36 (Diurno: %s-%s | Noturno: %s-%s)',
                 $schedule->cycle_data['day_start_time'] ?? '07:00',
@@ -415,7 +422,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             );
         }
 
-        if ($modality === \App\Enums\WorkScheduleModality::TwentyFourBySeventyTwo) {
+        if ($modality === WorkScheduleModality::TwentyFourBySeventyTwo) {
             $start = $schedule->cycle_data['start_time'] ?? '07:00';
             $end = $schedule->cycle_data['end_time'] ?? '07:00';
 
@@ -460,11 +467,11 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
         return sprintf('%02dh%02d', $hours, $mins);
     }
 
-    public function assignmentStatus(\App\Models\WorkScheduleAssignment $assignment): string
+    public function assignmentStatus(WorkScheduleAssignment $assignment): string
     {
         $today = Carbon::today()->format('Y-m-d');
-        $from = $assignment->effective_from->format('Y-m-d');
-        $until = $assignment->effective_until?->format('Y-m-d');
+        $from = Carbon::parse($assignment->effective_from)->format('Y-m-d');
+        $until = $assignment->effective_until ? Carbon::parse($assignment->effective_until)->format('Y-m-d') : null;
 
         if ($from > $today) {
             return 'Futura';
@@ -489,17 +496,17 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             $modality = $scheduleOrModality->modality;
         } elseif (is_string($scheduleOrModality)) {
             $modality = match ($scheduleOrModality) {
-                'shift_12h' => \App\Enums\WorkScheduleModality::TwelveByThirtySix,
-                'flexible_12h' => \App\Enums\WorkScheduleModality::FlexibleTwelveByThirtySix,
-                'shift_24h' => \App\Enums\WorkScheduleModality::TwentyFourBySeventyTwo,
+                'shift_12h' => WorkScheduleModality::TwelveByThirtySix,
+                'flexible_12h' => WorkScheduleModality::FlexibleTwelveByThirtySix,
+                'shift_24h' => WorkScheduleModality::TwentyFourBySeventyTwo,
                 default => null,
             };
         }
 
         if (! $modality || ! in_array($modality, [
-            \App\Enums\WorkScheduleModality::TwelveByThirtySix,
-            \App\Enums\WorkScheduleModality::FlexibleTwelveByThirtySix,
-            \App\Enums\WorkScheduleModality::TwentyFourBySeventyTwo,
+            WorkScheduleModality::TwelveByThirtySix,
+            WorkScheduleModality::FlexibleTwelveByThirtySix,
+            WorkScheduleModality::TwentyFourBySeventyTwo,
         ], true)) {
             return [
                 'status' => 'exempt',
@@ -554,9 +561,9 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
         }
 
         $modalityKey = match ($modality) {
-            \App\Enums\WorkScheduleModality::TwelveByThirtySix,
-            \App\Enums\WorkScheduleModality::FlexibleTwelveByThirtySix => '12x36',
-            \App\Enums\WorkScheduleModality::TwentyFourBySeventyTwo => '24x72',
+            WorkScheduleModality::TwelveByThirtySix,
+            WorkScheduleModality::FlexibleTwelveByThirtySix => '12x36',
+            WorkScheduleModality::TwentyFourBySeventyTwo => '24x72',
             default => 'regular',
         };
         if (! $profile->isModalityAllowed($modalityKey)) {
@@ -593,12 +600,12 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             $employee = Employee::find($this->gen_employee_id);
             $schedule = $employee?->getWorkScheduleForDate($startOfMonth);
             $isCyclic = $schedule && in_array($schedule->modality, [
-                \App\Enums\WorkScheduleModality::TwelveByThirtySix,
-                \App\Enums\WorkScheduleModality::FlexibleTwelveByThirtySix,
-                \App\Enums\WorkScheduleModality::TwentyFourBySeventyTwo,
-                \App\Enums\WorkScheduleModality::SixByOne,
-                \App\Enums\WorkScheduleModality::CustomCycle,
-                \App\Enums\WorkScheduleModality::VariableShifts,
+                WorkScheduleModality::TwelveByThirtySix,
+                WorkScheduleModality::FlexibleTwelveByThirtySix,
+                WorkScheduleModality::TwentyFourBySeventyTwo,
+                WorkScheduleModality::SixByOne,
+                WorkScheduleModality::CustomCycle,
+                WorkScheduleModality::VariableShifts,
             ], true);
             $this->gen_schedule_id = $isCyclic ? (string) $schedule->id : '';
         }
@@ -655,6 +662,8 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
         $this->edit_end_datetime = $shift->end_at_local->format('Y-m-d\TH:i');
         $this->edit_break_minutes = $shift->break_minutes;
         $this->edit_reason = $shift->reason ?? '';
+        $this->is_editing_flexible = $shift->isFlexible();
+        $this->edit_recognized_turn = $shift->recognized_turn;
         $this->showEditModal = true;
     }
 
@@ -680,7 +689,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
         $startLocal = Carbon::parse($this->edit_start_datetime, $shift->timezone);
         $endLocal = Carbon::parse($this->edit_end_datetime, $shift->timezone);
 
-        $shift->update([
+        $updateData = [
             'start_at_local' => $startLocal,
             'end_at_local' => $endLocal,
             'start_at_utc' => $startLocal->copy()->setTimezone('UTC'),
@@ -690,7 +699,20 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             'crosses_midnight' => $startLocal->format('Y-m-d') !== $endLocal->format('Y-m-d'),
             'reason' => $this->edit_reason,
             'assigned_by' => Auth::id(),
-        ]);
+        ];
+
+        if ($shift->isFlexible() && in_array($this->edit_recognized_turn, ['day', 'night', 'pending', 'undefined'], true)) {
+            $updateData['recognized_turn'] = $this->edit_recognized_turn;
+            if ($this->edit_recognized_turn === 'night') {
+                $updateData['is_night_shift'] = true;
+                $updateData['crosses_midnight'] = true;
+            } elseif ($this->edit_recognized_turn === 'day') {
+                $updateData['is_night_shift'] = false;
+                $updateData['crosses_midnight'] = false;
+            }
+        }
+
+        $shift->update($updateData);
 
         $this->showEditModal = false;
         session()->flash('message', 'Plantão atualizado com sucesso.');
@@ -891,6 +913,8 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             $schedule = match ($this->template) {
                 'administrative' => $action->createAdministrative([
                     'name' => $this->sched_name,
+                    'description' => $this->sched_description ?: null,
+                    'active' => (bool) $this->sched_active,
                     'days' => array_map('intval', (array) $this->admin_days),
                     'morning_start' => $this->admin_morning_start,
                     'morning_end' => $this->admin_morning_end,
@@ -902,6 +926,8 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
 
                 'continuous' => $action->createContinuous([
                     'name' => $this->sched_name,
+                    'description' => $this->sched_description ?: null,
+                    'active' => (bool) $this->sched_active,
                     'days' => array_map('intval', (array) $this->cont_days),
                     'start_time' => $this->cont_start_time,
                     'end_time' => $this->cont_end_time,
@@ -913,6 +939,8 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
 
                 'shift_12h' => $action->createShift12h([
                     'name' => $this->sched_name,
+                    'description' => $this->sched_description ?: null,
+                    'active' => (bool) $this->sched_active,
                     'start_time' => $this->p12_start_time,
                     'end_time' => $this->p12_end_time,
                     'break_minutes' => (int) $this->p12_break_minutes,
@@ -924,6 +952,8 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
 
                 'shift_24h' => $action->createShift24h([
                     'name' => $this->sched_name,
+                    'description' => $this->sched_description ?: null,
+                    'active' => (bool) $this->sched_active,
                     'start_time' => $this->p24_start_time,
                     'end_time' => $this->p24_end_time,
                     'break_minutes' => (int) $this->p24_break_minutes,
@@ -934,6 +964,8 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
 
                 'flexible_12h' => $action->createFlexible12h([
                     'name' => $this->sched_name,
+                    'description' => $this->sched_description ?: null,
+                    'active' => (bool) $this->sched_active,
                     'day_start_time' => $this->flex_day_start,
                     'day_end_time' => $this->flex_day_end,
                     'night_start_time' => $this->flex_night_start,
@@ -976,7 +1008,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
         }
     }
 
-    public function with()
+    public function with(): array
     {
         $user = Auth::user();
         $isManager = $user->role === UserRole::Manager;
@@ -1005,13 +1037,13 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
         $workSchedules = WorkSchedule::where('active', true)->orderBy('name')->get();
 
         // Modelos cíclicos para geração de plantões (fixos usam atribuição vigente).
-        $cyclicSchedules = $workSchedules->filter(fn (WorkSchedule $schedule) => in_array($schedule->modality, [
-            \App\Enums\WorkScheduleModality::TwelveByThirtySix,
-            \App\Enums\WorkScheduleModality::FlexibleTwelveByThirtySix,
-            \App\Enums\WorkScheduleModality::TwentyFourBySeventyTwo,
-            \App\Enums\WorkScheduleModality::SixByOne,
-            \App\Enums\WorkScheduleModality::CustomCycle,
-            \App\Enums\WorkScheduleModality::VariableShifts,
+        $cyclicSchedules = $workSchedules->filter(fn ($schedule) => in_array($schedule->modality, [
+            WorkScheduleModality::TwelveByThirtySix,
+            WorkScheduleModality::FlexibleTwelveByThirtySix,
+            WorkScheduleModality::TwentyFourBySeventyTwo,
+            WorkScheduleModality::SixByOne,
+            WorkScheduleModality::CustomCycle,
+            WorkScheduleModality::VariableShifts,
         ], true))->values();
 
         $shifts = collect();
@@ -1037,6 +1069,29 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
 
             $shifts = $isManager && $employees->isEmpty() ? collect() : $shiftsQuery->get();
 
+            $priorRests = [];
+            $shiftAlerts = [];
+            $shiftsByEmployee = $shifts->groupBy('employee_id');
+            foreach ($shiftsByEmployee as $empId => $empShifts) {
+                $sorted = $empShifts->where('is_day_off', false)->sortBy('start_at_utc')->values();
+                for ($i = 0; $i < $sorted->count(); $i++) {
+                    $curr = $sorted[$i];
+                    if ($i > 0) {
+                        $prev = $sorted[$i - 1];
+                        $diffH = round($prev->end_at_utc->diffInMinutes($curr->start_at_utc, false) / 60, 1);
+                        $priorRests[$curr->id] = $diffH;
+                        if ($diffH < 0) {
+                            $shiftAlerts[$curr->id][] = 'Sobreposição com plantão anterior';
+                        } elseif ($diffH < 36 && ($curr->isFlexible() || $curr->shift_type === ShiftType::Shift12x36)) {
+                            $shiftAlerts[$curr->id][] = sprintf('Descanso insuficiente (%sh < 36h)', $diffH);
+                        }
+                    }
+                    if ($curr->isFlexible() && $curr->recognized_turn === FlexibleShiftService::TURN_PENDING) {
+                        $shiftAlerts[$curr->id][] = 'Turno pendente de conferência';
+                    }
+                }
+            }
+
             // Validação de conflitos quando um colaborador específico está selecionado
             if ($this->selected_employee_id) {
                 $selectedEmp = Employee::find($this->selected_employee_id);
@@ -1045,6 +1100,9 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                     $conflictReport = app(ValidateShiftConflictsAction::class)->execute($selectedEmp, $shifts);
                 }
             }
+        } else {
+            $priorRests = [];
+            $shiftAlerts = [];
         }
 
         if ($this->activeTab === 'schedules') {
@@ -1055,7 +1113,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             }
             $schedules = $schedulesQuery->get();
 
-            $linkedCounts = \App\Models\WorkScheduleAssignment::query()
+            $linkedCounts = WorkScheduleAssignment::query()
                 ->selectRaw('work_schedule_id, COUNT(DISTINCT employee_id) as total')
                 ->whereIn('work_schedule_id', $schedules->pluck('id'))
                 ->groupBy('work_schedule_id')
@@ -1064,7 +1122,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
 
         if ($this->activeTab === 'assignments') {
             // Visão 2: servidores e jornadas (atribuições versionadas com escopo)
-            $assignmentsQuery = \App\Models\WorkScheduleAssignment::with(['employee.user', 'employee.sector', 'workSchedule', 'assignedByUser'])
+            $assignmentsQuery = WorkScheduleAssignment::with(['employee.user', 'employee.sector', 'workSchedule', 'assignedByUser'])
                 ->orderBy('effective_from', 'desc');
 
             if ($this->selected_employee_id) {
@@ -1094,6 +1152,8 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
             'linkedCounts' => $linkedCounts,
             'assignments' => $assignments,
             'monthName' => $startOfMonth->translatedFormat('F'),
+            'priorRests' => $priorRests,
+            'shiftAlerts' => $shiftAlerts,
         ];
     }
 };
@@ -1447,6 +1507,20 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                                             </span>
                                         @endif
                                     </div>
+                                    @if(isset($priorRests[$shift->id]))
+                                        <div class="text-[10px] text-slate-500 mt-0.5 font-mono">
+                                            Descanso anterior: <strong>{{ $priorRests[$shift->id] }}h</strong>
+                                        </div>
+                                    @endif
+                                    @if(!empty($shiftAlerts[$shift->id]))
+                                        <div class="mt-1 flex flex-wrap gap-1">
+                                            @foreach($shiftAlerts[$shift->id] as $alertMsg)
+                                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                                                    ⚠️ {{ $alertMsg }}
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                    @endif
                                     @if($shift->notes)
                                         <div class="text-[10px] text-slate-400 truncate max-w-xs mt-0.5" title="{{ $shift->notes }}">{{ $shift->notes }}</div>
                                     @endif
@@ -1579,6 +1653,18 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                         <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Intervalo Previsto (minutos)</label>
                         <input type="number" wire:model="edit_break_minutes" class="block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl font-mono" required>
                     </div>
+                    @if($is_editing_flexible)
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Turno Reconhecido / Classificação</label>
+                        <select wire:model="edit_recognized_turn" class="block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl bg-white">
+                            <option value="undefined">A definir (Projeção do Ciclo)</option>
+                            <option value="day">Diurno (07:00 às 19:00)</option>
+                            <option value="night">Noturno (19:00 às 07:00 do dia seguinte)</option>
+                            <option value="pending">Pendente de Classificação</option>
+                        </select>
+                        <span class="text-[10px] text-slate-500 mt-1 block">Permite à gestão de RH resolver ambiguidades e registrar alterações autorizadas com auditoria.</span>
+                    </div>
+                    @endif
                     <div>
                         <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Justificativa da Alteração</label>
                         <textarea wire:model="edit_reason" rows="3" placeholder="Informe o motivo administrativo da mudança de horário" class="block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl" required></textarea>
@@ -1691,7 +1777,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                             </div>
                             <div class="mt-3">
                                 <div class="text-xs font-bold text-slate-900">Plantonista Flexível 12x36</div>
-                                <div class="text-[10px] text-slate-500 mt-0.5 leading-tight">Alterna diurnos e noturnos no mês. Reconhecimento automático e descanso 36h.</div>
+                                <div class="text-[10px] text-slate-500 mt-0.5 leading-tight">Plantões de 12 horas com possibilidade de alternar entre turnos diurnos e noturnos. Reconhecimento automático pelas marcações de ponto, com controle de descanso e apuração de horas.</div>
                             </div>
                         </button>
 
@@ -1711,11 +1797,24 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                 </div>
 
                 <form wire:submit="saveSchedule" class="space-y-5">
-                    <!-- NOME DA ESCALA -->
+                    <!-- IDENTIFICAÇÃO DA ESCALA -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Nome Identificador da Escala</label>
+                            <input type="text" wire:model="sched_name" class="block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500" required>
+                            @error('sched_name') <span class="text-rose-500 text-xs">{{ $message }}</span> @enderror
+                        </div>
+                        <div class="flex items-center pt-5 sm:pt-6">
+                            <label class="inline-flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" wire:model="sched_active" class="rounded text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-xs font-semibold text-slate-700">Situação Ativa</span>
+                            </label>
+                        </div>
+                    </div>
+
                     <div>
-                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Nome Identificador da Escala</label>
-                        <input type="text" wire:model="sched_name" class="block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500" required>
-                        @error('sched_name') <span class="text-rose-500 text-xs">{{ $message }}</span> @enderror
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Descrição (Opcional)</label>
+                        <input type="text" wire:model="sched_description" placeholder="Ex: Plantões de 12 horas com alternância entre turnos diurnos e noturnos" class="block w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500">
                     </div>
 
                     <!-- FORMULÁRIO CONDICIONAL CONFORME MODELO -->
@@ -1949,6 +2048,19 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                             <input type="checkbox" id="flex_auto_detect" wire:model.live="flex_auto_detect" class="rounded text-teal-600 focus:ring-teal-500">
                             <label for="flex_auto_detect" class="text-xs text-slate-700">Reconhecer automaticamente o turno (diurno/noturno) pelas batidas de ponto efetivas do colaborador</label>
                         </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center pt-2 border-t border-slate-200">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Tolerância por Batida (minutos)</label>
+                                <input type="number" wire:model.live="sched_tolerance" min="0" max="30" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl">
+                                <span class="text-[10px] text-slate-500">Padrão legal CLT (Art. 58): 5 minutos.</span>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Tolerância Diária Máxima (minutos)</label>
+                                <input type="number" wire:model.live="sched_daily_tolerance" min="0" max="60" class="block w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-xl">
+                                <span class="text-[10px] text-slate-500">Padrão legal CLT (Art. 58): 10 minutos diários.</span>
+                            </div>
+                        </div>
                     </div>
                     @endif
 
@@ -2028,7 +2140,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                             </div>
                         </div>
 
-                        @if(in_array($template, ['shift_12h', 'shift_24h']) && !empty($apply_employee_ids))
+                        @if(in_array($template, ['shift_12h', 'shift_24h', 'flexible_12h']) && !empty($apply_employee_ids))
                             <div class="p-3 rounded-xl border border-slate-200 bg-white space-y-2">
                                 <div class="flex items-center justify-between">
                                     <span class="text-xs font-bold text-slate-800 uppercase flex items-center gap-1.5">
@@ -2042,7 +2154,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                                     @php $hasUnauthorizedSchedule = false; @endphp
                                     @foreach($apply_employee_ids as $empId)
                                         @php
-                                            $empObj = $employees->firstWhere('id', (int) $empId) ?? \App\Models\Employee::find($empId);
+                                            $empObj = $employees->firstWhere('id', (int) $empId) ?? Employee::find($empId);
                                         @endphp
                                         @if($empObj)
                                             @php
@@ -2069,7 +2181,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                                         <svg class="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                                         <div>
                                             Colaboradores com pendência normativa não terão a escala especial atribuída.
-                                            @if(Auth::user()->role === \App\Enums\UserRole::Admin)
+                                            @if(Auth::user()->role === UserRole::Admin)
                                                 <a href="{{ route('admin.labor-rule-profiles') }}" target="_blank" class="font-bold underline text-indigo-700 hover:text-indigo-900 block mt-0.5">
                                                     Configurar perfis normativos no RH →
                                                 </a>
@@ -2097,7 +2209,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
 
     <!-- MODAL DE VISUALIZAÇÃO DE HORÁRIO -->
     @if($showViewScheduleModal)
-    @php $viewingSchedule = $viewing_schedule_id ? \App\Models\WorkSchedule::find($viewing_schedule_id) : null; @endphp
+    @php $viewingSchedule = $viewing_schedule_id ? WorkSchedule::find($viewing_schedule_id) : null; @endphp
     <div class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" aria-label="Detalhes do horário">
         <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" wire:click="$set('showViewScheduleModal', false)"></div>
         <div class="flex min-h-screen items-center justify-center p-4">
@@ -2184,10 +2296,11 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                     </div>
 
                     @php
-                        $selectedSchedule = $assign_schedule_id ? \App\Models\WorkSchedule::find($assign_schedule_id) : null;
+                        $selectedSchedule = $assign_schedule_id ? WorkSchedule::find($assign_schedule_id) : null;
                         $isSpecialSchedule = $selectedSchedule && in_array($selectedSchedule->modality, [
-                            \App\Enums\WorkScheduleModality::TwelveByThirtySix,
-                            \App\Enums\WorkScheduleModality::TwentyFourBySeventyTwo,
+                            WorkScheduleModality::TwelveByThirtySix,
+                            WorkScheduleModality::FlexibleTwelveByThirtySix,
+                            WorkScheduleModality::TwentyFourBySeventyTwo,
                         ]);
                     @endphp
 
@@ -2205,7 +2318,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                                 @php $hasUnauthorized = false; @endphp
                                 @foreach($assign_employee_ids as $empId)
                                     @php
-                                        $empObj = $employees->firstWhere('id', (int) $empId) ?? \App\Models\Employee::find($empId);
+                                        $empObj = $employees->firstWhere('id', (int) $empId) ?? Employee::find($empId);
                                     @endphp
                                     @if($empObj)
                                         @php
@@ -2232,7 +2345,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
                                     <svg class="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                                     <div>
                                         A escala selecionada exige perfil normativo aprovado e vigente. Servidores sem perfil configurado serão recusados.
-                                        @if(Auth::user()->role === \App\Enums\UserRole::Admin)
+                                        @if(Auth::user()->role === UserRole::Admin)
                                             <a href="{{ route('admin.labor-rule-profiles') }}" target="_blank" class="font-bold underline text-indigo-700 hover:text-indigo-900 block mt-0.5">
                                                 Configurar perfis normativos no RH →
                                             </a>
@@ -2271,7 +2384,7 @@ new #[Layout('layouts.app')] #[Title('Gestão de Escalas e Plantões')] class ex
 
     <!-- MODAL DE DESATIVAÇÃO / REATIVAÇÃO -->
     @if($showDeactivateModal)
-    @php $deactivatingSchedule = $deactivating_schedule_id ? \App\Models\WorkSchedule::find($deactivating_schedule_id) : null; @endphp
+    @php $deactivatingSchedule = $deactivating_schedule_id ? WorkSchedule::find($deactivating_schedule_id) : null; @endphp
     <div class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" aria-label="Confirmar alteração de situação">
         <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" wire:click="$set('showDeactivateModal', false)"></div>
         <div class="flex min-h-screen items-center justify-center p-4">

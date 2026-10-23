@@ -133,6 +133,9 @@ class TimesheetJourneyService
         $pendingDaysCount = 0;
         $uncalculableDaysCount = 0;
         $hasHistoricalUnavailable = false;
+        $flexibleDayShiftsCount = 0;
+        $flexibleNightShiftsCount = 0;
+        $flexiblePendingShiftsCount = 0;
 
         $treatmentSnapshot = $snapshot->treatment_snapshot ?? [];
         $scheduleSnapshot = $snapshot->schedule_snapshot ?? [];
@@ -296,6 +299,15 @@ class TimesheetJourneyService
                     'attention_reason' => $attReason,
                 ];
 
+                $snapTurn = $j['identified_shift_turn'] ?? null;
+                if ($snapTurn === 'day') {
+                    $flexibleDayShiftsCount++;
+                } elseif ($snapTurn === 'night') {
+                    $flexibleNightShiftsCount++;
+                } elseif ($snapTurn === 'pending') {
+                    $flexiblePendingShiftsCount++;
+                }
+
                 $entries = collect([]);
                 $effectivePunchIds = collect($effectivePunches)->pluck('id')->filter()->all();
 
@@ -417,6 +429,10 @@ class TimesheetJourneyService
             'ruleProfileSnapshot' => $snapshot->rule_profile_snapshot ?? null,
             'treatmentSnapshot' => $treatmentSnapshot,
             'employeeSnapshot' => $snapshot->employee_snapshot ?? [],
+            'flexibleDayShiftsCount' => $flexibleDayShiftsCount,
+            'flexibleNightShiftsCount' => $flexibleNightShiftsCount,
+            'flexiblePendingShiftsCount' => $flexiblePendingShiftsCount,
+            'hasFlexibleShifts' => ($flexibleDayShiftsCount + $flexibleNightShiftsCount + $flexiblePendingShiftsCount) > 0,
         ];
     }
 
@@ -472,6 +488,9 @@ class TimesheetJourneyService
         $uncalculableDaysCount = 0;
         $destinedToPayrollTotal = 0;
         $destinedToCompTotal = 0;
+        $flexibleDayShiftsCount = 0;
+        $flexibleNightShiftsCount = 0;
+        $flexiblePendingShiftsCount = 0;
 
         foreach ($activeDates as $dateStr) {
             $date = Carbon::parse($dateStr);
@@ -544,6 +563,14 @@ class TimesheetJourneyService
                 }
             } elseif ($diffState === 'uncalculable') {
                 $uncalculableDaysCount++;
+            }
+
+            if ($calculated->identifiedShiftTurn === 'day') {
+                $flexibleDayShiftsCount++;
+            } elseif ($calculated->identifiedShiftTurn === 'night') {
+                $flexibleNightShiftsCount++;
+            } elseif ($calculated->identifiedShiftTurn === 'pending') {
+                $flexiblePendingShiftsCount++;
             }
 
             $daysCalculated[$dateStr] = [
@@ -784,6 +811,10 @@ class TimesheetJourneyService
             'monthlyDifferencesSummary' => $differencesSummary,
             'operatesTimeBank' => $operatesTimeBank,
             'allTreatments' => $allMonthTreatments,
+            'flexibleDayShiftsCount' => $flexibleDayShiftsCount,
+            'flexibleNightShiftsCount' => $flexibleNightShiftsCount,
+            'flexiblePendingShiftsCount' => $flexiblePendingShiftsCount,
+            'hasFlexibleShifts' => ($flexibleDayShiftsCount + $flexibleNightShiftsCount + $flexiblePendingShiftsCount) > 0,
         ];
     }
 

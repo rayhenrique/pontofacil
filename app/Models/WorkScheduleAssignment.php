@@ -2,11 +2,22 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int $employee_id
+ * @property int $work_schedule_id
+ * @property Carbon $effective_from
+ * @property Carbon|null $effective_until
+ * @property string|null $reason
+ * @property int|null $assigned_by
+ * @property string|null $notes
+ */
 class WorkScheduleAssignment extends Model
 {
     protected $fillable = [
@@ -46,9 +57,13 @@ class WorkScheduleAssignment extends Model
     {
         $dateStr = is_string($date) ? $date : $date->format('Y-m-d');
 
-        return $query->where('effective_from', '<=', $dateStr)
+        return $query->where(function ($q) use ($dateStr) {
+            $q->whereDate('effective_from', '<=', $dateStr)
+                ->orWhere('effective_from', '<=', $dateStr.' 23:59:59');
+        })
             ->where(function (Builder $q) use ($dateStr) {
                 $q->whereNull('effective_until')
+                    ->orWhereDate('effective_until', '>=', $dateStr)
                     ->orWhere('effective_until', '>=', $dateStr);
             });
     }
@@ -69,8 +84,8 @@ class WorkScheduleAssignment extends Model
         $fromStr = is_string($from) ? $from : $from->format('Y-m-d');
         $untilStr = $until ? (is_string($until) ? $until : $until->format('Y-m-d')) : null;
 
-        $thisFrom = $this->effective_from->format('Y-m-d');
-        $thisUntil = $this->effective_until?->format('Y-m-d');
+        $thisFrom = Carbon::parse($this->effective_from)->format('Y-m-d');
+        $thisUntil = $this->effective_until ? Carbon::parse($this->effective_until)->format('Y-m-d') : null;
 
         // Se a nova atribuição não tem fim:
         if ($untilStr === null) {

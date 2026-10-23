@@ -1150,6 +1150,32 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
             @endif
         </div>
 
+        {{-- BANNER DE APURAÇÃO DE PLANTÕES FLEXÍVEIS 12x36 (DIURNOS / NOTURNOS / PENDENTES) --}}
+        @if(($hasFlexibleShifts ?? false) || ($flexibleDayShiftsCount ?? 0) > 0 || ($flexibleNightShiftsCount ?? 0) > 0 || ($flexiblePendingShiftsCount ?? 0) > 0)
+            <div class="bg-teal-50/70 border border-teal-200/90 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
+                <div class="flex items-center gap-2.5">
+                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-teal-600 text-white text-xs font-bold shadow-xs">Flex</span>
+                    <div>
+                        <span class="font-bold text-slate-900 text-sm block">Plantonista Flexível 12×36</span>
+                        <span class="text-[11px] text-slate-500">Reconhecimento automático pelas marcações de ponto com apuração integrada</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold bg-amber-50 text-amber-900 border border-amber-200 shadow-2xs">
+                        ☀️ <strong>{{ $flexibleDayShiftsCount ?? 0 }}</strong> {{ ($flexibleDayShiftsCount ?? 0) === 1 ? 'plantão diurno' : 'plantões diurnos' }}
+                    </span>
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold bg-indigo-50 text-indigo-900 border border-indigo-200 shadow-2xs">
+                        🌙 <strong>{{ $flexibleNightShiftsCount ?? 0 }}</strong> {{ ($flexibleNightShiftsCount ?? 0) === 1 ? 'plantão noturno' : 'plantões noturnos' }}
+                    </span>
+                    @if(($flexiblePendingShiftsCount ?? 0) > 0)
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold bg-rose-50 text-rose-900 border border-rose-300 shadow-2xs animate-pulse">
+                            ⚠️ <strong>{{ $flexiblePendingShiftsCount }}</strong> {{ $flexiblePendingShiftsCount === 1 ? 'pendente de classificação' : 'pendentes de classificação' }}
+                        </span>
+                    @endif
+                </div>
+            </div>
+        @endif
+
         {{-- GRID PRINCIPAL RESPONSIVO: 6 INDICADORES DA JORNADA (Rule 6) --}}
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
             {{-- 1. Total Trabalhado --}}
@@ -1350,8 +1376,23 @@ new #[Layout('layouts.app')] #[Title('Espelho de Ponto')] class extends Componen
                                     Sem escala
                                 </span>
                             @elseif(!empty($dayCalc['shift_code']))
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                    Plantão{{ !empty($dayCalc['identified_shift_turn_label']) ? ' · '.$dayCalc['identified_shift_turn_label'] : '' }}
+                                @php
+                                    $turnKey = $dayCalc['identified_shift_turn'] ?? null;
+                                    $turnBadge = match($turnKey) {
+                                        'day' => 'bg-amber-50 text-amber-900 border-amber-200',
+                                        'night' => 'bg-purple-50 text-purple-900 border-purple-200',
+                                        'pending' => 'bg-rose-50 text-rose-900 border-rose-300 font-bold',
+                                        default => 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                                    };
+                                    $turnIcon = match($turnKey) {
+                                        'day' => '☀️ ',
+                                        'night' => '🌙 ',
+                                        'pending' => '⚠️ ',
+                                        default => '',
+                                    };
+                                @endphp
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold border {{ $turnBadge }}">
+                                    {{ $turnIcon }}Plantão{{ !empty($dayCalc['identified_shift_turn_label']) ? ' · '.$dayCalc['identified_shift_turn_label'] : '' }}
                                 </span>
                             @elseif(!empty($dayCalc['is_day_off']))
                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">

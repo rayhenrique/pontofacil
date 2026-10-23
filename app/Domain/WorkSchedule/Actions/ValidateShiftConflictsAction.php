@@ -80,11 +80,12 @@ class ValidateShiftConflictsAction
                 }
 
                 // 4. Descanso Mínimo Interjornada
-                $restHours = $current->end_at_utc->diffInHours($next->start_at_utc, false);
+                $restHours = round($current->end_at_utc->diffInMinutes($next->start_at_utc, false) / 60, 2);
 
-                $is12x36 = $current->shift_type === ShiftType::Shift12x36 || $current->isFlexible();
+                $is12x36 = $current->shift_type === ShiftType::Shift12x36 || $current->isFlexible()
+                    || $next->shift_type === ShiftType::Shift12x36 || $next->isFlexible();
                 $requiredRest = match (true) {
-                    $current->shift_type === ShiftType::Shift24x72 => 72,
+                    $current->shift_type === ShiftType::Shift24x72 || $next->shift_type === ShiftType::Shift24x72 => 72,
                     $is12x36 => 36,
                     default => 11, // CLT Art. 66
                 };

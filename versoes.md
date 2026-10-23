@@ -1,6 +1,20 @@
 # Histórico de Versões (Changelog)
 
-## v2.6.22 (Atual)
+## v2.6.23 (Atual)
+- **Aprimoramento e Consolidação do Plantonista Flexível 12x36 e Resolução de Análise Estática:**
+  - **Identificação Robusta de Turnos e Transição Noturna:**
+    - Refinamento das heurísticas de reconhecimento automático de turnos diurnos e noturnos no cálculo diário de jornada (`CalculateDailyJourneyAction`), assegurando correta detecção de batidas que cruzam a meia-noite e prevenção de falsas faltas em dias com escala flexível não iniciada.
+  - **Monitoramento de Descanso Interjornada:**
+    - Sinalização automática de descanso inferior a 36 horas entre plantões consecutivos na tela de Gestão de Escalas (`shifts-management`), orientando chefias e RH.
+  - **Totais Mensais e Transparência no Espelho de Ponto (`timesheet`):**
+    - Exibição de crachás visuais explicativos por plantão (*Diurno*, *Noturno*, *Pendente de conferência*) e bloco consolidado de totais mensais flexíveis com horas diurnas e noturnas apuradas.
+  - **Correções de Tipagem e Análise Estática:**
+    - Padronização de tipagem de datas nos modelos `Employee`, `LaborRuleProfile`, `WorkScheduleAssignment` e `EmployeeLaborRuleProfileAssignment`.
+    - Correção de importações e simplificação de referências de enums e classes no componente Livewire `shifts-management.blade.php`.
+  - **Suíte Completa de Testes Automatizados:**
+    - Implementação de 24 testes unitários e de integração em `Flexible12x36ShiftTest` cobrindo cenários diurnos, noturnos, viradas de mês/meia-noite, descansos mínimos e reclassificações retroativas.
+
+## v2.6.22
 - **Nova Escala de Plantonista Flexível 12x36 (Diurno e Noturno no Mesmo Mês):**
   - **Trabalho em Plantões de Dia e de Noite sem Complicação:**
     - Profissionais da saúde e plantonistas agora podem alternar entre plantões de dia (das 07:00 às 19:00) e de noite (das 19:00 às 07:00 do dia seguinte) durante o mesmo mês sem que o RH precise trocar a escala no sistema toda vez ou cadastrar cada plantão manualmente.

@@ -3,6 +3,8 @@
 namespace App\Domain\WorkSchedule\Services;
 
 use App\Domain\Company\Services\CurrentCompany;
+use App\Domain\PTRP\Enums\TreatmentEventStatus;
+use App\Domain\PTRP\Enums\TreatmentEventType;
 use App\Enums\LegalRegime;
 use App\Enums\ShiftOrigin;
 use App\Enums\ShiftStatus;
@@ -13,6 +15,7 @@ use App\Models\Establishment;
 use App\Models\LaborRuleProfile;
 use App\Models\PunchEvent;
 use App\Models\ShiftAssignment;
+use App\Models\TreatmentEvent;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Log;
@@ -173,6 +176,19 @@ class ShiftMidnightService
                     ->where('direction', 'in')
                     ->exists();
 
+                if (! $hasNightPunchYesterday) {
+                    $hasNightPunchYesterday = TreatmentEvent::where('employee_id', $employee->id)
+                        ->where('type', TreatmentEventType::ManualPunchAdded)
+                        ->where('status', TreatmentEventStatus::Approved)
+                        ->where('effective_at', '>=', $prevDayStart->copy()->setTime(17, 0, 0))
+                        ->where('effective_at', '<', $dayStart)
+                        ->where(function ($q) {
+                            $q->where('new_value_json->direction', 'in')
+                                ->orWhereNull('new_value_json->direction');
+                        })
+                        ->exists();
+                }
+
                 if ($hasNightPunchYesterday) {
                     app(FlexibleShiftService::class)->syncTurnToShift($s, FlexibleShiftService::TURN_NIGHT, $prevDayStart);
                     $s->refresh();
@@ -189,7 +205,7 @@ class ShiftMidnightService
         if ($authorizedPrevShifts->isEmpty()) {
             $wsYesterday = $employee->getWorkScheduleForDate($prevDayStart);
             if ($wsYesterday && app(FlexibleShiftService::class)->isFlexibleSchedule($wsYesterday)) {
-                $yesterdayNightPunch = PunchEvent::where(function ($q) use ($employee) {
+                $hasNightPunchYesterday = PunchEvent::where(function ($q) use ($employee) {
                     $q->where('employee_id', $employee->id);
                     if ($employee->user_id) {
                         $q->orWhere('user_id', $employee->user_id);
@@ -198,9 +214,22 @@ class ShiftMidnightService
                     ->where('occurred_at_local', '>=', $prevDayStart->copy()->setTime(17, 0, 0))
                     ->where('occurred_at_local', '<', $dayStart)
                     ->where('direction', 'in')
-                    ->first();
+                    ->exists();
 
-                if ($yesterdayNightPunch !== null) {
+                if (! $hasNightPunchYesterday) {
+                    $hasNightPunchYesterday = TreatmentEvent::where('employee_id', $employee->id)
+                        ->where('type', TreatmentEventType::ManualPunchAdded)
+                        ->where('status', TreatmentEventStatus::Approved)
+                        ->where('effective_at', '>=', $prevDayStart->copy()->setTime(17, 0, 0))
+                        ->where('effective_at', '<', $dayStart)
+                        ->where(function ($q) {
+                            $q->where('new_value_json->direction', 'in')
+                                ->orWhereNull('new_value_json->direction');
+                        })
+                        ->exists();
+                }
+
+                if ($hasNightPunchYesterday) {
                     $nightStartStr = $wsYesterday->cycle_data['night_start_time'] ?? '19:00';
                     $nightEndStr = $wsYesterday->cycle_data['night_end_time'] ?? '07:00';
                     [$nSH, $nSM] = explode(':', $nightStartStr);
@@ -279,8 +308,24 @@ class ShiftMidnightService
                     ->orderBy('id', 'desc')
                     ->first();
 
+                $lastPunchDirection = $lastPunchInShift?->direction;
+
+                if ($lastPunchInShift === null) {
+                    $lastManualPunch = TreatmentEvent::where('employee_id', $employee->id)
+                        ->where('type', TreatmentEventType::ManualPunchAdded)
+                        ->where('status', TreatmentEventStatus::Approved)
+                        ->where('effective_at', '>=', $prevShift->start_at_local)
+                        ->where('effective_at', '<=', $localTime)
+                        ->orderBy('effective_at', 'desc')
+                        ->first();
+
+                    if ($lastManualPunch !== null) {
+                        $lastPunchDirection = $lastManualPunch->new_value_json['direction'] ?? 'in';
+                    }
+                }
+
                 // Se não houve nenhuma batida ou se a última batida já foi saída, o plantão não tem sequência aberta
-                if ($lastPunchInShift !== null && $lastPunchInShift->direction === 'in') {
+                if ($lastPunchDirection === 'in') {
                     // Verificar se há novo plantão ativo já iniciando hoje cobrindo este horário
                     $hasNewShiftStartingNow = ShiftAssignment::where('employee_id', $employee->id)
                         ->whereIn('status', [ShiftStatus::Scheduled, ShiftStatus::Confirmed, ShiftStatus::Completed])

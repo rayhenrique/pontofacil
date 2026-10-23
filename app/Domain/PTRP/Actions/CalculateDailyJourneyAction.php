@@ -243,114 +243,6 @@ class CalculateDailyJourneyAction
             $treatmentNotes[] = sprintf('Batida manual inserida às %s (%s).', $manual->effective_at->format('H:i'), $manual->reason_text);
         }
 
-        // 7.1. Se for plantonista flexível 12x36, executar reconhecimento automático do turno
-        $isFlexibleSchedule = ($workSchedule?->modality === WorkScheduleModality::FlexibleTwelveByThirtySix)
-            || ($shift !== null && $shift->isFlexible());
-
-        $identifiedShiftTurn = null;
-        $identifiedShiftTurnLabel = null;
-
-        if ($isFlexibleSchedule) {
-            $flexService = app(FlexibleShiftService::class);
-            $classifiedTurn = $flexService->classifyTurn($effectivePunches, $workSchedule, $tz);
-            $identifiedShiftTurn = $classifiedTurn;
-
-            if ($classifiedTurn === FlexibleShiftService::TURN_DAY) {
-                $identifiedShiftTurnLabel = 'Diurno';
-                $treatmentNotes[] = 'Turno identificado: Diurno (07:00 às 19:00).';
-                if ($shift) {
-                    $flexService->syncTurnToShift($shift, FlexibleShiftService::TURN_DAY, $localDay, $workSchedule);
-                    $shift->refresh();
-                    $scheduledMinutes = 720 - $shift->break_minutes;
-                } else {
-                    $scheduledMinutes = 720 - (int) ($workSchedule?->cycle_data['break_minutes'] ?? 60);
-                }
-            } elseif ($classifiedTurn === FlexibleShiftService::TURN_NIGHT) {
-                $identifiedShiftTurnLabel = 'Noturno';
-                $treatmentNotes[] = 'Turno identificado: Noturno (19:00 às 07:00 do dia seguinte).';
-                if ($shift) {
-                    $flexService->syncTurnToShift($shift, FlexibleShiftService::TURN_NIGHT, $localDay, $workSchedule);
-                    $shift->refresh();
-                    $scheduledMinutes = 720 - $shift->break_minutes;
-                } else {
-                    $nightStartStr = $workSchedule?->cycle_data['night_start_time'] ?? '19:00';
-                    $nightEndStr = $workSchedule?->cycle_data['night_end_time'] ?? '07:00';
-                    [$nSH, $nSM] = explode(':', $nightStartStr);
-                    [$nEH, $nEM] = explode(':', $nightEndStr);
-
-                    $startLocal = $localDay->copy()->setTime((int) $nSH, (int) $nSM, 0);
-                    $endLocal = $localDay->copy()->addDay()->setTime((int) $nEH, (int) $nEM, 0);
-                    $breakMin = (int) ($workSchedule?->cycle_data['break_minutes'] ?? 60);
-
-                    $activeAssignment = $employee->workScheduleAssignments()
-                        ->where('effective_from', '<=', $localDay->format('Y-m-d'))
-                        ->where(function ($q) use ($localDay) {
-                            $q->whereNull('effective_until')
-                                ->orWhere('effective_until', '>=', $localDay->format('Y-m-d'));
-                        })
-                        ->first();
-
-                    $shift = ShiftAssignment::create([
-                        'shift_code' => (string) Str::uuid(),
-                        'employee_id' => $employee->id,
-                        'work_schedule_assignment_id' => $activeAssignment?->id,
-                        'work_schedule_id' => $workSchedule?->id,
-                        'start_at_utc' => $startLocal->copy()->setTimezone('UTC'),
-                        'end_at_utc' => $endLocal->copy()->setTimezone('UTC'),
-                        'start_at_local' => $startLocal,
-                        'end_at_local' => $endLocal,
-                        'timezone' => $tz,
-                        'break_minutes' => $breakMin,
-                        'expected_work_minutes' => 720 - $breakMin,
-                        'shift_type' => ShiftType::Shift12x36,
-                        'origin' => ShiftOrigin::GeneratedCycle,
-                        'status' => ShiftStatus::Scheduled,
-                        'is_day_off' => false,
-                        'is_night_shift' => true,
-                        'crosses_midnight' => true,
-                        'recognized_turn' => FlexibleShiftService::TURN_NIGHT,
-                        'reason' => 'Reconhecimento automático de plantão flexível noturno',
-                        'notes' => 'Plantão Flexível 12×36 — Turno Noturno reconhecido automaticamente pelas marcações.',
-                    ]);
-                    $scheduledMinutes = 720 - $breakMin;
-                    $shiftAssignmentId = $shift->id;
-                    $shiftCode = $shift->shift_code;
-                }
-            } elseif ($classifiedTurn === FlexibleShiftService::TURN_PENDING) {
-                $identifiedShiftTurnLabel = 'Pendente de Classificação';
-                $treatmentNotes[] = 'Plantonista Flexível: marcações fora das janelas de referência de turno — jornada pendente de classificação para conferência administrativa.';
-                if ($shift) {
-                    $flexService->syncTurnToShift($shift, FlexibleShiftService::TURN_PENDING, $localDay, $workSchedule);
-                }
-            } elseif ($classifiedTurn === FlexibleShiftService::TURN_UNDEFINED) {
-                $identifiedShiftTurnLabel = 'A Definir';
-            }
-        }
-
-        $isCurrentShiftMidnight = $this->shiftMidnightService->isAuthorizedCrossMidnightShift($shift, $employee);
-
-        // Jornada em andamento: hoje com entrada sem saída, ou plantão autorizado em andamento.
-        $isInProgressDay = false;
-        $punchCount = count($effectivePunches);
-        if ($punchCount > 0) {
-            $lastPunch = end($effectivePunches);
-            $lastType = $lastPunch['type'] ?? $lastPunch['direction'] ?? null;
-            if ($lastType === 'in' || $lastType === 'clock_in') {
-                if ($localDay->isToday() && $punchCount % 2 !== 0) {
-                    $isInProgressDay = true;
-                } elseif ($localDay->isYesterday() && $punchCount % 2 !== 0 && $isCurrentShiftMidnight && $shift !== null) {
-                    $lastEntryTime = Carbon::parse($lastPunch['timestamp'] ?? ($dateStr.' '.$lastPunch['time']));
-                    if (now()->diffInHours($lastEntryTime) <= 24 && now()->lte($shift->end_at_local->copy()->addHours(2))) {
-                        $isInProgressDay = true;
-                    }
-                }
-            }
-        }
-
-        if ($isInProgressDay) {
-            $treatmentNotes[] = 'Jornada em andamento — apuração parcial do dia.';
-        }
-
         // 8. Verificar se marcações do início do dia pertencem a plantão noturno autorizado iniciado na véspera
         $prevDate = $localDay->copy()->subDay();
         $prevDateStr = $prevDate->format('Y-m-d');
@@ -380,70 +272,97 @@ class CalculateDailyJourneyAction
         }
 
         $isPrevShiftMidnight = $prevShift && $this->shiftMidnightService->isAuthorizedCrossMidnightShift($prevShift, $employee);
+        $prevScheduleEnd = null;
+        if (! $isPrevShiftMidnight && $prevShift === null) {
+            $prevSchedule = $employee->getWorkScheduleForDate($prevDayStart);
+            if ($prevSchedule && $prevSchedule->isAuthorizedForRegime($employee->legal_regime)) {
+                $prevDaySchedule = $prevSchedule->getScheduleForDay($prevDayStart->dayOfWeek);
+                $prevPeriods = $prevDaySchedule['periods'] ?? [];
+                foreach ($prevPeriods as $pPeriod) {
+                    if (! empty($pPeriod['start']) && ! empty($pPeriod['end']) && strcmp($pPeriod['start'], $pPeriod['end']) > 0) {
+                        $isPrevShiftMidnight = true;
+                        [$pEH, $pEM] = explode(':', $pPeriod['end']);
+                        $prevScheduleEnd = $localDay->copy()->setTime((int) $pEH, (int) $pEM, 0);
+                        break;
+                    }
+                }
+            }
+        }
 
         // Confirmar se o plantão da véspera tinha de fato uma sequência em aberto (entrada sem saída correspondente antes da 00h)
         $prevHadOpenSequence = false;
-        if ($isPrevShiftMidnight) {
-            if ($prefetch !== null && $prefetch->neighborsResolved) {
-                $prevPunchesRaw = $prefetch->prevDayPunches;
-            } else {
-                $prevPunchesRaw = PunchEvent::where(function ($q) use ($employee) {
-                    $q->where('employee_id', $employee->id)
-                        ->orWhere('user_id', $employee->user_id);
-                })
-                    ->where('occurred_at_local', '>=', $prevDayStart)
-                    ->where('occurred_at_local', '<', $prevDayEnd)
-                    ->orderBy('occurred_at_local', 'asc')
-                    ->get();
-
-                if ($prevPunchesRaw->isEmpty() && $employee->user_id) {
-                    $prevPunchesRaw = TimeEntry::where('user_id', $employee->user_id)
-                        ->where('timestamp', '>=', $prevDayStart)
-                        ->where('timestamp', '<', $prevDayEnd)
-                        ->orderBy('timestamp', 'asc')
-                        ->get();
-                }
-            }
-
-            // Tratamentos aprovados da véspera
-            $prevTreatments = TreatmentEvent::where(function ($q) use ($employee) {
+        if ($prefetch !== null && $prefetch->neighborsResolved) {
+            $prevPunchesRaw = $prefetch->prevDayPunches;
+        } else {
+            $prevPunchesRaw = PunchEvent::where(function ($q) use ($employee) {
                 $q->where('employee_id', $employee->id)
-                    ->orWhere('employment_id', $employee->id);
+                    ->orWhere('user_id', $employee->user_id);
             })
-                ->where('status', TreatmentEventStatus::Approved)
-                ->where('effective_at', '>=', $prevDayStart)
-                ->where('effective_at', '<', $prevDayEnd)
+                ->where('occurred_at_local', '>=', $prevDayStart)
+                ->where('occurred_at_local', '<', $prevDayEnd)
+                ->orderBy('occurred_at_local', 'asc')
                 ->get();
 
-            $prevDisregardedIds = $prevTreatments
-                ->where('type', TreatmentEventType::PunchDisregarded)
-                ->map(fn ($t) => $t->reference_source === 'time_entry' ? ($t->reference_time_entry_id ?? $t->reference_punch_id) : $t->reference_punch_id)
-                ->filter()
-                ->all();
-
-            $prevEffectiveCount = 0;
-            $prevLastDir = null;
-            foreach ($prevPunchesRaw as $pp) {
-                if (in_array((string) $pp->id, $prevDisregardedIds, true) || in_array((int) $pp->id, $prevDisregardedIds, true)) {
-                    continue;
-                }
-                $prevEffectiveCount++;
-                $prevLastDir = $pp->direction ?? (match ($pp->type ?? '') {
-                    'clock_out', 'out' => 'out',
-                    default => 'in',
-                });
+            if ($prevPunchesRaw->isEmpty() && $employee->user_id) {
+                $prevPunchesRaw = TimeEntry::where('user_id', $employee->user_id)
+                    ->where('timestamp', '>=', $prevDayStart)
+                    ->where('timestamp', '<', $prevDayEnd)
+                    ->orderBy('timestamp', 'asc')
+                    ->get();
             }
+        }
 
-            foreach ($prevTreatments->where('type', TreatmentEventType::ManualPunchAdded) as $mp) {
-                $prevEffectiveCount++;
-                $prevLastDir = $mp->new_value_json['direction'] ?? 'in';
+        // Tratamentos aprovados da véspera
+        $prevTreatments = TreatmentEvent::where(function ($q) use ($employee) {
+            $q->where('employee_id', $employee->id)
+                ->orWhere('employment_id', $employee->id);
+        })
+            ->where('status', TreatmentEventStatus::Approved)
+            ->where('effective_at', '>=', $prevDayStart)
+            ->where('effective_at', '<', $prevDayEnd)
+            ->get();
+
+        $prevDisregardedIds = $prevTreatments
+            ->where('type', TreatmentEventType::PunchDisregarded)
+            ->map(fn ($t) => $t->reference_source === 'time_entry' ? ($t->reference_time_entry_id ?? $t->reference_punch_id) : $t->reference_punch_id)
+            ->filter()
+            ->all();
+
+        $prevEffectiveCount = 0;
+        $prevLastDir = null;
+        $prevLastPunchTime = null;
+        foreach ($prevPunchesRaw as $pp) {
+            if (in_array((string) $pp->id, $prevDisregardedIds, true) || in_array((int) $pp->id, $prevDisregardedIds, true)) {
+                continue;
             }
+            $prevEffectiveCount++;
+            $prevLastDir = $pp->direction ?? (match ($pp->type ?? '') {
+                'clock_out', 'out' => 'out',
+                default => 'in',
+            });
+            $prevLastPunchTime = Carbon::parse($pp->occurred_at_local ?? $pp->timestamp);
+        }
 
-            $prevHadOpenSequence = ($prevEffectiveCount > 0);
+        foreach ($prevTreatments->where('type', TreatmentEventType::ManualPunchAdded) as $mp) {
+            $prevEffectiveCount++;
+            $prevLastDir = $mp->new_value_json['direction'] ?? 'in';
+            $prevLastPunchTime = $mp->effective_at;
+        }
+
+        $prevHadOpenSequence = ($prevEffectiveCount > 0 && $prevLastDir === 'in');
+
+        // Heurística protegida: se não há shift formal ou escala com cruzamento, mas a véspera encerrou com entrada noturna
+        if (! $isPrevShiftMidnight && $prevHadOpenSequence && $prevLastPunchTime) {
+            $nightStartStr = $ruleProfile ? $ruleProfile->getNightStartTime() : '21:00';
+            if ($prevLastPunchTime->hour >= 18 || $prevLastPunchTime->format('H:i') >= $nightStartStr) {
+                $isPrevShiftMidnight = true;
+                $prevScheduleEnd = $localDay->copy()->setTime(12, 0, 0);
+            }
         }
 
         if ($isPrevShiftMidnight && $prevHadOpenSequence && ! empty($effectivePunches)) {
-            $prevShiftEndWithGrace = $prevShift->end_at_local->copy()->addHours(3);
+            $effectivePrevEnd = $prevShift ? $prevShift->end_at_local : $prevScheduleEnd;
+            $prevShiftEndWithGrace = $effectivePrevEnd->copy()->addHours(3);
             $currentShiftDir = $prevLastDir;
 
             foreach ($effectivePunches as &$punchRef) {
@@ -464,7 +383,7 @@ class CalculateDailyJourneyAction
                 }
 
                 // Se já estiver além do término previsto da escala (janela de tolerância operacional):
-                if ($pTimestamp->gt($prevShift->end_at_local)) {
+                if ($pTimestamp->gt($effectivePrevEnd)) {
                     // Se a sequência já estava fechada antes do término, não associa batida após o fim previsto
                     if ($currentShiftDir === 'out') {
                         break;
@@ -523,6 +442,143 @@ class CalculateDailyJourneyAction
             unset($punchRef);
         }
 
+        // 7.1. Se for plantonista flexível 12x36, executar reconhecimento automático do turno
+        $isFlexibleSchedule = ($workSchedule?->modality === WorkScheduleModality::FlexibleTwelveByThirtySix)
+            || ($shift !== null && $shift->isFlexible());
+
+        $identifiedShiftTurn = null;
+        $identifiedShiftTurnLabel = null;
+
+        if ($isFlexibleSchedule) {
+            $flexService = app(FlexibleShiftService::class);
+            $classifiedTurn = $flexService->classifyTurn($effectivePunches, $workSchedule, $tz);
+            $identifiedShiftTurn = $classifiedTurn;
+
+            if ($classifiedTurn === FlexibleShiftService::TURN_DAY) {
+                $identifiedShiftTurnLabel = 'Diurno';
+                $treatmentNotes[] = 'Turno identificado: Diurno (07:00 às 19:00).';
+                if ($shift) {
+                    $flexService->syncTurnToShift($shift, FlexibleShiftService::TURN_DAY, $localDay, $workSchedule);
+                    $shift->refresh();
+                    $scheduledMinutes = 720 - $shift->break_minutes;
+                } else {
+                    $dayStartStr = $workSchedule?->cycle_data['day_start_time'] ?? '07:00';
+                    $dayEndStr = $workSchedule?->cycle_data['day_end_time'] ?? '19:00';
+                    [$dSH, $dSM] = explode(':', $dayStartStr);
+                    [$dEH, $dEM] = explode(':', $dayEndStr);
+
+                    $startLocal = $localDay->copy()->setTime((int) $dSH, (int) $dSM, 0);
+                    $endLocal = $localDay->copy()->setTime((int) $dEH, (int) $dEM, 0);
+                    $breakMin = (int) ($workSchedule?->cycle_data['break_minutes'] ?? 60);
+
+                    $activeAssignment = $employee->workScheduleAssignments()
+                        ->where(function ($q) use ($localDay) {
+                            $dateStr = $localDay->format('Y-m-d');
+                            $q->whereDate('effective_from', '<=', $dateStr)
+                                ->orWhere('effective_from', '<=', $dateStr.' 23:59:59');
+                        })
+                        ->where(function ($q) use ($localDay) {
+                            $dateStr = $localDay->format('Y-m-d');
+                            $q->whereNull('effective_until')
+                                ->orWhereDate('effective_until', '>=', $dateStr)
+                                ->orWhere('effective_until', '>=', $dateStr);
+                        })
+                        ->first();
+
+                    $shift = ShiftAssignment::create([
+                        'shift_code' => (string) Str::uuid(),
+                        'employee_id' => $employee->id,
+                        'work_schedule_assignment_id' => $activeAssignment?->id,
+                        'work_schedule_id' => $workSchedule?->id,
+                        'start_at_utc' => $startLocal->copy()->setTimezone('UTC'),
+                        'end_at_utc' => $endLocal->copy()->setTimezone('UTC'),
+                        'start_at_local' => $startLocal,
+                        'end_at_local' => $endLocal,
+                        'timezone' => $tz,
+                        'break_minutes' => $breakMin,
+                        'expected_work_minutes' => 720 - $breakMin,
+                        'shift_type' => ShiftType::Shift12x36,
+                        'origin' => ShiftOrigin::GeneratedCycle,
+                        'status' => ShiftStatus::Scheduled,
+                        'is_day_off' => false,
+                        'is_night_shift' => false,
+                        'crosses_midnight' => false,
+                        'recognized_turn' => FlexibleShiftService::TURN_DAY,
+                        'reason' => 'Reconhecimento automático de plantão flexível diurno',
+                        'notes' => 'Plantão Flexível 12×36 — Turno Diurno reconhecido automaticamente pelas marcações.',
+                    ]);
+                    $scheduledMinutes = 720 - $breakMin;
+                    $shiftAssignmentId = $shift->id;
+                    $shiftCode = $shift->shift_code;
+                }
+            } elseif ($classifiedTurn === FlexibleShiftService::TURN_NIGHT) {
+                $identifiedShiftTurnLabel = 'Noturno';
+                $treatmentNotes[] = 'Turno identificado: Noturno (19:00 às 07:00 do dia seguinte).';
+                if ($shift) {
+                    $flexService->syncTurnToShift($shift, FlexibleShiftService::TURN_NIGHT, $localDay, $workSchedule);
+                    $shift->refresh();
+                    $scheduledMinutes = 720 - $shift->break_minutes;
+                } else {
+                    $nightStartStr = $workSchedule?->cycle_data['night_start_time'] ?? '19:00';
+                    $nightEndStr = $workSchedule?->cycle_data['night_end_time'] ?? '07:00';
+                    [$nSH, $nSM] = explode(':', $nightStartStr);
+                    [$nEH, $nEM] = explode(':', $nightEndStr);
+
+                    $startLocal = $localDay->copy()->setTime((int) $nSH, (int) $nSM, 0);
+                    $endLocal = $localDay->copy()->addDay()->setTime((int) $nEH, (int) $nEM, 0);
+                    $breakMin = (int) ($workSchedule?->cycle_data['break_minutes'] ?? 60);
+
+                    $activeAssignment = $employee->workScheduleAssignments()
+                        ->where(function ($q) use ($localDay) {
+                            $dateStr = $localDay->format('Y-m-d');
+                            $q->whereDate('effective_from', '<=', $dateStr)
+                                ->orWhere('effective_from', '<=', $dateStr.' 23:59:59');
+                        })
+                        ->where(function ($q) use ($localDay) {
+                            $dateStr = $localDay->format('Y-m-d');
+                            $q->whereNull('effective_until')
+                                ->orWhereDate('effective_until', '>=', $dateStr)
+                                ->orWhere('effective_until', '>=', $dateStr);
+                        })
+                        ->first();
+
+                    $shift = ShiftAssignment::create([
+                        'shift_code' => (string) Str::uuid(),
+                        'employee_id' => $employee->id,
+                        'work_schedule_assignment_id' => $activeAssignment?->id,
+                        'work_schedule_id' => $workSchedule?->id,
+                        'start_at_utc' => $startLocal->copy()->setTimezone('UTC'),
+                        'end_at_utc' => $endLocal->copy()->setTimezone('UTC'),
+                        'start_at_local' => $startLocal,
+                        'end_at_local' => $endLocal,
+                        'timezone' => $tz,
+                        'break_minutes' => $breakMin,
+                        'expected_work_minutes' => 720 - $breakMin,
+                        'shift_type' => ShiftType::Shift12x36,
+                        'origin' => ShiftOrigin::GeneratedCycle,
+                        'status' => ShiftStatus::Scheduled,
+                        'is_day_off' => false,
+                        'is_night_shift' => true,
+                        'crosses_midnight' => true,
+                        'recognized_turn' => FlexibleShiftService::TURN_NIGHT,
+                        'reason' => 'Reconhecimento automático de plantão flexível noturno',
+                        'notes' => 'Plantão Flexível 12×36 — Turno Noturno reconhecido automaticamente pelas marcações.',
+                    ]);
+                    $scheduledMinutes = 720 - $breakMin;
+                    $shiftAssignmentId = $shift->id;
+                    $shiftCode = $shift->shift_code;
+                }
+            } elseif ($classifiedTurn === FlexibleShiftService::TURN_PENDING) {
+                $identifiedShiftTurnLabel = 'Pendente de Classificação';
+                $treatmentNotes[] = 'Plantonista Flexível: marcações fora das janelas de referência de turno — jornada pendente de classificação para conferência administrativa.';
+                if ($shift) {
+                    $flexService->syncTurnToShift($shift, FlexibleShiftService::TURN_PENDING, $localDay, $workSchedule);
+                }
+            } elseif ($classifiedTurn === FlexibleShiftService::TURN_UNDEFINED) {
+                $identifiedShiftTurnLabel = 'A Definir';
+            }
+        }
+
         // 9. Se hoje for um plantão autorizado que atravessa a meia-noite, buscar continuidade no dia seguinte
         $dayEffectiveBeforeNext = array_values(array_filter($effectivePunches, fn ($p) => empty($p['is_previous_day_exit'])));
         $dayEffectiveCount = count($dayEffectiveBeforeNext);
@@ -537,12 +593,62 @@ class CalculateDailyJourneyAction
             }
         }
 
-        if ($isCurrentShiftMidnight && $shift !== null && $dayEffectiveCount > 0) {
+        $isCurrentShiftMidnight = $this->shiftMidnightService->isAuthorizedCrossMidnightShift($shift, $employee);
+        $currentScheduleEnd = null;
+        if (! $isCurrentShiftMidnight && $shift === null && $workSchedule && $isScheduleAuthorized) {
+            foreach ($expectedPeriods as $period) {
+                if (! empty($period['start']) && ! empty($period['end']) && strcmp($period['start'], $period['end']) > 0) {
+                    $isCurrentShiftMidnight = true;
+                    [$cEH, $cEM] = explode(':', $period['end']);
+                    $currentScheduleEnd = $localDay->copy()->addDay()->setTime((int) $cEH, (int) $cEM, 0);
+                    break;
+                }
+            }
+        }
+
+        // Heurística protegida para entrada noturna em aberto sem escala ou shift formal
+        if (! $isCurrentShiftMidnight && $shift === null && $dayEffectiveCount > 0 && $dayLastDir === 'in') {
+            $lastEntryPunch = $dayEffectiveBeforeNext[$dayEffectiveCount - 1];
+            $lastEntryTime = $lastEntryPunch['timestamp'] instanceof CarbonInterface
+                ? $lastEntryPunch['timestamp']
+                : Carbon::parse($lastEntryPunch['timestamp'] ?? ($dateStr.' '.$lastEntryPunch['time']));
+            $nightStartStr = $ruleProfile ? $ruleProfile->getNightStartTime() : '21:00';
+            if ($lastEntryTime->hour >= 18 || $lastEntryTime->format('H:i') >= $nightStartStr) {
+                $isCurrentShiftMidnight = true;
+                $currentScheduleEnd = $localDay->copy()->addDay()->setTime(12, 0, 0);
+            }
+        }
+
+        // Jornada em andamento: hoje com entrada sem saída, ou plantão autorizado em andamento.
+        $isInProgressDay = false;
+        $punchCount = count($effectivePunches);
+        if ($punchCount > 0) {
+            $lastPunch = end($effectivePunches);
+            $lastType = $lastPunch['type'] ?? $lastPunch['direction'] ?? null;
+            if ($lastType === 'in' || $lastType === 'clock_in') {
+                if ($localDay->isToday() && $punchCount % 2 !== 0) {
+                    $isInProgressDay = true;
+                } elseif ($localDay->isYesterday() && $punchCount % 2 !== 0 && $isCurrentShiftMidnight && ($shift !== null || $currentScheduleEnd !== null)) {
+                    $effectiveEndForProgress = $shift ? $shift->end_at_local : $currentScheduleEnd;
+                    $lastEntryTime = Carbon::parse($lastPunch['timestamp'] ?? ($dateStr.' '.$lastPunch['time']));
+                    if (now()->diffInHours($lastEntryTime) <= 24 && now()->lte($effectiveEndForProgress->copy()->addHours(2))) {
+                        $isInProgressDay = true;
+                    }
+                }
+            }
+        }
+
+        if ($isInProgressDay) {
+            $treatmentNotes[] = 'Jornada em andamento — apuração parcial do dia.';
+        }
+
+        if ($isCurrentShiftMidnight && ($shift !== null || $currentScheduleEnd !== null) && $dayEffectiveCount > 0) {
+            $effectiveCurrentEnd = $shift ? $shift->end_at_local : $currentScheduleEnd;
             $nextDate = $localDay->copy()->addDay();
             $nextDateStr = $nextDate->format('Y-m-d');
             $nextDayStart = $dayEnd->copy();
             $nextDayEnd = $nextDayStart->copy()->addDay();
-            $shiftEndWithGrace = $shift->end_at_local->copy()->addHours(3);
+            $shiftEndWithGrace = $effectiveCurrentEnd->copy()->addHours(3);
 
             if ($prefetch !== null && $prefetch->neighborsResolved && $prefetch->nextDayPunches->isNotEmpty()) {
                 $nextPunches = $prefetch->nextDayPunches;
@@ -654,7 +760,7 @@ class CalculateDailyJourneyAction
                     break;
                 }
 
-                if ($npTime->gt($shift->end_at_local)) {
+                if ($npTime->gt($effectiveCurrentEnd)) {
                     if ($currentShiftDir === 'out') {
                         break;
                     }
@@ -817,7 +923,8 @@ class CalculateDailyJourneyAction
             $treatmentNotes[] = sprintf('Marcação de entrada às %s em aberto (sem registro de saída).', $currentEntry['time']);
         }
 
-        if (count($punchesToCalculate) % 2 !== 0) {
+        $nonDuplicatePunches = array_values(array_filter($punchesToCalculate, fn ($p) => empty($p['is_duplicate'])));
+        if (count($nonDuplicatePunches) % 2 !== 0) {
             $isIncomplete = true;
         }
 
@@ -843,9 +950,9 @@ class CalculateDailyJourneyAction
             $lastPriorShift = ShiftAssignment::where('employee_id', $employee->id)
                 ->whereIn('status', [ShiftStatus::Scheduled, ShiftStatus::Confirmed, ShiftStatus::Completed])
                 ->where('is_day_off', false)
-                ->where('end_at_local', '<', $todayEntryTime)
+                ->where('start_at_local', '<', $todayEntryTime)
                 ->where('id', '!=', $shift?->id ?? 0)
-                ->orderBy('end_at_local', 'desc')
+                ->orderBy('start_at_local', 'desc')
                 ->first();
 
             if ($lastPriorShift) {

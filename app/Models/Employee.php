@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * @property Carbon|null $normative_effective_from
@@ -159,7 +160,7 @@ class Employee extends Model
         ?string $notes = null,
     ): EmployeeLaborRuleProfileAssignment {
         if (! $profile->isApproved()) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'labor_rule_profile_id' => ['Apenas perfis normativos aprovados podem ser atribuídos a colaboradores.'],
             ]);
         }
@@ -168,7 +169,7 @@ class Employee extends Model
         $until = $effectiveUntil ? ($effectiveUntil instanceof CarbonInterface ? $effectiveUntil->copy()->startOfDay() : Carbon::parse($effectiveUntil)->startOfDay()) : null;
 
         if ($until && $until->lt($from)) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'effective_until' => ['A data final de vigência não pode ser anterior à data de início.'],
             ]);
         }
@@ -177,7 +178,7 @@ class Employee extends Model
         $profileRegimeVal = $profile->legal_regime instanceof LegalRegime ? $profile->legal_regime->value : (string) $profile->legal_regime;
 
         if ($regimeVal !== $profileRegimeVal) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'labor_rule_profile_id' => [
                     "Incompatibilidade jurídica: o perfil '{$profile->name}' pertence ao regime {$profile->legal_regime?->label()}, incompatível com o regime {$this->legal_regime?->label()} do colaborador.",
                 ],
@@ -193,8 +194,8 @@ class Employee extends Model
                 ->get();
 
             foreach ($existingAssignments as $existing) {
-                $existingFromStr = $existing->effective_from->format('Y-m-d');
-                $existingUntilStr = $existing->effective_until?->format('Y-m-d');
+                $existingFromStr = Carbon::parse($existing->effective_from)->format('Y-m-d');
+                $existingUntilStr = $existing->effective_until ? Carbon::parse($existing->effective_until)->format('Y-m-d') : null;
 
                 if ($existingUntilStr === null) {
                     if ($fromStr > $existingFromStr) {
@@ -205,7 +206,7 @@ class Employee extends Model
                     }
 
                     if ($fromStr === $existingFromStr) {
-                        throw \Illuminate\Validation\ValidationException::withMessages([
+                        throw ValidationException::withMessages([
                             'effective_from' => ['Já existe uma atribuição de perfil normativo iniciando exatamente nesta mesma data.'],
                         ]);
                     }
@@ -214,15 +215,17 @@ class Employee extends Model
                         continue;
                     }
 
-                    throw \Illuminate\Validation\ValidationException::withMessages([
+                    throw ValidationException::withMessages([
                         'effective_from' => ['Conflito de vigência: a data informada colide com uma atribuição de perfil aberta.'],
                     ]);
                 }
 
                 if ($existing->conflictsWith($fromStr, $untilStr)) {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
+                    $fromDisplay = Carbon::parse($existing->effective_from)->format('d/m/Y');
+                    $untilDisplay = Carbon::parse($existing->effective_until)->format('d/m/Y');
+                    throw ValidationException::withMessages([
                         'effective_from' => [
-                            "Conflito de vigência: o colaborador já possui o perfil '{$existing->laborRuleProfile?->name}' atribuído entre {$existing->effective_from->format('d/m/Y')} e {$existing->effective_until->format('d/m/Y')}.",
+                            "Conflito de vigência: o colaborador já possui o perfil '{$existing->laborRuleProfile?->name}' atribuído entre {$fromDisplay} e {$untilDisplay}.",
                         ],
                     ]);
                 }
@@ -386,11 +389,11 @@ class Employee extends Model
                 ->first(function ($assignment) use ($dateStr) {
                     $effectiveFrom = $assignment->effective_from instanceof CarbonInterface
                         ? $assignment->effective_from->format('Y-m-d')
-                        : (string) $assignment->effective_from;
+                        : substr((string) $assignment->effective_from, 0, 10);
 
                     $effectiveUntil = $assignment->effective_until instanceof CarbonInterface
                         ? $assignment->effective_until->format('Y-m-d')
-                        : ($assignment->effective_until ? (string) $assignment->effective_until : null);
+                        : ($assignment->effective_until ? substr((string) $assignment->effective_until, 0, 10) : null);
 
                     return $effectiveFrom <= $dateStr && ($effectiveUntil === null || $effectiveUntil >= $dateStr);
                 });
@@ -400,9 +403,13 @@ class Employee extends Model
             }
         } else {
             $assignment = $this->workScheduleAssignments()
-                ->where('effective_from', '<=', $dateStr)
+                ->where(function ($q) use ($dateStr) {
+                    $q->whereDate('effective_from', '<=', $dateStr)
+                        ->orWhere('effective_from', '<=', $dateStr.' 23:59:59');
+                })
                 ->where(function ($query) use ($dateStr) {
                     $query->whereNull('effective_until')
+                        ->orWhereDate('effective_until', '>=', $dateStr)
                         ->orWhere('effective_until', '>=', $dateStr);
                 })
                 ->first();

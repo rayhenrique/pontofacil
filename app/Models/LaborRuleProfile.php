@@ -12,6 +12,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * @property Carbon $effective_from
+ * @property Carbon|null $effective_until
+ * @property Carbon|null $approved_at
+ * @property Carbon|null $revoked_at
+ */
 class LaborRuleProfile extends Model
 {
     protected $fillable = [
@@ -242,8 +248,8 @@ class LaborRuleProfile extends Model
     public function isEffectiveAt(CarbonInterface|string $date): bool
     {
         $dateStr = is_string($date) ? $date : $date->format('Y-m-d');
-        $fromStr = $this->effective_from->format('Y-m-d');
-        $untilStr = $this->effective_until?->format('Y-m-d');
+        $fromStr = Carbon::parse($this->effective_from)->format('Y-m-d');
+        $untilStr = $this->effective_until ? Carbon::parse($this->effective_until)->format('Y-m-d') : null;
 
         if ($dateStr < $fromStr) {
             return false;
@@ -324,13 +330,13 @@ class LaborRuleProfile extends Model
             'entity_name' => $this->entity_name,
             'legal_reference' => $this->legal_reference,
             'version' => $this->version,
-            'effective_from' => $this->effective_from->format('Y-m-d'),
-            'effective_until' => $this->effective_until?->format('Y-m-d'),
+            'effective_from' => Carbon::parse($this->effective_from)->format('Y-m-d'),
+            'effective_until' => $this->effective_until ? Carbon::parse($this->effective_until)->format('Y-m-d') : null,
             'approval_status' => $this->approval_status?->value ?? (string) $this->approval_status,
             'approved_by' => $this->approved_by,
-            'approved_at' => $this->approved_at?->format('Y-m-d H:i:s'),
+            'approved_at' => $this->approved_at ? Carbon::parse($this->approved_at)->format('Y-m-d H:i:s') : null,
             'revoked_by' => $this->revoked_by,
-            'revoked_at' => $this->revoked_at?->format('Y-m-d H:i:s'),
+            'revoked_at' => $this->revoked_at ? Carbon::parse($this->revoked_at)->format('Y-m-d H:i:s') : null,
             'revocation_reason' => $this->revocation_reason,
             'change_reason' => $this->change_reason,
             'parent_profile_id' => $this->parent_profile_id,
@@ -407,7 +413,7 @@ class LaborRuleProfile extends Model
                     'scale_12x36_compensates_holidays' => true,
                     'holiday_treatment' => 'scale_offset',
                     'deduct_break_from_night' => true,
-                    'allowed_modalities' => ['standard', '12x36', '6x1'],
+                    'allowed_modalities' => ['standard', '12x36', '24x72', '6x1'],
                 ],
             ], $attributes)
         );

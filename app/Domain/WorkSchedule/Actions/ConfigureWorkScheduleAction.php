@@ -311,7 +311,7 @@ class ConfigureWorkScheduleAction
                 'anchor_date' => $anchorDate,
             ],
             'schedule_data' => [],
-            'active' => true,
+            'active' => isset($data['active']) ? (bool) $data['active'] : true,
         ]);
     }
 
@@ -450,13 +450,14 @@ class ConfigureWorkScheduleAction
             'flexible_12h' => (function () use (
                 $data, $daysInMonth, $targetYear, $targetMonth, $startDate,
                 &$dailyMinutes, &$weeklyMinutes, &$monthlyExpectedMinutes, &$workDaysInMonth,
-                &$crossesMidnight, &$isNight
+                &$crossesMidnight, &$isNight, &$requiresAuth
             ) {
                 $bMin = (int) ($data['break_minutes'] ?? 60);
                 $dailyMinutes = 720 - $bMin;
                 $weeklyMinutes = (int) round($dailyMinutes * 3.5);
                 $crossesMidnight = true; // Turnos noturnos atravessam meia-noite
                 $isNight = false; // Alternância diurno/noturno automática
+                $requiresAuth = true;
 
                 $anchorStr = $data['anchor_date'] ?? null;
                 $anchor = $anchorStr ? Carbon::parse($anchorStr)->startOfDay() : $startDate->copy();

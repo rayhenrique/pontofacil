@@ -2,11 +2,22 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int $employee_id
+ * @property int $labor_rule_profile_id
+ * @property Carbon $effective_from
+ * @property Carbon|null $effective_until
+ * @property string|null $reason
+ * @property int|null $assigned_by
+ * @property string|null $notes
+ */
 class EmployeeLaborRuleProfileAssignment extends Model
 {
     protected $fillable = [

@@ -226,7 +226,14 @@
   - [x] Remoção de coordenadas fictícias de Maceió e não cálculo de distância quando o perímetro não está configurado.
   - [x] Resiliência de GPS com timeout de 5s: ausência de GPS não bloqueia a marcação (Art. 74/78 Portaria 671 MTP).
   - [x] Tratamento completo de falhas de rede com reconciliação assíncrona (`checkPunchStatus`) e retentativa segura.
-  - [x] Suíte de 13 testes automatizados de hardening (`TimePunchHardeningTest`).
+- [x] **Fase 24: Escala de Plantonista Flexível 12x36 Diurno e Noturno (v2.6.23)**
+  - [x] Nova modalidade `FlexibleTwelveByThirtySix` (`flexible_12x36`) no enum `WorkScheduleModality`.
+  - [x] Reconhecimento automático do turno (diurno/noturno/pendente) a partir dos pares de batidas do dia.
+  - [x] Suporte a virada de meia-noite e sugestão da batida de saída na manhã seguinte.
+  - [x] Acompanhamento do descanso mínimo de 36 horas entre plantões com avisos no painel.
+  - [x] Prevenção de faltas presumidas indevidas em dias sem batida na escala flexível.
+  - [x] Etiquetas visuais e totalizadores no espelho de ponto (`timesheet`) e gestão de escalas (`shifts-management`).
+  - [x] Cobertura abrangente com 24 testes automatizados em `Flexible12x36ShiftTest`.
 
 - [ ] **Fase 21B: Compliance Externo & Assinatura Digital Oficial — Dependências Externas**
   - [ ] Configurar certificado digital válido ICP-Brasil em storage seguro.
